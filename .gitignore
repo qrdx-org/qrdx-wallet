@@ -1,0 +1,32 @@
+node_modules/
+dist/
+.expo/
+.next/
+.vercel/
+
+# Build outputs
+*.log
+*.tgz
+*.zip
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Testing
+coverage/
+
+# Temporary
+tmp/
+temp/
