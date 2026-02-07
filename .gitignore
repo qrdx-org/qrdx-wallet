@@ -3,6 +3,7 @@ dist/
 .expo/
 .next/
 .vercel/
+ref/
 
 # Build outputs
 *.log
