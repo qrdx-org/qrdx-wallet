@@ -4,34 +4,24 @@ import { useState } from 'react'
 import { Key, Download, Shield, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useWallet } from '@/src/shared/contexts/WalletContext'
 
-interface SetupProps {
-  onComplete: () => void
-}
-
-export function Setup({ onComplete }: SetupProps) {
+export function Setup() {
+  const { initialize, createWallet } = useWallet()
   const [isCreating, setIsCreating] = useState(false)
 
-  const handleCreateWallet = () => {
+  const handleCreateWallet = async () => {
     setIsCreating(true)
-    setTimeout(() => {
-      localStorage.setItem('qrdx_wallet_state', JSON.stringify({
-        initialized: true,
-        locked: false,
-        version: '1.0.0'
-      }))
-      onComplete()
-    }, 1000)
+    try {
+      await initialize('temp-password')
+      await createWallet('My Wallet', 'temp-password')
+    } catch {
+      setIsCreating(false)
+    }
   }
 
-  const handleImportWallet = () => {
-    // TODO: Implement import flow
-    localStorage.setItem('qrdx_wallet_state', JSON.stringify({
-      initialized: true,
-      locked: false,
-      version: '1.0.0'
-    }))
-    onComplete()
+  const handleImportWallet = async () => {
+    await initialize('temp-password')
   }
 
   return (

@@ -3,7 +3,9 @@ import { NavigationContainer } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
-import { WalletProvider } from '@shared/contexts/WalletContext'
+import * as SecureStore from 'expo-secure-store'
+import { WalletProvider } from '../shared/contexts/WalletContext'
+import { MobileStorage } from '../core/storage'
 
 // Screens
 import { HomeScreen } from './screens/HomeScreen'
@@ -14,10 +16,13 @@ import { ReceiveScreen } from './screens/ReceiveScreen'
 
 const Stack = createNativeStackNavigator()
 
+// Create mobile storage backed by Expo SecureStore
+const mobileStorage = new MobileStorage(SecureStore)
+
 export function App() {
   return (
     <SafeAreaProvider>
-      <WalletProvider>
+      <WalletProvider storage={mobileStorage}>
         <NavigationContainer>
           <StatusBar style="auto" />
           <Stack.Navigator

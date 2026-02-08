@@ -1,13 +1,31 @@
 import React, { useState } from 'react'
 import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useWallet } from '../../shared/contexts/WalletContext'
 
 export function UnlockScreen({ navigation }: any) {
+  const { unlock, locked, loading } = useWallet()
   const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
 
-  const handleUnlock = () => {
-    // TODO: Implement unlock logic
-    navigation.navigate('Home')
+  // If already unlocked, skip to Home
+  React.useEffect(() => {
+    if (!loading && !locked) {
+      navigation.replace('Home')
+    }
+  }, [loading, locked])
+
+  const handleUnlock = async () => {
+    if (!password) {
+      setError('Enter your password')
+      return
+    }
+    const ok = await unlock(password)
+    if (ok) {
+      navigation.replace('Home')
+    } else {
+      setError('Incorrect password')
+    }
   }
 
   return (
@@ -20,13 +38,15 @@ export function UnlockScreen({ navigation }: any) {
 
         <View style={styles.form}>
           <TextInput
-            style={styles.input}
+            style={[styles.input, error ? styles.inputError : null]}
             placeholder="Password"
             placeholderTextColor="#666"
             secureTextEntry
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(text) => { setPassword(text); setError('') }}
           />
+
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
           <TouchableOpacity style={styles.button} onPress={handleUnlock}>
             <Text style={styles.buttonText}>Unlock</Text>
@@ -74,6 +94,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 16,
     color: '#fff',
+  },
+  inputError: {
+    borderColor: '#ef4444',
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 13,
+    textAlign: 'center',
   },
   button: {
     backgroundColor: '#6366f1',

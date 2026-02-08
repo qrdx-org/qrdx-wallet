@@ -1,7 +1,5 @@
 'use client'
 
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Card } from '@/components/ui/card'
 import { ArrowUpRight, ArrowDownLeft, RefreshCw } from 'lucide-react'
 import { formatTimestamp } from '@/lib/utils'
 
@@ -70,7 +68,7 @@ export function ActivityList() {
     }
   }
 
-  const getColor = (type: Activity['type']) => {
+  const getIconStyle = (type: Activity['type']) => {
     switch (type) {
       case 'send':
         return 'text-red-500 bg-red-500/10'
@@ -81,39 +79,47 @@ export function ActivityList() {
     }
   }
 
+  const getAmountColor = (type: Activity['type']) => {
+    switch (type) {
+      case 'send':
+        return 'text-red-500'
+      case 'receive':
+        return 'text-green-500'
+      case 'swap':
+        return 'text-foreground'
+    }
+  }
+
   return (
-    <Card>
-      <div className="divide-y divide-border">
-        <div className="p-4 border-b">
-          <h3 className="font-semibold">Recent Activity</h3>
-        </div>
-        {activities.map((activity) => (
-          <div
-            key={activity.id}
-            className="flex items-center justify-between p-4 hover:bg-accent/50 transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <Avatar className={`h-10 w-10 ${getColor(activity.type)}`}>
-                <AvatarFallback className={getColor(activity.type)}>
-                  {getIcon(activity.type)}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <div className="font-medium capitalize">{activity.type}</div>
-                <div className="text-sm text-muted-foreground">
-                  {formatTimestamp(activity.timestamp)}
-                </div>
-              </div>
+    <div className="space-y-1">
+      <div className="px-1 mb-2">
+        <h3 className="text-sm font-semibold text-muted-foreground">Recent Activity</h3>
+      </div>
+      {activities.map((activity, index) => (
+        <div
+          key={activity.id}
+          className="flex items-center justify-between p-3 rounded-xl hover:bg-accent/30 transition-all cursor-pointer group animate-slide-up"
+          style={{ animationDelay: `${index * 50}ms` }}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${getIconStyle(activity.type)}`}>
+              {getIcon(activity.type)}
             </div>
-            <div className="text-right">
-              <div className="font-semibold">
-                {activity.amount} {activity.token}
+            <div>
+              <div className="font-medium text-sm capitalize">{activity.type}</div>
+              <div className="text-xs text-muted-foreground">
+                {formatTimestamp(activity.timestamp)}
               </div>
-              <div className="text-sm text-muted-foreground">{activity.value}</div>
             </div>
           </div>
-        ))}
-      </div>
-    </Card>
+          <div className="text-right">
+            <div className={`font-semibold text-sm ${getAmountColor(activity.type)}`}>
+              {activity.amount} {activity.token}
+            </div>
+            <div className="text-xs text-muted-foreground">{activity.value}</div>
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }

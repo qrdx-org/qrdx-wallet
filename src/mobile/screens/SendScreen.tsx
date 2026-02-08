@@ -1,14 +1,20 @@
 import React, { useState } from 'react'
-import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useWallet } from '../../shared/contexts/WalletContext'
 
 export function SendScreen({ navigation }: any) {
+  const { currentWallet } = useWallet()
   const [recipient, setRecipient] = useState('')
   const [amount, setAmount] = useState('')
 
   const handleSend = () => {
-    // TODO: Implement send logic
-    console.log('Sending:', { recipient, amount })
+    if (!currentWallet) {
+      Alert.alert('Error', 'No wallet selected')
+      return
+    }
+    // TODO: Implement send via WalletManager.signTransaction
+    console.log('Sending:', { from: currentWallet.address, recipient, amount })
   }
 
   return (

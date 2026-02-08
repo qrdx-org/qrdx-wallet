@@ -6,6 +6,10 @@
       "DOM",
       "DOM.Iterable"
     ],
+    "types": [
+      "chrome",
+      "webextension-polyfill"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -29,20 +33,29 @@
       "@core/*": [
         "./src/core/*"
       ],
-      "@mobile/*": [
-        "./src/mobile/*"
+      "@shared/*": [
+        "./src/shared/*"
       ]
     }
   },
   "include": [
     "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "lib/**/*.ts",
+    "src/core/**/*.ts",
+    "src/shared/**/*.ts",
+    "src/shared/**/*.tsx",
+    "src/popup/**/*.ts",
+    "src/popup/**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
-    ".expo"
+    ".expo",
+    "src/mobile"
   ]
 }

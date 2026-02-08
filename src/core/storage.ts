@@ -1,7 +1,9 @@
 import type { WalletState, StoredWallet } from './types'
 
 /**
- * Abstract storage interface that can be implemented for different platforms
+ * Abstract storage interface that can be implemented for different platforms.
+ * All platform-specific storage backends implement this interface so that
+ * WalletStorage, WalletManager, and WalletContext stay platform-agnostic.
  */
 export interface IStorage {
   get<T>(key: string): Promise<T | null>
@@ -11,52 +13,87 @@ export interface IStorage {
 }
 
 /**
- * Browser extension storage implementation
+ * Browser extension storage implementation.
+ * Uses a lazy dynamic import for webextension-polyfill so that importing this
+ * module in React Native / non-extension environments never throws.
  */
 export class ExtensionStorage implements IStorage {
-  async get<T>(key: string): Promise<T | null> {
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      const result = await chrome.storage.local.get(key)
-      return result[key] ?? null
+  private browser: any = null
+  private initialized = false
+
+  private async init() {
+    if (this.initialized) return
+    this.initialized = true
+    try {
+      if (typeof chrome !== 'undefined' && chrome?.storage) {
+        this.browser = chrome
+      } else {
+        const mod = await import('webextension-polyfill')
+        if (mod.default?.storage) {
+          this.browser = mod.default
+        }
+      }
+    } catch {
+      // Not in an extension context — will fall through to localStorage
     }
-    // Fallback to localStorage for development
+  }
+
+  private isExtensionContext(): boolean {
+    return this.browser?.storage !== undefined
+  }
+
+  async get<T>(key: string): Promise<T | null> {
+    await this.init()
+    if (this.isExtensionContext()) {
+      const result = await this.browser.storage.local.get(key)
+      return (result[key] as T) ?? null
+    }
+    if (typeof localStorage === 'undefined') return null
     const item = localStorage.getItem(key)
     return item ? JSON.parse(item) : null
   }
 
   async set<T>(key: string, value: T): Promise<void> {
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      await chrome.storage.local.set({ [key]: value })
-    } else {
-      // Fallback to localStorage for development
+    await this.init()
+    if (this.isExtensionContext()) {
+      await this.browser.storage.local.set({ [key]: value })
+    } else if (typeof localStorage !== 'undefined') {
       localStorage.setItem(key, JSON.stringify(value))
     }
   }
 
   async remove(key: string): Promise<void> {
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      await chrome.storage.local.remove(key)
-    } else {
+    await this.init()
+    if (this.isExtensionContext()) {
+      await this.browser.storage.local.remove(key)
+    } else if (typeof localStorage !== 'undefined') {
       localStorage.removeItem(key)
     }
   }
 
   async clear(): Promise<void> {
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      await chrome.storage.local.clear()
-    } else {
+    await this.init()
+    if (this.isExtensionContext()) {
+      await this.browser.storage.local.clear()
+    } else if (typeof localStorage !== 'undefined') {
       localStorage.clear()
     }
   }
 }
 
 /**
- * Mobile storage implementation (using Expo SecureStore)
+ * Mobile storage implementation (using Expo SecureStore).
+ * SecureStore is injected at construction time to avoid top-level
+ * imports that would fail outside React Native.
  */
 export class MobileStorage implements IStorage {
-  private secureStore: any
+  private secureStore: {
+    getItemAsync: (key: string) => Promise<string | null>
+    setItemAsync: (key: string, value: string) => Promise<void>
+    deleteItemAsync: (key: string) => Promise<void>
+  }
 
-  constructor(secureStore: any) {
+  constructor(secureStore: MobileStorage['secureStore']) {
     this.secureStore = secureStore
   }
 
@@ -74,9 +111,7 @@ export class MobileStorage implements IStorage {
   }
 
   async clear(): Promise<void> {
-    // Note: SecureStore doesn't have a clear all method
-    // You'd need to track keys separately if needed
-    console.warn('MobileStorage.clear() not fully implemented')
+    console.warn('MobileStorage.clear() — SecureStore has no bulk clear')
   }
 }
 

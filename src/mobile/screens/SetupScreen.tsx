@@ -1,8 +1,45 @@
 import React from 'react'
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useWallet } from '../../shared/contexts/WalletContext'
 
 export function SetupScreen({ navigation }: any) {
+  const { initialize, createWallet, initialized, loading } = useWallet()
+  const [creating, setCreating] = React.useState(false)
+
+  // If already initialized, skip to Unlock
+  React.useEffect(() => {
+    if (!loading && initialized) {
+      navigation.replace('Unlock')
+    }
+  }, [loading, initialized])
+
+  const handleCreate = async () => {
+    setCreating(true)
+    try {
+      await initialize('temp-password')
+      await createWallet('My Wallet', 'temp-password')
+      navigation.replace('Home')
+    } catch (e) {
+      setCreating(false)
+    }
+  }
+
+  const handleImport = async () => {
+    await initialize('temp-password')
+    navigation.replace('Home')
+  }
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.content}>
+          <ActivityIndicator size="large" color="#6366f1" />
+        </View>
+      </SafeAreaView>
+    )
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>

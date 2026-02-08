@@ -1,44 +1,33 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import { Setup } from './wallet/Setup'
 import { Unlock } from './wallet/Unlock'
 import { Dashboard } from './wallet/Dashboard'
+import { useWallet } from '@/src/shared/contexts/WalletContext'
 
 export function WalletHome() {
-  const [initialized, setInitialized] = useState(false)
-  const [locked, setLocked] = useState(true)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    // Check wallet state from localStorage
-    const checkWalletState = () => {
-      const state = localStorage.getItem('qrdx_wallet_state')
-      if (state) {
-        const parsed = JSON.parse(state)
-        setInitialized(parsed.initialized || false)
-        setLocked(parsed.locked !== false)
-      }
-      setLoading(false)
-    }
-
-    checkWalletState()
-  }, [])
+  const { initialized, locked, loading } = useWallet()
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Loading...</div>
+      <div className="flex items-center justify-center w-full h-full min-h-screen bg-background">
+        <div className="flex flex-col items-center gap-4 animate-fade-in">
+          <div className="relative">
+            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-primary/60 animate-pulse-ring" />
+            <div className="absolute inset-0 h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-primary/60 opacity-30 blur-lg" />
+          </div>
+          <div className="text-sm font-medium text-muted-foreground">Loading QRDX Wallet...</div>
+        </div>
       </div>
     )
   }
 
   if (!initialized) {
-    return <Setup onComplete={() => setInitialized(true)} />
+    return <Setup />
   }
 
   if (locked) {
-    return <Unlock onUnlock={() => setLocked(false)} />
+    return <Unlock />
   }
 
   return <Dashboard />

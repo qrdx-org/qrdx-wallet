@@ -12,8 +12,19 @@
   "include": [
     "src/core/**/*.ts",
     "src/shared/**/*.ts",
+    "src/shared/**/*.tsx",
     "src/mobile/**/*.ts",
     "src/mobile/**/*.tsx",
+    "lib/utils.ts",
     "App.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "app",
+    "components",
+    "pages",
+    "src/popup",
+    "src/extension"
   ]
 }

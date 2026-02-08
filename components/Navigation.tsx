@@ -2,6 +2,7 @@
 
 import { Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 export function Navigation() {
   return (
@@ -20,6 +21,7 @@ export function Navigation() {
               className="pl-10"
             />
           </div>
+          <ThemeToggle />
         </div>
       </div>
     </div>

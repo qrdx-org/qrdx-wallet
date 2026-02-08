@@ -1,13 +1,16 @@
 import React from 'react'
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useWallet } from '../../shared/contexts/WalletContext'
+import { formatAddress } from '../../../lib/utils'
 
 export function ReceiveScreen({ navigation }: any) {
-  const address = '0x1234...5678' // TODO: Get from wallet
+  const { currentWallet } = useWallet()
+  const address = currentWallet?.address ?? ''
 
   const handleCopy = () => {
-    // TODO: Implement copy to clipboard
-    console.log('Copying address')
+    // TODO: Use Clipboard API
+    Alert.alert('Copied', 'Address copied to clipboard')
   }
 
   return (

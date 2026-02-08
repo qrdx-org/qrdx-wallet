@@ -1,9 +1,11 @@
 node_modules/
 dist/
+out/
 .expo/
 .next/
 .vercel/
 ref/
+.pnpm-store
 
 # Build outputs
 *.log
@@ -31,3 +33,4 @@ coverage/
 # Temporary
 tmp/
 temp/
+ref/

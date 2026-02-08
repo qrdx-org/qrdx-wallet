@@ -5,18 +5,16 @@ import { Lock, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useWallet } from '@/src/shared/contexts/WalletContext'
 
-interface UnlockProps {
-  onUnlock: () => void
-}
-
-export function Unlock({ onUnlock }: UnlockProps) {
+export function Unlock() {
+  const { unlock } = useWallet()
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [isUnlocking, setIsUnlocking] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     
@@ -26,22 +24,11 @@ export function Unlock({ onUnlock }: UnlockProps) {
     }
 
     setIsUnlocking(true)
-    
-    // Simulate password verification
-    setTimeout(() => {
-      // TODO: Implement actual password verification
-      if (password === 'wrong') {
-        setError('Incorrect password')
-        setIsUnlocking(false)
-      } else {
-        localStorage.setItem('qrdx_wallet_state', JSON.stringify({
-          initialized: true,
-          locked: false,
-          version: '1.0.0'
-        }))
-        onUnlock()
-      }
-    }, 800)
+    const ok = await unlock(password)
+    if (!ok) {
+      setError('Incorrect password')
+      setIsUnlocking(false)
+    }
   }
 
   return (

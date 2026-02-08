@@ -1,21 +1,22 @@
 'use client'
 
 import { useState } from 'react'
-import { Lock, Settings, Copy, Check, Eye, EyeOff } from 'lucide-react'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Lock, Settings, Copy, Check, Eye, EyeOff, Shield, Bell, MoreHorizontal, ChevronDown } from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { QuickActions } from './QuickActions'
 import { TokenList } from './TokenList'
 import { ActivityList } from './ActivityList'
 import { PortfolioChart } from './PortfolioChart'
 import { formatAddress } from '@/lib/utils'
+import { useWallet } from '@/src/shared/contexts/WalletContext'
 
 export function Dashboard() {
+  const { lock, currentWallet } = useWallet()
   const [copied, setCopied] = useState(false)
   const [balanceVisible, setBalanceVisible] = useState(true)
   const [activeTab, setActiveTab] = useState<'tokens' | 'nfts' | 'activity'>('tokens')
-  const address = '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'
+  const address = currentWallet?.address ?? '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'
   const totalBalance = '$29,703.62'
 
   const handleCopy = () => {
@@ -24,32 +25,39 @@ export function Dashboard() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleLock = () => {
-    localStorage.setItem('qrdx_wallet_state', JSON.stringify({
-      initialized: true,
-      locked: true,
-      version: '1.0.0'
-    }))
-    window.location.reload()
+  const handleLock = async () => {
+    await lock()
   }
 
+  const tabs = [
+    { key: 'tokens' as const, label: 'Tokens', count: 4 },
+    { key: 'nfts' as const, label: 'NFTs', count: 0 },
+    { key: 'activity' as const, label: 'Activity', count: 4 },
+  ]
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       {/* Header */}
-      <div className="border-b bg-card">
-        <div className="max-w-5xl mx-auto px-6 py-4">
+      <div className="glass-strong sticky top-0 z-20">
+        <div className="px-4 py-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Avatar className="h-10 w-10 bg-gradient-to-br from-primary to-purple-600">
-                <AvatarFallback className="bg-transparent text-white font-bold">
-                  {address.slice(2, 4).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
+            <div className="flex items-center gap-2.5">
+              <div className="relative">
+                <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-md shadow-primary/20">
+                  <span className="text-white font-bold text-xs">
+                    {address.slice(2, 4).toUpperCase()}
+                  </span>
+                </div>
+                <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 border-2 border-background" />
+              </div>
               <div>
-                <div className="font-semibold">QRDX Wallet</div>
+                <div className="font-semibold text-sm flex items-center gap-1">
+                  QRDX Wallet
+                  <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                </div>
                 <button
                   onClick={handleCopy}
-                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors font-mono"
                 >
                   {formatAddress(address)}
                   {copied ? (
@@ -60,12 +68,15 @@ export function Dashboard() {
                 </button>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon">
-                <Settings className="h-5 w-5" />
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/50">
+                <Bell className="h-4 w-4 text-muted-foreground" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={handleLock}>
-                <Lock className="h-5 w-5" />
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/50">
+                <Settings className="h-4 w-4 text-muted-foreground" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/50" onClick={handleLock}>
+                <Lock className="h-4 w-4 text-muted-foreground" />
               </Button>
             </div>
           </div>
@@ -73,79 +84,83 @@ export function Dashboard() {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+      <div className="px-4 py-3 space-y-3">
+        {/* Network badge */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20">
+            <Shield className="h-3 w-3 text-primary" />
+            <span className="text-[10px] font-semibold text-primary">Quantum-Safe</span>
+          </div>
+          <span className="text-[10px] text-muted-foreground">QRDX Mainnet</span>
+        </div>
+
         {/* Balance Card */}
-        <Card className="bg-gradient-to-br from-primary/10 via-purple-500/10 to-background border-primary/20">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-muted-foreground">Total Balance</div>
+        <Card className="glass border-primary/10 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/10 pointer-events-none" />
+          <CardContent className="p-4 relative">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-muted-foreground font-medium">Total Balance</span>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="h-7 w-7 rounded-lg"
                 onClick={() => setBalanceVisible(!balanceVisible)}
               >
                 {balanceVisible ? (
-                  <Eye className="h-4 w-4" />
+                  <Eye className="h-3.5 w-3.5 text-muted-foreground" />
                 ) : (
-                  <EyeOff className="h-4 w-4" />
+                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
                 )}
               </Button>
             </div>
-            <div className="text-4xl font-bold mt-2">
-              {balanceVisible ? totalBalance : '••••••'}
+            <div className="text-3xl font-bold tracking-tight mb-1">
+              {balanceVisible ? totalBalance : '••••••••'}
             </div>
             <PortfolioChart change24h={4.34} />
-          </CardHeader>
-          <CardContent>
-            <QuickActions />
           </CardContent>
         </Card>
 
+        {/* Quick Actions */}
+        <QuickActions />
+
         {/* Tabs */}
-        <div className="flex gap-4 border-b">
-          <button 
-            onClick={() => setActiveTab('tokens')}
-            className={`pb-3 px-1 border-b-2 ${
-              activeTab === 'tokens' 
-                ? 'border-primary font-semibold' 
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            } text-sm transition-colors`}
-          >
-            Tokens
-          </button>
-          <button 
-            onClick={() => setActiveTab('nfts')}
-            className={`pb-3 px-1 border-b-2 ${
-              activeTab === 'nfts' 
-                ? 'border-primary font-semibold' 
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            } text-sm transition-colors`}
-          >
-            NFTs
-          </button>
-          <button 
-            onClick={() => setActiveTab('activity')}
-            className={`pb-3 px-1 border-b-2 ${
-              activeTab === 'activity' 
-                ? 'border-primary font-semibold' 
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            } text-sm transition-colors`}
-          >
-            Activity
-          </button>
+        <div className="flex gap-1 p-1 bg-accent/30 rounded-xl">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${
+                activeTab === tab.key
+                  ? 'bg-background shadow-sm text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab.label}
+              {tab.count > 0 && activeTab === tab.key && (
+                <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
 
         {/* Tab Content */}
-        {activeTab === 'tokens' && <TokenList />}
-        {activeTab === 'nfts' && (
-          <Card>
-            <div className="p-12 text-center">
-              <p className="text-muted-foreground">No NFTs yet</p>
-            </div>
-          </Card>
-        )}
-        {activeTab === 'activity' && <ActivityList />}
+        <Card className="glass border-border/50">
+          <CardContent className="p-2">
+            {activeTab === 'tokens' && <TokenList />}
+            {activeTab === 'nfts' && (
+              <div className="py-10 text-center">
+                <div className="h-12 w-12 rounded-xl bg-accent/50 flex items-center justify-center mx-auto mb-3">
+                  <MoreHorizontal className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <p className="text-sm text-muted-foreground">No NFTs yet</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Your collectibles will appear here</p>
+              </div>
+            )}
+            {activeTab === 'activity' && <ActivityList />}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

@@ -1,3 +1,9 @@
+/**
+ * Shared utilities — single source of truth.
+ * Both web/extension (via @/lib/utils) and mobile (via @shared/lib/utils)
+ * re-export from here to avoid duplication.
+ */
+
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 

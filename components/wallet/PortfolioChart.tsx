@@ -1,7 +1,7 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import { TrendingUp, TrendingDown } from 'lucide-react'
-import { Card } from '@/components/ui/card'
 
 interface PortfolioChartProps {
   data?: Array<{ time: number; value: number }>
@@ -9,66 +9,135 @@ interface PortfolioChartProps {
 }
 
 export function PortfolioChart({ change24h = 4.34 }: PortfolioChartProps) {
+  const chartContainerRef = useRef<HTMLDivElement>(null)
+  const chartRef = useRef<any>(null)
   const isPositive = change24h > 0
+  const [chartReady, setChartReady] = useState(false)
 
-  // Simple mock chart data
-  const chartPoints = Array.from({ length: 24 }, (_, i) => ({
-    x: (i / 23) * 100,
-    y: 50 + Math.sin(i * 0.5) * 20 + (isPositive ? i * 0.5 : -i * 0.5),
-  }))
+  useEffect(() => {
+    if (!chartContainerRef.current) return
 
-  const pathD = chartPoints
-    .map((point, i) => `${i === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
-    .join(' ')
+    let chart: any = null
+
+    const initChart = async () => {
+      try {
+        const { createChart, ColorType, LineStyle } = await import('lightweight-charts')
+
+        if (!chartContainerRef.current) return
+
+        const container = chartContainerRef.current
+
+        chart = createChart(container, {
+          width: container.clientWidth,
+          height: 100,
+          layout: {
+            background: { type: ColorType.Solid, color: 'transparent' },
+            textColor: 'transparent',
+            fontFamily: 'Inter, sans-serif',
+          },
+          grid: {
+            vertLines: { visible: false },
+            horzLines: { visible: false },
+          },
+          crosshair: {
+            vertLine: {
+              visible: false,
+              labelVisible: false,
+            },
+            horzLine: {
+              visible: false,
+              labelVisible: false,
+            },
+          },
+          rightPriceScale: { visible: false },
+          timeScale: {
+            visible: false,
+            borderVisible: false,
+          },
+          handleScroll: false,
+          handleScale: false,
+        })
+
+        const lineColor = isPositive ? '#22c55e' : '#ef4444'
+        const topColor = isPositive ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'
+        const bottomColor = isPositive ? 'rgba(34, 197, 94, 0)' : 'rgba(239, 68, 68, 0)'
+
+        const areaSeries = chart.addAreaSeries({
+          lineColor,
+          topColor,
+          bottomColor,
+          lineWidth: 2,
+          crosshairMarkerVisible: false,
+          priceLineVisible: false,
+          lastValueVisible: false,
+        })
+
+        // Generate mock data - 48 data points over 24 hours
+        const now = Math.floor(Date.now() / 1000)
+        const baseValue = 29000
+        const mockData = Array.from({ length: 48 }, (_, i) => {
+          const time = now - (47 - i) * 1800
+          const trend = isPositive ? i * 8 : -i * 5
+          const noise = Math.sin(i * 0.7) * 200 + Math.cos(i * 1.3) * 150
+          return {
+            time: time as any,
+            value: baseValue + trend + noise,
+          }
+        })
+
+        areaSeries.setData(mockData)
+        chart.timeScale().fitContent()
+        chartRef.current = chart
+        setChartReady(true)
+      } catch (error) {
+        console.error('Failed to init chart:', error)
+      }
+    }
+
+    initChart()
+
+    const handleResize = () => {
+      if (chart && chartContainerRef.current) {
+        chart.applyOptions({ width: chartContainerRef.current.clientWidth })
+      }
+    }
+
+    window.addEventListener('resize', handleResize)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      if (chart) {
+        chart.remove()
+      }
+    }
+  }, [isPositive])
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 mt-2">
       <div className="flex items-center gap-2">
         {isPositive ? (
-          <TrendingUp className="h-4 w-4 text-green-500" />
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10">
+            <TrendingUp className="h-3.5 w-3.5 text-green-500" />
+            <span className="text-xs font-semibold text-green-500">
+              +{change24h.toFixed(2)}%
+            </span>
+          </div>
         ) : (
-          <TrendingDown className="h-4 w-4 text-red-500" />
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/10">
+            <TrendingDown className="h-3.5 w-3.5 text-red-500" />
+            <span className="text-xs font-semibold text-red-500">
+              {change24h.toFixed(2)}%
+            </span>
+          </div>
         )}
-        <span className={`text-sm font-medium ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
-          {isPositive ? '+' : ''}{change24h.toFixed(2)}% (24h)
-        </span>
+        <span className="text-xs text-muted-foreground">24h</span>
       </div>
-      
-      <div className="w-full h-24 relative">
-        <svg
-          className="w-full h-full"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-        >
-          <defs>
-            <linearGradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
-              <stop
-                offset="0%"
-                stopColor={isPositive ? '#10b981' : '#ef4444'}
-                stopOpacity="0.3"
-              />
-              <stop
-                offset="100%"
-                stopColor={isPositive ? '#10b981' : '#ef4444'}
-                stopOpacity="0"
-              />
-            </linearGradient>
-          </defs>
-          
-          <path
-            d={`${pathD} L 100 100 L 0 100 Z`}
-            fill="url(#chartGradient)"
-          />
-          
-          <path
-            d={pathD}
-            fill="none"
-            stroke={isPositive ? '#10b981' : '#ef4444'}
-            strokeWidth="2"
-            vectorEffect="non-scaling-stroke"
-          />
-        </svg>
-      </div>
+
+      <div
+        ref={chartContainerRef}
+        className="w-full h-[100px] relative"
+        style={{ opacity: chartReady ? 1 : 0, transition: 'opacity 0.3s ease' }}
+      />
     </div>
   )
 }

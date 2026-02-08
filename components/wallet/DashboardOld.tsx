@@ -1,17 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import { useWallet } from '@/src/shared/contexts/WalletContext'
 
 export function Dashboard() {
+  const { lock } = useWallet()
   const [balance] = useState('0.00')
 
-  const handleLock = () => {
-    localStorage.setItem('qrdx_wallet_state', JSON.stringify({
-      initialized: true,
-      locked: true,
-      version: '1.0.0'
-    }))
-    window.location.reload()
+  const handleLock = async () => {
+    await lock()
   }
 
   return (
