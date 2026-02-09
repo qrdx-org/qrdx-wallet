@@ -17,7 +17,7 @@ export function TokenList() {
   const tokens: Token[] = [
     {
       symbol: 'QRDX',
-      name: 'Quardex',
+      name: 'QRDX Ledger',
       balance: '1,234.56',
       value: '$12,345.67',
       change24h: 5.23,

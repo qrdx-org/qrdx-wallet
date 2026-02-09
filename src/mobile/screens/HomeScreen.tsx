@@ -51,7 +51,7 @@ export function HomeScreen({ navigation }: any) {
   }
 
   const tokens: TokenItem[] = [
-    { symbol: 'QRDX', name: 'Quardex', balance: '1,234.56', value: '$12,345.67', change24h: 5.23, gradientStart: colors.primary, gradientEnd: 'rgba(138, 80, 255, 0.6)' },
+    { symbol: 'QRDX', name: 'QRDX Ledger', balance: '1,234.56', value: '$12,345.67', change24h: 5.23, gradientStart: colors.primary, gradientEnd: 'rgba(138, 80, 255, 0.6)' },
     { symbol: 'ETH', name: 'Ethereum', balance: '2.5', value: '$8,234.50', change24h: -2.15, gradientStart: colors.blue, gradientEnd: '#2563eb' },
     { symbol: 'USDC', name: 'USD Coin', balance: '5,000.00', value: '$5,000.00', change24h: 0.01, gradientStart: '#38bdf8', gradientEnd: '#06b6d4' },
     { symbol: 'BTC', name: 'Bitcoin', balance: '0.05', value: '$4,123.45', change24h: 3.45, gradientStart: '#fb923c', gradientEnd: '#f59e0b' },

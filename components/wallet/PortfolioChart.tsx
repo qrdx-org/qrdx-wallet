@@ -1,116 +1,191 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { TrendingUp, TrendingDown } from 'lucide-react'
+import { createChart, ColorType, AreaSeries, CrosshairMode } from 'lightweight-charts'
+import type { IChartApi, ISeriesApi } from 'lightweight-charts'
 
 interface PortfolioChartProps {
   data?: Array<{ time: number; value: number }>
   change24h?: number
 }
 
+// Generate deterministic mock data so chart always has something to show
+function generateMockData(isPositive: boolean) {
+  const now = Math.floor(Date.now() / 1000)
+  const baseValue = 29000
+  const points = []
+  for (let i = 0; i < 48; i++) {
+    const time = now - (47 - i) * 1800
+    const trend = isPositive ? i * 8 : -i * 5
+    const noise = Math.sin(i * 0.7) * 200 + Math.cos(i * 1.3) * 150
+    points.push({
+      time: time as any,
+      value: baseValue + trend + noise,
+    })
+  }
+  return points
+}
+
 export function PortfolioChart({ change24h = 4.34 }: PortfolioChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
-  const chartRef = useRef<any>(null)
+  const chartInstanceRef = useRef<IChartApi | null>(null)
+  const seriesRef = useRef<any>(null)
   const isPositive = change24h > 0
-  const [chartReady, setChartReady] = useState(false)
+  const [ready, setReady] = useState(false)
+  const [hoverData, setHoverData] = useState<{ price: string; time: string } | null>(null)
+
+  const setupChart = useCallback(() => {
+    const container = chartContainerRef.current
+    if (!container) return
+
+    // Destroy previous instance if exists
+    if (chartInstanceRef.current) {
+      try { chartInstanceRef.current.remove() } catch {}
+      chartInstanceRef.current = null
+      seriesRef.current = null
+    }
+
+    // Ensure container has real dimensions
+    const rect = container.getBoundingClientRect()
+    const w = Math.max(rect.width, 200)
+    const h = 90
+
+    const chart = createChart(container, {
+      width: w,
+      height: h,
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: 'transparent',
+        fontFamily: 'Inter, sans-serif',
+        attributionLogo: false,
+      },
+      grid: {
+        vertLines: { visible: false },
+        horzLines: { visible: false },
+      },
+      crosshair: {
+        mode: CrosshairMode.Magnet,
+        vertLine: {
+          visible: true,
+          labelVisible: false,
+          width: 1,
+          color: 'rgba(138, 80, 255, 0.4)',
+          style: 0,
+        },
+        horzLine: {
+          visible: true,
+          labelVisible: false,
+          width: 1,
+          color: 'rgba(138, 80, 255, 0.2)',
+          style: 2,
+        },
+      },
+      rightPriceScale: { visible: false, borderVisible: false },
+      leftPriceScale: { visible: false, borderVisible: false },
+      timeScale: { visible: false, borderVisible: false },
+      handleScroll: false,
+      handleScale: false,
+      watermark: { visible: false },
+    } as any)
+
+    const lineColor = isPositive ? '#22c55e' : '#ef4444'
+
+    const series = chart.addSeries(AreaSeries, {
+      lineColor,
+      topColor: isPositive ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)',
+      bottomColor: 'transparent',
+      lineWidth: 2,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 5,
+      crosshairMarkerBorderColor: isPositive ? '#22c55e' : '#ef4444',
+      crosshairMarkerBorderWidth: 2,
+      crosshairMarkerBackgroundColor: '#0a0e1a',
+      priceLineVisible: false,
+      lastValueVisible: false,
+    })
+
+    const mockData = generateMockData(isPositive)
+    series.setData(mockData)
+    chart.timeScale().fitContent()
+
+    chartInstanceRef.current = chart
+    seriesRef.current = series
+    setReady(true)
+
+    // Show price tooltip on hover
+    chart.subscribeCrosshairMove((param) => {
+      if (!param.time || !param.seriesData.size) {
+        setHoverData(null)
+        return
+      }
+      const data = param.seriesData.get(series) as any
+      if (data?.value !== undefined) {
+        const price = data.value.toLocaleString('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: 2,
+        })
+        const date = new Date((param.time as number) * 1000)
+        const time = date.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        })
+        setHoverData({ price, time })
+      }
+    })
+
+    // Hide TradingView attribution link only (do NOT hide tables — lightweight-charts uses them internally)
+    requestAnimationFrame(() => {
+      const tvLinks = container.querySelectorAll('a[href*="tradingview"]')
+      tvLinks.forEach((el) => {
+        ;(el as HTMLElement).style.display = 'none'
+      })
+    })
+  }, [isPositive])
 
   useEffect(() => {
-    if (!chartContainerRef.current) return
+    const container = chartContainerRef.current
+    if (!container) return
 
-    let chart: any = null
-
-    const initChart = async () => {
-      try {
-        const { createChart, ColorType, LineStyle } = await import('lightweight-charts')
-
-        if (!chartContainerRef.current) return
-
-        const container = chartContainerRef.current
-
-        chart = createChart(container, {
-          width: container.clientWidth,
-          height: 100,
-          layout: {
-            background: { type: ColorType.Solid, color: 'transparent' },
-            textColor: 'transparent',
-            fontFamily: 'Inter, sans-serif',
-          },
-          grid: {
-            vertLines: { visible: false },
-            horzLines: { visible: false },
-          },
-          crosshair: {
-            vertLine: {
-              visible: false,
-              labelVisible: false,
-            },
-            horzLine: {
-              visible: false,
-              labelVisible: false,
-            },
-          },
-          rightPriceScale: { visible: false },
-          timeScale: {
-            visible: false,
-            borderVisible: false,
-          },
-          handleScroll: false,
-          handleScale: false,
-        })
-
-        const lineColor = isPositive ? '#22c55e' : '#ef4444'
-        const topColor = isPositive ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'
-        const bottomColor = isPositive ? 'rgba(34, 197, 94, 0)' : 'rgba(239, 68, 68, 0)'
-
-        const areaSeries = chart.addAreaSeries({
-          lineColor,
-          topColor,
-          bottomColor,
-          lineWidth: 2,
-          crosshairMarkerVisible: false,
-          priceLineVisible: false,
-          lastValueVisible: false,
-        })
-
-        // Generate mock data - 48 data points over 24 hours
-        const now = Math.floor(Date.now() / 1000)
-        const baseValue = 29000
-        const mockData = Array.from({ length: 48 }, (_, i) => {
-          const time = now - (47 - i) * 1800
-          const trend = isPositive ? i * 8 : -i * 5
-          const noise = Math.sin(i * 0.7) * 200 + Math.cos(i * 1.3) * 150
-          return {
-            time: time as any,
-            value: baseValue + trend + noise,
-          }
-        })
-
-        areaSeries.setData(mockData)
-        chart.timeScale().fitContent()
-        chartRef.current = chart
-        setChartReady(true)
-      } catch (error) {
-        console.error('Failed to init chart:', error)
+    // Use ResizeObserver to detect when the container has real dimensions,
+    // then initialize the chart. This is more reliable than setTimeout in
+    // extension popups where layout may be deferred.
+    let initialized = false
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (!entry) return
+      const { width } = entry.contentRect
+      if (width > 0 && !initialized) {
+        initialized = true
+        observer.disconnect()
+        setupChart()
+      } else if (width > 0 && chartInstanceRef.current) {
+        // Handle subsequent resizes
+        chartInstanceRef.current.applyOptions({ width })
       }
-    }
+    })
+    observer.observe(container)
 
-    initChart()
-
-    const handleResize = () => {
-      if (chart && chartContainerRef.current) {
-        chart.applyOptions({ width: chartContainerRef.current.clientWidth })
+    // Fallback: if ResizeObserver doesn't fire within 200ms, force init
+    const fallback = setTimeout(() => {
+      if (!initialized) {
+        initialized = true
+        observer.disconnect()
+        setupChart()
       }
-    }
-
-    window.addEventListener('resize', handleResize)
+    }, 200)
 
     return () => {
-      window.removeEventListener('resize', handleResize)
-      if (chart) {
-        chart.remove()
+      clearTimeout(fallback)
+      observer.disconnect()
+      if (chartInstanceRef.current) {
+        try { chartInstanceRef.current.remove() } catch {}
+        chartInstanceRef.current = null
       }
     }
-  }, [isPositive])
+  }, [setupChart])
 
   return (
     <div className="space-y-2 mt-2">
@@ -134,10 +209,27 @@ export function PortfolioChart({ change24h = 4.34 }: PortfolioChartProps) {
       </div>
 
       <div
-        ref={chartContainerRef}
-        className="w-full h-[100px] relative"
-        style={{ opacity: chartReady ? 1 : 0, transition: 'opacity 0.3s ease' }}
-      />
+        className="w-full relative"
+        onMouseLeave={() => setHoverData(null)}
+      >
+        {/* Price tooltip on hover */}
+        {hoverData && (
+          <div className="absolute top-0 left-0 z-10 flex items-center gap-2 pointer-events-none">
+            <span className="text-sm font-semibold text-foreground">{hoverData.price}</span>
+            <span className="text-[10px] text-muted-foreground">{hoverData.time}</span>
+          </div>
+        )}
+        <div
+          ref={chartContainerRef}
+          className="w-full relative"
+          style={{
+            height: 90,
+            minWidth: 200,
+            opacity: ready ? 1 : 0,
+            transition: 'opacity 0.3s ease',
+          }}
+        />
+      </div>
     </div>
   )
 }

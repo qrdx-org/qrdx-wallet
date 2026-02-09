@@ -95,7 +95,7 @@ export function Dashboard() {
         </div>
 
         {/* Balance Card */}
-        <Card className="glass border-primary/10 overflow-hidden">
+        <Card className="glass border-primary/10">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/10 pointer-events-none" />
           <CardContent className="p-4 relative">
             <div className="flex items-center justify-between mb-1">
