@@ -34,6 +34,8 @@ import {
   Sparkles,
   UserPlus,
   Star,
+  Fingerprint,
+  Users,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -45,9 +47,37 @@ interface SettingsProps {
 }
 
 // ─── Mock data ──────────────────────────────────────────────────────────────
-const MOCK_WALLETS = [
-  { id: '1', name: 'Main Wallet', address: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb', isActive: true },
-  { id: '2', name: 'Trading', address: '0x89205A3A3b2A69De6Dbf7f01ED13B2108B2c43e7', isActive: false },
+interface MockAccount {
+  id: string
+  name: string
+  ethAddress: string
+  pqAddress: string
+  isActive: boolean
+  avatar?: string
+}
+
+const MOCK_ACCOUNTS: MockAccount[] = [
+  {
+    id: '1',
+    name: 'Account 1',
+    ethAddress: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+    pqAddress: 'qr_8f3a91d2e6b5c047f1a2d3e4f5a6b7c8d9e0f1a2',
+    isActive: true,
+  },
+  {
+    id: '2',
+    name: 'Trading',
+    ethAddress: '0x89205A3A3b2A69De6Dbf7f01ED13B2108B2c43e7',
+    pqAddress: 'qr_4b7c2e91a5d8f3061c4e7a2b5d8f1c4e7a2b5d8f',
+    isActive: false,
+  },
+  {
+    id: '3',
+    name: 'Hardware',
+    ethAddress: '0x1234567890abcdef1234567890abcdef12345678',
+    pqAddress: 'qr_1a2b3c4d5e6f708192a3b4c5d6e7f80a1b2c3d4e',
+    isActive: false,
+  },
 ]
 
 const LANGUAGES = [
@@ -149,16 +179,17 @@ interface AddressBookEntry {
   id: string
   name: string
   address: string
+  addressType: 'eth' | 'pq'
   chain: string
   isFavorite: boolean
 }
 
 const MOCK_ADDRESS_BOOK: AddressBookEntry[] = [
-  { id: '1', name: 'Coinbase', address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', chain: 'Ethereum', isFavorite: true },
-  { id: '2', name: 'Alice', address: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984', chain: 'Ethereum', isFavorite: false },
-  { id: '3', name: 'QRDX Staking', address: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', chain: 'QRDX', isFavorite: true },
-  { id: '4', name: 'Bob (Polygon)', address: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', chain: 'Polygon', isFavorite: false },
-  { id: '5', name: 'Treasury', address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', chain: 'Ethereum', isFavorite: true },
+  { id: '1', name: 'Coinbase', address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', addressType: 'eth', chain: 'Ethereum', isFavorite: true },
+  { id: '2', name: 'Alice', address: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984', addressType: 'eth', chain: 'Ethereum', isFavorite: false },
+  { id: '3', name: 'QRDX Staking', address: 'qr_7a250d5630B4cF539739dF2C5dAcb4c659F2488D', addressType: 'pq', chain: 'QRDX', isFavorite: true },
+  { id: '4', name: 'Bob (Polygon)', address: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', addressType: 'eth', chain: 'Polygon', isFavorite: false },
+  { id: '5', name: 'Treasury (PQ)', address: 'qr_6B175474E89094C44Da98b954EedeAC495271d0F', addressType: 'pq', chain: 'QRDX', isFavorite: true },
 ]
 
 // Theme preview colors for the picker
@@ -362,10 +393,10 @@ export function Settings({ onBack }: SettingsProps) {
             <Card className="glass border-border/50">
               <CardContent className="p-1.5 space-y-0.5">
                 <MenuItem
-                  icon={Wallet}
-                  label="Wallets"
-                  description="Manage your wallets"
-                  value={`${MOCK_WALLETS.length} wallets`}
+                  icon={Users}
+                  label="Accounts"
+                  description="Manage accounts & addresses"
+                  value={`${MOCK_ACCOUNTS.length} accounts`}
                   onClick={() => setPage('wallets')}
                   gradient="from-primary to-primary/60"
                 />
@@ -526,42 +557,59 @@ export function Settings({ onBack }: SettingsProps) {
     )
   }
 
-  // ── Wallets ───────────────────────────────────────────────────────────────
+  // ── Accounts ──────────────────────────────────────────────────────────────
   if (page === 'wallets') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-        <Header title="Wallets" />
+        <Header title="Accounts" />
         <div className="px-4 py-3 space-y-3">
+          {/* Account list */}
           <Card className="glass border-border/50">
             <CardContent className="p-1.5 space-y-0.5">
-              {MOCK_WALLETS.map((wallet) => (
+              {MOCK_ACCOUNTS.map((acct) => (
                 <div
-                  key={wallet.id}
-                  className={`flex items-center gap-3 p-3 rounded-xl transition-all ${
-                    wallet.isActive
+                  key={acct.id}
+                  className={`p-3 rounded-xl transition-all ${
+                    acct.isActive
                       ? 'bg-primary/10 border border-primary/30'
                       : 'hover:bg-accent/30'
                   }`}
                 >
-                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-sm">
-                    <span className="text-white font-bold text-xs">
-                      {wallet.address.slice(2, 4).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold">{wallet.name}</span>
-                      {wallet.isActive && (
-                        <span className="px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-500 text-[9px] font-semibold">
-                          Active
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-sm shrink-0">
+                      <span className="text-white font-bold text-xs">
+                        {acct.name.slice(0, 2).toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-sm font-semibold">{acct.name}</span>
+                        {acct.isActive && (
+                          <span className="px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-500 text-[9px] font-semibold">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      {/* Address pair */}
+                      <div className="flex items-center gap-1.5 text-[10px]">
+                        <span className="text-[9px] font-semibold bg-blue-500/15 text-blue-400 px-1 py-0.5 rounded">
+                          ETH
                         </span>
-                      )}
+                        <span className="text-muted-foreground font-mono truncate">
+                          {acct.ethAddress.slice(0, 8)}...{acct.ethAddress.slice(-4)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[10px] mt-1">
+                        <span className="text-[9px] font-semibold bg-primary/15 text-primary px-1.5 py-0.5 rounded">
+                          PQ
+                        </span>
+                        <span className="text-muted-foreground font-mono truncate">
+                          {acct.pqAddress.slice(0, 8)}...{acct.pqAddress.slice(-4)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="text-[11px] text-muted-foreground font-mono truncate">
-                      {wallet.address.slice(0, 8)}...{wallet.address.slice(-6)}
-                    </div>
+                    {acct.isActive && <Check className="h-4 w-4 text-primary shrink-0" />}
                   </div>
-                  {wallet.isActive && <Check className="h-4 w-4 text-primary shrink-0" />}
                 </div>
               ))}
             </CardContent>
@@ -571,7 +619,7 @@ export function Settings({ onBack }: SettingsProps) {
             className="w-full h-11 font-semibold bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25"
           >
             <Plus className="h-4 w-4 mr-2" />
-            Add Wallet
+            Add Account
           </Button>
 
           <Card className="glass border-border/50">
@@ -579,7 +627,7 @@ export function Settings({ onBack }: SettingsProps) {
               <MenuItem
                 icon={Key}
                 label="Export Recovery Phrase"
-                description="Back up your wallet"
+                description="Back up your account"
                 onClick={() => {}}
               />
               <MenuItem
@@ -589,8 +637,14 @@ export function Settings({ onBack }: SettingsProps) {
                 onClick={() => {}}
               />
               <MenuItem
+                icon={Fingerprint}
+                label="Export PQ Key Pair"
+                description="Dilithium / SPHINCS+ keys"
+                onClick={() => {}}
+              />
+              <MenuItem
                 icon={Trash2}
-                label="Remove Wallet"
+                label="Remove Account"
                 description="This cannot be undone"
                 onClick={() => {}}
                 danger
@@ -1361,6 +1415,13 @@ export function Settings({ onBack }: SettingsProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="text-sm font-medium">{contact.name}</span>
+            <span className={`text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded ${
+              contact.addressType === 'pq'
+                ? 'bg-primary/15 text-primary'
+                : 'bg-blue-500/15 text-blue-400'
+            }`}>
+              {contact.addressType === 'pq' ? 'PQ' : 'ETH'}
+            </span>
             <span className="text-[9px] bg-muted/80 text-muted-foreground px-1.5 py-0.5 rounded-full">
               {contact.chain}
             </span>

@@ -48,11 +48,22 @@ export interface Network {
 }
 
 // Storage Types
+
+/**
+ * A stored account has a paired ETH + PQ (post-quantum) address.
+ * On QRDX chain every account is represented by both an EVM-compatible
+ * address and a quantum-resistant address derived from Dilithium/SPHINCS+ keys.
+ */
 export interface StoredWallet {
   id: string
   name: string
   encryptedPrivateKey: string
   publicKey: string
+  /** Primary QRDX / EVM-compatible address (0x…) */
+  ethAddress: string
+  /** Post-Quantum address (qr_…) */
+  pqAddress: string
+  /** @deprecated kept for backwards compat — resolves to ethAddress */
   address: string
   createdAt: number
 }

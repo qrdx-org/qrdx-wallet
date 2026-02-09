@@ -63,7 +63,9 @@ export class WalletManager {
       name,
       encryptedPrivateKey,
       publicKey,
-      address,
+      ethAddress: address.startsWith('0x') ? address : `0x${address.replace(/^qr_/, '')}`,
+      pqAddress: address.startsWith('qr_') ? address : `qr_${address.replace(/^0x/, '')}`,
+      address, // backwards compat
       createdAt: Date.now()
     }
 
@@ -89,6 +91,8 @@ export class WalletManager {
     // This is a placeholder implementation
     const publicKey = 'qr_pub_' + privateKey.substring(0, 40)
     const address = 'qr_' + privateKey.substring(0, 40)
+    const ethAddress = '0x' + privateKey.substring(0, 40)
+    const pqAddress = 'qr_' + privateKey.substring(0, 40)
 
     const encryptedPrivateKey = await QuantumCrypto.encrypt(privateKey, password)
 
@@ -97,7 +101,9 @@ export class WalletManager {
       name,
       encryptedPrivateKey,
       publicKey,
-      address,
+      ethAddress,
+      pqAddress,
+      address, // backwards compat
       createdAt: Date.now()
     }
 

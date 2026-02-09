@@ -10,20 +10,53 @@ interface PortfolioChartProps {
   change24h?: number
 }
 
-// Generate deterministic mock data so chart always has something to show
+// Generate realistic mock data with random walk and volatility
 function generateMockData(isPositive: boolean) {
   const now = Math.floor(Date.now() / 1000)
   const baseValue = 29000
   const points = []
+  
+  // Seed random number generator for consistency (based on current day)
+  const seed = Math.floor(now / 86400)
+  const random = (n: number) => {
+    const x = Math.sin(seed + n) * 10000
+    return x - Math.floor(x)
+  }
+  
+  let currentValue = baseValue
+  const trendStrength = isPositive ? 12 : -8
+  
   for (let i = 0; i < 48; i++) {
     const time = now - (47 - i) * 1800
-    const trend = isPositive ? i * 8 : -i * 5
-    const noise = Math.sin(i * 0.7) * 200 + Math.cos(i * 1.3) * 150
+    
+    // Random walk component (each step depends on previous)
+    const randomWalk = (random(i * 3) - 0.5) * 250
+    
+    // Trend component (overall direction)
+    const trend = (i / 48) * trendStrength * 40
+    
+    // Volatility spikes (occasional larger movements)
+    const volatilitySpike = random(i * 7) > 0.85 ? (random(i * 11) - 0.5) * 600 : 0
+    
+    // Mean reversion (pull towards base + trend)
+    const targetValue = baseValue + trend
+    const meanReversion = (targetValue - currentValue) * 0.15
+    
+    // Multi-frequency noise for more natural movement
+    const noise1 = Math.sin(i * 0.4 + random(i)) * 120 * random(i * 2)
+    const noise2 = Math.cos(i * 1.1 + random(i * 5)) * 80 * random(i * 4)
+    const noise3 = Math.sin(i * 2.3 + random(i * 9)) * 50 * random(i * 6)
+    
+    // Combine all components
+    currentValue += randomWalk + meanReversion + volatilitySpike * 0.3
+    const finalValue = currentValue + noise1 + noise2 + noise3
+    
     points.push({
       time: time as any,
-      value: baseValue + trend + noise,
+      value: Math.max(finalValue, baseValue * 0.85), // Floor to prevent going too low
     })
   }
+  
   return points
 }
 

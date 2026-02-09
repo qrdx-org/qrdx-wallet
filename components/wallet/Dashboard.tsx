@@ -14,17 +14,23 @@ import { useWallet } from '@/src/shared/contexts/WalletContext'
 
 export function Dashboard() {
   const { lock, currentWallet } = useWallet()
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<'eth' | 'pq' | null>(null)
   const [balanceVisible, setBalanceVisible] = useState(true)
   const [activeTab, setActiveTab] = useState<'tokens' | 'nfts' | 'activity'>('tokens')
   const [showSettings, setShowSettings] = useState(false)
-  const address = currentWallet?.address ?? '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'
+  const [addressMode, setAddressMode] = useState<'eth' | 'pq'>('eth')
+
+  const accountName = currentWallet?.name ?? 'Account 1'
+  const ethAddress = currentWallet?.ethAddress ?? currentWallet?.address ?? '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'
+  const pqAddress = (currentWallet as any)?.pqAddress ?? 'qr_8f3a91d2e6b5c047f1a2d3e4f5a6b7c8d9e0f1a2'
+  const activeAddress = addressMode === 'eth' ? ethAddress : pqAddress
   const totalBalance = '$29,703.62'
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(address)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const handleCopy = (type: 'eth' | 'pq') => {
+    const addr = type === 'eth' ? ethAddress : pqAddress
+    navigator.clipboard.writeText(addr)
+    setCopied(type)
+    setTimeout(() => setCopied(null), 2000)
   }
 
   const handleLock = async () => {
@@ -52,27 +58,50 @@ export function Dashboard() {
               <div className="relative">
                 <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-md shadow-primary/20">
                   <span className="text-white font-bold text-xs">
-                    {address.slice(2, 4).toUpperCase()}
+                    {accountName.slice(0, 2).toUpperCase()}
                   </span>
                 </div>
                 <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 border-2 border-background" />
               </div>
               <div>
                 <div className="font-semibold text-sm flex items-center gap-1">
-                  QRDX Wallet
+                  {accountName}
                   <ChevronDown className="h-3 w-3 text-muted-foreground" />
                 </div>
-                <button
-                  onClick={handleCopy}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors font-mono"
-                >
-                  {formatAddress(address)}
-                  {copied ? (
-                    <Check className="h-3 w-3 text-green-500" />
-                  ) : (
-                    <Copy className="h-3 w-3" />
-                  )}
-                </button>
+                {/* Address type switcher */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setAddressMode('eth')}
+                    className={`text-[9px] font-semibold uppercase px-1 py-0.5 rounded transition-colors ${
+                      addressMode === 'eth'
+                        ? 'bg-blue-500/20 text-blue-400'
+                        : 'text-muted-foreground/50 hover:text-muted-foreground'
+                    }`}
+                  >
+                    ETH
+                  </button>
+                  <button
+                    onClick={() => setAddressMode('pq')}
+                    className={`text-[9px] font-semibold uppercase px-1 py-0.5 rounded transition-colors ${
+                      addressMode === 'pq'
+                        ? 'bg-primary/20 text-primary'
+                        : 'text-muted-foreground/50 hover:text-muted-foreground'
+                    }`}
+                  >
+                    PQ
+                  </button>
+                  <button
+                    onClick={() => handleCopy(addressMode)}
+                    className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary transition-colors font-mono ml-0.5"
+                  >
+                    {formatAddress(activeAddress, 4)}
+                    {copied === addressMode ? (
+                      <Check className="h-2.5 w-2.5 text-green-500" />
+                    ) : (
+                      <Copy className="h-2.5 w-2.5" />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-1">
