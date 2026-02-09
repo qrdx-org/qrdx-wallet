@@ -30,6 +30,10 @@ import {
   Code,
   Zap,
   X,
+  BookUser,
+  Sparkles,
+  UserPlus,
+  Star,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -141,6 +145,22 @@ const DEFAULT_INJECTED_APIS: InjectedApi[] = [
   { id: 'qrdx-pq', name: 'QRDX Post-Quantum', description: 'Dilithium & SPHINCS+ signature schemes', namespace: 'window.qrdx.pq', enabled: true, icon: 'qrdx' },
 ]
 
+interface AddressBookEntry {
+  id: string
+  name: string
+  address: string
+  chain: string
+  isFavorite: boolean
+}
+
+const MOCK_ADDRESS_BOOK: AddressBookEntry[] = [
+  { id: '1', name: 'Coinbase', address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', chain: 'Ethereum', isFavorite: true },
+  { id: '2', name: 'Alice', address: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984', chain: 'Ethereum', isFavorite: false },
+  { id: '3', name: 'QRDX Staking', address: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', chain: 'QRDX', isFavorite: true },
+  { id: '4', name: 'Bob (Polygon)', address: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', chain: 'Polygon', isFavorite: false },
+  { id: '5', name: 'Treasury', address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', chain: 'Ethereum', isFavorite: true },
+]
+
 // Theme preview colors for the picker
 const THEME_PREVIEWS: Record<ThemeValue, { bg: string; card: string; accent: string; text: string; label: string }> = {
   dark: { bg: '#020817', card: '#0c1425', accent: '#8A50FF', text: '#f8fafc', label: 'QRDX Purple Dark' },
@@ -162,6 +182,8 @@ type SettingsPage =
   | 'network-detail'
   | 'connected-sites'
   | 'injected-apis'
+  | 'address-book'
+  | 'smart-wallet'
   | 'about'
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -185,6 +207,7 @@ export function Settings({ onBack }: SettingsProps) {
   const [editingNetwork, setEditingNetwork] = useState<Network | null>(null)
   const [connectedSites, setConnectedSites] = useState<ConnectedSite[]>(MOCK_CONNECTED_SITES)
   const [injectedApis, setInjectedApis] = useState<InjectedApi[]>(DEFAULT_INJECTED_APIS)
+  const [addressBook, setAddressBook] = useState<AddressBookEntry[]>(MOCK_ADDRESS_BOOK)
 
   const goBack = () => {
     if (page === 'main') {
@@ -369,6 +392,48 @@ export function Settings({ onBack }: SettingsProps) {
                   value={currency}
                   onClick={() => setPage('currency')}
                   gradient="from-green-500 to-emerald-500"
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Wallet Features section */}
+          <div className="space-y-0.5">
+            <div className="px-1 mb-1.5">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Wallet Features
+              </span>
+            </div>
+            <Card className="glass border-border/50">
+              <CardContent className="p-1.5 space-y-0.5">
+                {/* Smart Wallet - Coming Soon */}
+                <div className="relative">
+                  <button
+                    onClick={() => setPage('smart-wallet')}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left opacity-50 cursor-default"
+                  >
+                    <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 bg-gradient-to-br from-purple-500/40 to-pink-500/40 text-white/60">
+                      <Sparkles className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-muted-foreground">Smart Wallet</span>
+                        <span className="text-[9px] bg-primary/15 text-primary px-1.5 py-0.5 rounded-full font-semibold">
+                          Coming Soon
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground/60 truncate">Account abstraction & gasless txns</div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground/30 shrink-0" />
+                  </button>
+                </div>
+                <MenuItem
+                  icon={BookUser}
+                  label="Address Book"
+                  description="Saved addresses & contacts"
+                  value={`${addressBook.length} contacts`}
+                  onClick={() => setPage('address-book')}
+                  gradient="from-cyan-500 to-blue-500"
                 />
               </CardContent>
             </Card>
@@ -1198,6 +1263,194 @@ export function Settings({ onBack }: SettingsProps) {
               </span>
             </div>
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Smart Wallet (Coming Soon) ────────────────────────────────────────────
+  if (page === 'smart-wallet') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Header title="Smart Wallet" />
+        <div className="px-4 py-3 space-y-4">
+          <div className="flex flex-col items-center py-8 animate-fade-in">
+            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center shadow-lg mb-3 opacity-60">
+              <Sparkles className="h-8 w-8 text-primary/50" />
+            </div>
+            <span className="text-[10px] bg-primary/15 text-primary px-2.5 py-1 rounded-full font-semibold mb-3">
+              Coming Soon
+            </span>
+            <h2 className="text-base font-bold text-muted-foreground">Smart Wallet</h2>
+            <p className="text-[11px] text-muted-foreground/60 text-center mt-1 max-w-[260px] leading-relaxed">
+              ERC-4337 account abstraction with gasless transactions, social recovery, session keys, and batch operations.
+            </p>
+          </div>
+
+          <Card className="glass border-border/50 opacity-50">
+            <CardContent className="p-1.5 space-y-0.5">
+              <div className="flex items-center gap-3 p-3 rounded-xl">
+                <div className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center shrink-0">
+                  <Zap className="h-4 w-4 text-muted-foreground/50" />
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-muted-foreground/60">Gasless Transactions</div>
+                  <div className="text-[10px] text-muted-foreground/40">Sponsor gas fees via paymasters</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-xl">
+                <div className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center shrink-0">
+                  <Key className="h-4 w-4 text-muted-foreground/50" />
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-muted-foreground/60">Social Recovery</div>
+                  <div className="text-[10px] text-muted-foreground/40">Recover wallet with trusted guardians</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-xl">
+                <div className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center shrink-0">
+                  <Shield className="h-4 w-4 text-muted-foreground/50" />
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-muted-foreground/60">Session Keys</div>
+                  <div className="text-[10px] text-muted-foreground/40">Approve dApps for limited-scope access</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-xl">
+                <div className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center shrink-0">
+                  <Blocks className="h-4 w-4 text-muted-foreground/50" />
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-muted-foreground/60">Batch Operations</div>
+                  <div className="text-[10px] text-muted-foreground/40">Bundle multiple transactions in one</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="px-1 py-2 text-center">
+            <p className="text-[10px] text-muted-foreground/50">
+              Smart wallet features are under development and will be available in a future update.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Address Book ──────────────────────────────────────────────────────────
+  if (page === 'address-book') {
+    const favorites = addressBook.filter((c) => c.isFavorite)
+    const others = addressBook.filter((c) => !c.isFavorite)
+
+    const toggleFavorite = (id: string) => {
+      setAddressBook(
+        addressBook.map((c) => (c.id === id ? { ...c, isFavorite: !c.isFavorite } : c))
+      )
+    }
+
+    const removeContact = (id: string) => {
+      setAddressBook(addressBook.filter((c) => c.id !== id))
+    }
+
+    const ContactRow = ({ contact }: { contact: AddressBookEntry }) => (
+      <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-accent/30 transition-all group">
+        <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary/80 to-primary/40 flex items-center justify-center text-white text-xs font-bold shrink-0">
+          {contact.name.slice(0, 2).toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-medium">{contact.name}</span>
+            <span className="text-[9px] bg-muted/80 text-muted-foreground px-1.5 py-0.5 rounded-full">
+              {contact.chain}
+            </span>
+          </div>
+          <div className="text-[10px] text-muted-foreground font-mono truncate">
+            {contact.address}
+          </div>
+        </div>
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+          <button
+            onClick={() => toggleFavorite(contact.id)}
+            className={`h-7 w-7 rounded-lg flex items-center justify-center transition-colors ${
+              contact.isFavorite
+                ? 'text-amber-400 hover:bg-amber-500/10'
+                : 'text-muted-foreground hover:bg-accent/50'
+            }`}
+            title={contact.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Star className={`h-3.5 w-3.5 ${contact.isFavorite ? 'fill-amber-400' : ''}`} />
+          </button>
+          <button
+            onClick={() => removeContact(contact.id)}
+            className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            title="Remove"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+    )
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Header title="Address Book" />
+        <div className="px-4 py-3 space-y-3">
+          {addressBook.length === 0 ? (
+            <div className="flex flex-col items-center py-10 animate-fade-in">
+              <div className="h-14 w-14 rounded-2xl bg-muted/50 flex items-center justify-center mb-3">
+                <BookUser className="h-7 w-7 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium text-muted-foreground">No saved contacts</p>
+              <p className="text-[11px] text-muted-foreground/70 mt-1">
+                Add addresses you send to frequently
+              </p>
+            </div>
+          ) : (
+            <>
+              {favorites.length > 0 && (
+                <div className="space-y-0.5">
+                  <div className="px-1 mb-1">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      Favorites
+                    </span>
+                  </div>
+                  <Card className="glass border-border/50">
+                    <CardContent className="p-1.5 space-y-0.5">
+                      {favorites.map((c) => (
+                        <ContactRow key={c.id} contact={c} />
+                      ))}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {others.length > 0 && (
+                <div className="space-y-0.5">
+                  <div className="px-1 mb-1">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      All Contacts
+                    </span>
+                  </div>
+                  <Card className="glass border-border/50">
+                    <CardContent className="p-1.5 space-y-0.5">
+                      {others.map((c) => (
+                        <ContactRow key={c.id} contact={c} />
+                      ))}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </>
+          )}
+
+          <Button
+            variant="outline"
+            className="w-full h-10 font-medium glass hover:bg-accent/50 hover:border-primary/30"
+          >
+            <UserPlus className="h-4 w-4 mr-2" />
+            Add Contact
+          </Button>
         </div>
       </div>
     )
