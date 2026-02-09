@@ -1,3 +1,9 @@
+/**
+ * QRDX Wallet — Extension popup entry point.
+ *
+ * This file is the React root for the browser-extension popup.
+ * It is compiled by the build script and bundled into dist/<browser>/popup/.
+ */
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { WalletHome } from '../../components/WalletHome'

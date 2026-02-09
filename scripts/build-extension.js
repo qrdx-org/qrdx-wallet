@@ -8,6 +8,7 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const esbuild = require('esbuild');
 
 // Directories
 const rootDir = path.join(__dirname, '..');
@@ -238,116 +239,48 @@ function copyNextOutput(targetDir) {
   processHTMLFiles(popupDir);
 }
 
-function createExtensionScripts(targetDir) {
-  log('Creating extension scripts...');
-  
-  // Create background directory
-  const backgroundDir = path.join(targetDir, 'background');
-  fs.mkdirSync(backgroundDir, { recursive: true });
-  
-  // Create background script with proper error handling
-  const backgroundScript = `// QRDX Wallet Background Script
-'use strict';
+function createExtensionScripts(targetDir, browser) {
+  log('Compiling extension scripts with esbuild...');
 
-console.log('QRDX Wallet background script loaded');
+  const srcDir = path.join(rootDir, 'src', 'extension');
 
-// Initialize wallet on install
-if (typeof chrome !== 'undefined' && chrome.runtime) {
-  chrome.runtime.onInstalled.addListener((details) => {
-    console.log('QRDX Wallet installed', details.reason);
-    
-    // Initialize default settings
-    chrome.storage.local.set({
-      initialized: true,
-      version: '1.0.0',
-      installDate: new Date().toISOString(),
-    });
+  // ── Background script ──────────────────────────────────────────────────────
+  // Chrome MV3 service workers use ES modules; Firefox MV2 background scripts
+  // are classic scripts, so we use IIFE for Firefox.
+  const bgOutDir = path.join(targetDir, 'background');
+  fs.mkdirSync(bgOutDir, { recursive: true });
+
+  esbuild.buildSync({
+    entryPoints: [path.join(srcDir, 'background.ts')],
+    bundle: true,
+    outfile: path.join(bgOutDir, 'background.js'),
+    platform: 'browser',
+    target: 'es2020',
+    format: browser === 'chrome' ? 'esm' : 'iife',
+    // Type-only imports are erased — no runtime dependency on core/types
+    external: [],
+    logLevel: 'info',
   });
 
-  // Handle messages from popup/content scripts
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    console.log('Message received:', request);
-    
-    // Handle different message types
-    switch (request.type) {
-      case 'PING':
-        sendResponse({ success: true, message: 'pong' });
-        break;
-      
-      case 'GET_WALLET_STATE':
-        // Add wallet state logic here
-        chrome.storage.local.get(['walletState'], (result) => {
-          sendResponse({ success: true, data: result.walletState });
-        });
-        return true; // Will respond asynchronously
-      
-      default:
-        sendResponse({ success: false, error: 'Unknown message type' });
-    }
-    
-    return true; // Keep channel open for async response
+  log(`  ✔ background.js (${browser === 'chrome' ? 'ESM' : 'IIFE'})`);
+
+  // ── Content script ─────────────────────────────────────────────────────────
+  // Content scripts are always classic scripts (never ES modules).
+  const contentOutDir = path.join(targetDir, 'content');
+  fs.mkdirSync(contentOutDir, { recursive: true });
+
+  esbuild.buildSync({
+    entryPoints: [path.join(srcDir, 'content.ts')],
+    bundle: true,
+    outfile: path.join(contentOutDir, 'content.js'),
+    platform: 'browser',
+    target: 'es2020',
+    format: 'iife',
+    external: [],
+    logLevel: 'info',
   });
-}`;
 
-  fs.writeFileSync(
-    path.join(backgroundDir, 'background.js'),
-    backgroundScript
-  );
-
-  // Create content directory
-  const contentDir = path.join(targetDir, 'content');
-  fs.mkdirSync(contentDir, { recursive: true });
-
-  // Create content script with Web3 provider injection capability
-  const contentScript = `// QRDX Wallet Content Script
-'use strict';
-
-console.log('QRDX Wallet content script loaded');
-
-// Inject QRDX provider into page context
-(function() {
-  // Create QRDX provider object
-  const qrdxProvider = {
-    isQRDX: true,
-    version: '1.0.0',
-    
-    // Add provider methods here
-    request: async (args) => {
-      // Send message to background script
-      return new Promise((resolve, reject) => {
-        if (typeof chrome !== 'undefined' && chrome.runtime) {
-          chrome.runtime.sendMessage(
-            { type: 'PROVIDER_REQUEST', payload: args },
-            (response) => {
-              if (chrome.runtime.lastError) {
-                reject(new Error(chrome.runtime.lastError.message));
-              } else if (response.success) {
-                resolve(response.data);
-              } else {
-                reject(new Error(response.error || 'Unknown error'));
-              }
-            }
-          );
-        } else {
-          reject(new Error('Extension not available'));
-        }
-      });
-    },
-  };
-  
-  // Inject into window
-  if (typeof window !== 'undefined') {
-    window.qrdx = qrdxProvider;
-    
-    // Dispatch event to notify page
-    window.dispatchEvent(new Event('qrdx#initialized'));
-  }
-})();`;
-
-  fs.writeFileSync(
-    path.join(contentDir, 'content.js'),
-    contentScript
-  );
+  log('  ✔ content.js (IIFE)');
 }
 
 function createIcons(targetDir) {
@@ -398,8 +331,8 @@ function buildForBrowser(browser) {
   // Copy Next.js output
   copyNextOutput(targetDir);
 
-  // Create extension scripts
-  createExtensionScripts(targetDir);
+  // Create extension scripts (compile TypeScript with esbuild)
+  createExtensionScripts(targetDir, browser);
 
   // Create icons
   createIcons(targetDir);

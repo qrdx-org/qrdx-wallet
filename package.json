@@ -66,6 +66,7 @@
     "@typescript-eslint/eslint-plugin": "^8.33.0",
     "@typescript-eslint/parser": "^8.33.0",
     "autoprefixer": "^10.4.24",
+    "esbuild": "^0.27.3",
     "eslint": "^9.19.0",
     "eslint-config-next": "^16.0.1",
     "expo": "^52.0.26",
@@ -80,5 +81,13 @@
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.8.4",
     "webextension-polyfill": "^0.12.0"
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "esbuild"
+    ],
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

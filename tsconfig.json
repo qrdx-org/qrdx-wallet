@@ -48,8 +48,8 @@
     "src/core/**/*.ts",
     "src/shared/**/*.ts",
     "src/shared/**/*.tsx",
-    "src/popup/**/*.ts",
-    "src/popup/**/*.tsx",
+    "src/extension/**/*.ts",
+    "src/extension/**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
