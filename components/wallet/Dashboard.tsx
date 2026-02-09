@@ -1,13 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { Lock, Settings, Copy, Check, Eye, EyeOff, Shield, Bell, MoreHorizontal, ChevronDown } from 'lucide-react'
+import { Lock, Settings as SettingsIcon, Copy, Check, Eye, EyeOff, Shield, Bell, MoreHorizontal, ChevronDown } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { QuickActions } from './QuickActions'
 import { TokenList } from './TokenList'
 import { ActivityList } from './ActivityList'
 import { PortfolioChart } from './PortfolioChart'
+import { Settings } from './Settings'
 import { formatAddress } from '@/lib/utils'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 
@@ -16,6 +17,7 @@ export function Dashboard() {
   const [copied, setCopied] = useState(false)
   const [balanceVisible, setBalanceVisible] = useState(true)
   const [activeTab, setActiveTab] = useState<'tokens' | 'nfts' | 'activity'>('tokens')
+  const [showSettings, setShowSettings] = useState(false)
   const address = currentWallet?.address ?? '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'
   const totalBalance = '$29,703.62'
 
@@ -27,6 +29,11 @@ export function Dashboard() {
 
   const handleLock = async () => {
     await lock()
+  }
+
+  // Show settings page
+  if (showSettings) {
+    return <Settings onBack={() => setShowSettings(false)} />
   }
 
   const tabs = [
@@ -72,8 +79,8 @@ export function Dashboard() {
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/50">
                 <Bell className="h-4 w-4 text-muted-foreground" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/50">
-                <Settings className="h-4 w-4 text-muted-foreground" />
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/50" onClick={() => setShowSettings(true)}>
+                <SettingsIcon className="h-4 w-4 text-muted-foreground" />
               </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/50" onClick={handleLock}>
                 <Lock className="h-4 w-4 text-muted-foreground" />

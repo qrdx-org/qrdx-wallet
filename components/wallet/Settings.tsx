@@ -1,0 +1,819 @@
+'use client'
+
+import { useState } from 'react'
+import {
+  ArrowLeft,
+  ChevronRight,
+  Wallet,
+  Shield,
+  Globe,
+  DollarSign,
+  Bell,
+  Lock,
+  Key,
+  Trash2,
+  Plus,
+  Check,
+  Moon,
+  Sun,
+  Palette,
+  Monitor,
+  Info,
+  ExternalLink,
+} from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { useTheme } from 'next-themes'
+import { THEME_OPTIONS, type ThemeValue } from '@/components/theme-provider'
+
+interface SettingsProps {
+  onBack: () => void
+}
+
+// ─── Mock data ──────────────────────────────────────────────────────────────
+const MOCK_WALLETS = [
+  { id: '1', name: 'Main Wallet', address: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb', isActive: true },
+  { id: '2', name: 'Trading', address: '0x89205A3A3b2A69De6Dbf7f01ED13B2108B2c43e7', isActive: false },
+]
+
+const LANGUAGES = [
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Español' },
+  { code: 'fr', label: 'Français' },
+  { code: 'de', label: 'Deutsch' },
+  { code: 'ja', label: '日本語' },
+  { code: 'ko', label: '한국어' },
+  { code: 'zh', label: '中文' },
+]
+
+const CURRENCIES = [
+  { code: 'USD', symbol: '$', label: 'US Dollar' },
+  { code: 'EUR', symbol: '€', label: 'Euro' },
+  { code: 'GBP', symbol: '£', label: 'British Pound' },
+  { code: 'JPY', symbol: '¥', label: 'Japanese Yen' },
+  { code: 'KRW', symbol: '₩', label: 'Korean Won' },
+  { code: 'BTC', symbol: '₿', label: 'Bitcoin' },
+  { code: 'ETH', symbol: 'Ξ', label: 'Ethereum' },
+]
+
+const NETWORKS = [
+  { id: 'qrdx-mainnet', name: 'QRDX Mainnet', rpc: 'https://rpc.qrdx.org', active: true },
+  { id: 'qrdx-testnet', name: 'QRDX Testnet', rpc: 'https://testnet-rpc.qrdx.org', active: false },
+]
+
+// Theme preview colors for the picker
+const THEME_PREVIEWS: Record<ThemeValue, { bg: string; card: string; accent: string; text: string; label: string }> = {
+  dark: { bg: '#020817', card: '#0c1425', accent: '#8A50FF', text: '#f8fafc', label: 'QRDX Purple Dark' },
+  light: { bg: '#ffffff', card: '#ffffff', accent: '#8A50FF', text: '#020817', label: 'QRDX Purple Light' },
+  'mono-light': { bg: '#ffffff', card: '#ffffff', accent: '#0f172a', text: '#020817', label: 'Monochrome Light' },
+  'mono-dark': { bg: '#020817', card: '#020817', accent: '#f8fafc', text: '#f8fafc', label: 'Monochrome Dark' },
+}
+
+// ─── Sub-page type ──────────────────────────────────────────────────────────
+type SettingsPage =
+  | 'main'
+  | 'wallets'
+  | 'theme'
+  | 'language'
+  | 'currency'
+  | 'security'
+  | 'notifications'
+  | 'network'
+  | 'about'
+
+// ─── Component ──────────────────────────────────────────────────────────────
+export function Settings({ onBack }: SettingsProps) {
+  const [page, setPage] = useState<SettingsPage>('main')
+  const { theme, setTheme } = useTheme()
+
+  // Mock state
+  const [language, setLanguage] = useState('en')
+  const [currency, setCurrency] = useState('USD')
+  const [notifications, setNotifications] = useState({
+    transactions: true,
+    priceAlerts: true,
+    securityAlerts: true,
+    marketing: false,
+  })
+  const [autoLock, setAutoLock] = useState('5')
+  const [biometrics, setBiometrics] = useState(false)
+
+  const goBack = () => {
+    if (page === 'main') {
+      onBack()
+    } else {
+      setPage('main')
+    }
+  }
+
+  // ── Header ────────────────────────────────────────────────────────────────
+  const Header = ({ title }: { title: string }) => (
+    <div className="glass-strong sticky top-0 z-20">
+      <div className="px-4 py-3">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-lg hover:bg-accent/50"
+            onClick={goBack}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h1 className="text-sm font-semibold">{title}</h1>
+        </div>
+      </div>
+    </div>
+  )
+
+  // ── Menu item ─────────────────────────────────────────────────────────────
+  const MenuItem = ({
+    icon: Icon,
+    label,
+    description,
+    onClick,
+    value,
+    danger,
+    gradient,
+  }: {
+    icon: React.ElementType
+    label: string
+    description?: string
+    onClick?: () => void
+    value?: string
+    danger?: boolean
+    gradient?: string
+  }) => (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-accent/30 transition-all text-left group"
+    >
+      <div
+        className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${
+          danger
+            ? 'bg-red-500/10 text-red-500'
+            : gradient
+              ? `bg-gradient-to-br ${gradient} text-white`
+              : 'bg-primary/10 text-primary'
+        }`}
+      >
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className={`text-sm font-medium ${danger ? 'text-red-500' : ''}`}>{label}</div>
+        {description && (
+          <div className="text-[11px] text-muted-foreground truncate">{description}</div>
+        )}
+      </div>
+      {value && (
+        <span className="text-xs text-muted-foreground shrink-0">{value}</span>
+      )}
+      <ChevronRight className="h-4 w-4 text-muted-foreground/50 shrink-0 group-hover:text-foreground transition-colors" />
+    </button>
+  )
+
+  // ── Toggle item ───────────────────────────────────────────────────────────
+  const ToggleItem = ({
+    label,
+    description,
+    checked,
+    onChange,
+  }: {
+    label: string
+    description?: string
+    checked: boolean
+    onChange: (v: boolean) => void
+  }) => (
+    <div className="flex items-center justify-between p-3 rounded-xl">
+      <div>
+        <div className="text-sm font-medium">{label}</div>
+        {description && (
+          <div className="text-[11px] text-muted-foreground">{description}</div>
+        )}
+      </div>
+      <button
+        onClick={() => onChange(!checked)}
+        className={`relative w-10 h-5.5 rounded-full transition-colors ${
+          checked ? 'bg-primary' : 'bg-muted'
+        }`}
+        style={{ width: 40, height: 22 }}
+      >
+        <div
+          className={`absolute top-0.5 h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform ${
+            checked ? 'translate-x-[20px]' : 'translate-x-0.5'
+          }`}
+        />
+      </button>
+    </div>
+  )
+
+  // ── Select item ───────────────────────────────────────────────────────────
+  const SelectItem = ({
+    label,
+    selected,
+    onClick,
+  }: {
+    label: string
+    selected: boolean
+    onClick: () => void
+  }) => (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${
+        selected ? 'bg-primary/10 border border-primary/30' : 'hover:bg-accent/30'
+      }`}
+    >
+      <span className={`text-sm ${selected ? 'font-semibold text-primary' : ''}`}>{label}</span>
+      {selected && <Check className="h-4 w-4 text-primary" />}
+    </button>
+  )
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PAGES
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ── Main ──────────────────────────────────────────────────────────────────
+  if (page === 'main') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Header title="Settings" />
+        <div className="px-4 py-3 space-y-2">
+          {/* General section */}
+          <div className="space-y-0.5">
+            <div className="px-1 mb-1.5">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                General
+              </span>
+            </div>
+            <Card className="glass border-border/50">
+              <CardContent className="p-1.5 space-y-0.5">
+                <MenuItem
+                  icon={Wallet}
+                  label="Wallets"
+                  description="Manage your wallets"
+                  value={`${MOCK_WALLETS.length} wallets`}
+                  onClick={() => setPage('wallets')}
+                  gradient="from-primary to-primary/60"
+                />
+                <MenuItem
+                  icon={Palette}
+                  label="Theme"
+                  description="Appearance & color scheme"
+                  value={THEME_PREVIEWS[(theme as ThemeValue) || 'dark']?.label ?? 'QRDX Purple Dark'}
+                  onClick={() => setPage('theme')}
+                  gradient="from-violet-500 to-pink-500"
+                />
+                <MenuItem
+                  icon={Globe}
+                  label="Language"
+                  description="Display language"
+                  value={LANGUAGES.find(l => l.code === language)?.label}
+                  onClick={() => setPage('language')}
+                  gradient="from-blue-500 to-cyan-500"
+                />
+                <MenuItem
+                  icon={DollarSign}
+                  label="Currency"
+                  description="Default fiat currency"
+                  value={currency}
+                  onClick={() => setPage('currency')}
+                  gradient="from-green-500 to-emerald-500"
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Security section */}
+          <div className="space-y-0.5">
+            <div className="px-1 mb-1.5">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Security & Privacy
+              </span>
+            </div>
+            <Card className="glass border-border/50">
+              <CardContent className="p-1.5 space-y-0.5">
+                <MenuItem
+                  icon={Shield}
+                  label="Security"
+                  description="Auto-lock, biometrics & backup"
+                  onClick={() => setPage('security')}
+                  gradient="from-amber-500 to-orange-500"
+                />
+                <MenuItem
+                  icon={Bell}
+                  label="Notifications"
+                  description="Transaction & price alerts"
+                  onClick={() => setPage('notifications')}
+                  gradient="from-red-500 to-rose-500"
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Network section */}
+          <div className="space-y-0.5">
+            <div className="px-1 mb-1.5">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Network
+              </span>
+            </div>
+            <Card className="glass border-border/50">
+              <CardContent className="p-1.5 space-y-0.5">
+                <MenuItem
+                  icon={Monitor}
+                  label="Networks"
+                  description="Manage RPC endpoints"
+                  value="QRDX Mainnet"
+                  onClick={() => setPage('network')}
+                  gradient="from-teal-500 to-emerald-500"
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* About section */}
+          <div className="space-y-0.5">
+            <div className="px-1 mb-1.5">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                About
+              </span>
+            </div>
+            <Card className="glass border-border/50">
+              <CardContent className="p-1.5">
+                <MenuItem
+                  icon={Info}
+                  label="About QRDX Wallet"
+                  description="v1.0.0 · Quantum-resistant"
+                  onClick={() => setPage('about')}
+                />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Wallets ───────────────────────────────────────────────────────────────
+  if (page === 'wallets') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Header title="Wallets" />
+        <div className="px-4 py-3 space-y-3">
+          <Card className="glass border-border/50">
+            <CardContent className="p-1.5 space-y-0.5">
+              {MOCK_WALLETS.map((wallet) => (
+                <div
+                  key={wallet.id}
+                  className={`flex items-center gap-3 p-3 rounded-xl transition-all ${
+                    wallet.isActive
+                      ? 'bg-primary/10 border border-primary/30'
+                      : 'hover:bg-accent/30'
+                  }`}
+                >
+                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-sm">
+                    <span className="text-white font-bold text-xs">
+                      {wallet.address.slice(2, 4).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold">{wallet.name}</span>
+                      {wallet.isActive && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-500 text-[9px] font-semibold">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground font-mono truncate">
+                      {wallet.address.slice(0, 8)}...{wallet.address.slice(-6)}
+                    </div>
+                  </div>
+                  {wallet.isActive && <Check className="h-4 w-4 text-primary shrink-0" />}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Button
+            className="w-full h-11 font-semibold bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Wallet
+          </Button>
+
+          <Card className="glass border-border/50">
+            <CardContent className="p-1.5">
+              <MenuItem
+                icon={Key}
+                label="Export Recovery Phrase"
+                description="Back up your wallet"
+                onClick={() => {}}
+              />
+              <MenuItem
+                icon={Key}
+                label="Export Private Key"
+                description="For advanced users"
+                onClick={() => {}}
+              />
+              <MenuItem
+                icon={Trash2}
+                label="Remove Wallet"
+                description="This cannot be undone"
+                onClick={() => {}}
+                danger
+              />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Theme ─────────────────────────────────────────────────────────────────
+  if (page === 'theme') {
+    const currentTheme = (theme as ThemeValue) || 'dark'
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Header title="Theme" />
+        <div className="px-4 py-3 space-y-3">
+          <div className="px-1 mb-1">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Color Theme
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            {THEME_OPTIONS.map((opt) => {
+              const preview = THEME_PREVIEWS[opt.value]
+              const isActive = currentTheme === opt.value
+
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => setTheme(opt.value)}
+                  className={`group relative rounded-xl overflow-hidden border-2 transition-all ${
+                    isActive
+                      ? 'border-primary shadow-lg shadow-primary/20 scale-[1.02]'
+                      : 'border-border/50 hover:border-border'
+                  }`}
+                >
+                  {/* Mini preview */}
+                  <div
+                    className="p-2.5 pb-2"
+                    style={{ backgroundColor: preview.bg }}
+                  >
+                    {/* Mini header bar */}
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <div
+                        className="h-3 w-3 rounded"
+                        style={{ backgroundColor: preview.accent }}
+                      />
+                      <div
+                        className="h-1.5 w-10 rounded-full"
+                        style={{ backgroundColor: preview.text, opacity: 0.3 }}
+                      />
+                    </div>
+                    {/* Mini card */}
+                    <div
+                      className="rounded-md p-1.5 mb-1.5"
+                      style={{
+                        backgroundColor: preview.card,
+                        border: `1px solid ${preview.text}11`,
+                      }}
+                    >
+                      <div
+                        className="h-1.5 w-12 rounded-full mb-1"
+                        style={{ backgroundColor: preview.text, opacity: 0.2 }}
+                      />
+                      <div
+                        className="h-2 w-16 rounded-full"
+                        style={{ backgroundColor: preview.text, opacity: 0.5 }}
+                      />
+                    </div>
+                    {/* Mini action buttons */}
+                    <div className="flex gap-1">
+                      {[1, 2, 3].map((i) => (
+                        <div
+                          key={i}
+                          className="flex-1 h-3 rounded"
+                          style={{ backgroundColor: preview.accent, opacity: i === 1 ? 0.8 : 0.15 }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  {/* Label */}
+                  <div
+                    className="px-2.5 py-2 flex items-center justify-between"
+                    style={{ backgroundColor: preview.bg }}
+                  >
+                    <div className="text-left">
+                      <div
+                        className="text-[11px] font-semibold"
+                        style={{ color: preview.text }}
+                      >
+                        {opt.label}
+                      </div>
+                      <div
+                        className="text-[9px]"
+                        style={{ color: preview.text, opacity: 0.5 }}
+                      >
+                        {opt.description}
+                      </div>
+                    </div>
+                    {isActive && (
+                      <div className="h-5 w-5 rounded-full flex items-center justify-center"
+                        style={{ backgroundColor: preview.accent }}
+                      >
+                        <Check className="h-3 w-3" style={{ color: preview.bg }} />
+                      </div>
+                    )}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="px-1 mt-1">
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              Choose between QRDX branded themes with purple accents, or clean
+              monochrome themes inspired by the QRDX website. Theme applies to all
+              extension views.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Language ──────────────────────────────────────────────────────────────
+  if (page === 'language') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Header title="Language" />
+        <div className="px-4 py-3">
+          <Card className="glass border-border/50">
+            <CardContent className="p-1.5 space-y-0.5">
+              {LANGUAGES.map((lang) => (
+                <SelectItem
+                  key={lang.code}
+                  label={lang.label}
+                  selected={language === lang.code}
+                  onClick={() => setLanguage(lang.code)}
+                />
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Currency ──────────────────────────────────────────────────────────────
+  if (page === 'currency') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Header title="Currency" />
+        <div className="px-4 py-3">
+          <Card className="glass border-border/50">
+            <CardContent className="p-1.5 space-y-0.5">
+              {CURRENCIES.map((cur) => (
+                <SelectItem
+                  key={cur.code}
+                  label={`${cur.symbol} ${cur.label} (${cur.code})`}
+                  selected={currency === cur.code}
+                  onClick={() => setCurrency(cur.code)}
+                />
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Security ──────────────────────────────────────────────────────────────
+  if (page === 'security') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Header title="Security" />
+        <div className="px-4 py-3 space-y-3">
+          <Card className="glass border-border/50">
+            <CardContent className="p-1.5 space-y-0.5">
+              <div className="p-3 rounded-xl">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="text-sm font-medium">Auto-Lock Timer</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Lock wallet after inactivity
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-1.5">
+                  {[
+                    { value: '1', label: '1m' },
+                    { value: '5', label: '5m' },
+                    { value: '15', label: '15m' },
+                    { value: '30', label: '30m' },
+                    { value: 'never', label: 'Never' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setAutoLock(opt.value)}
+                      className={`flex-1 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
+                        autoLock === opt.value
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-accent/30 text-muted-foreground hover:bg-accent/50'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <ToggleItem
+                label="Biometric Unlock"
+                description="Use fingerprint or face ID"
+                checked={biometrics}
+                onChange={setBiometrics}
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="glass border-border/50">
+            <CardContent className="p-1.5">
+              <MenuItem
+                icon={Lock}
+                label="Change Password"
+                description="Update your wallet password"
+                onClick={() => {}}
+              />
+              <MenuItem
+                icon={Key}
+                label="View Recovery Phrase"
+                description="Requires password verification"
+                onClick={() => {}}
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="glass border-border/50">
+            <CardContent className="p-1.5">
+              <MenuItem
+                icon={Trash2}
+                label="Reset Wallet"
+                description="Erase all data from this device"
+                onClick={() => {}}
+                danger
+              />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+  if (page === 'notifications') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Header title="Notifications" />
+        <div className="px-4 py-3">
+          <Card className="glass border-border/50">
+            <CardContent className="p-1.5 space-y-0.5">
+              <ToggleItem
+                label="Transactions"
+                description="Incoming & outgoing transaction alerts"
+                checked={notifications.transactions}
+                onChange={(v) => setNotifications({ ...notifications, transactions: v })}
+              />
+              <ToggleItem
+                label="Price Alerts"
+                description="Significant price movements"
+                checked={notifications.priceAlerts}
+                onChange={(v) => setNotifications({ ...notifications, priceAlerts: v })}
+              />
+              <ToggleItem
+                label="Security Alerts"
+                description="Suspicious activity warnings"
+                checked={notifications.securityAlerts}
+                onChange={(v) => setNotifications({ ...notifications, securityAlerts: v })}
+              />
+              <ToggleItem
+                label="News & Updates"
+                description="Product updates & announcements"
+                checked={notifications.marketing}
+                onChange={(v) => setNotifications({ ...notifications, marketing: v })}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Networks ──────────────────────────────────────────────────────────────
+  if (page === 'network') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Header title="Networks" />
+        <div className="px-4 py-3 space-y-3">
+          <Card className="glass border-border/50">
+            <CardContent className="p-1.5 space-y-0.5">
+              {NETWORKS.map((net) => (
+                <div
+                  key={net.id}
+                  className={`flex items-center gap-3 p-3 rounded-xl transition-all ${
+                    net.active
+                      ? 'bg-primary/10 border border-primary/30'
+                      : 'hover:bg-accent/30'
+                  }`}
+                >
+                  <div
+                    className={`h-3 w-3 rounded-full ${
+                      net.active ? 'bg-green-500' : 'bg-muted-foreground/30'
+                    }`}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium">{net.name}</div>
+                    <div className="text-[10px] text-muted-foreground font-mono truncate">
+                      {net.rpc}
+                    </div>
+                  </div>
+                  {net.active && <Check className="h-4 w-4 text-primary shrink-0" />}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Button
+            variant="outline"
+            className="w-full h-10 font-medium glass hover:bg-accent/50 hover:border-primary/30"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Custom Network
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── About ─────────────────────────────────────────────────────────────────
+  if (page === 'about') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Header title="About" />
+        <div className="px-4 py-3 space-y-4">
+          {/* Logo & version */}
+          <div className="flex flex-col items-center py-4 animate-fade-in">
+            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/25 mb-3">
+              <Shield className="h-8 w-8 text-white" />
+            </div>
+            <h2 className="text-lg font-bold">QRDX Wallet</h2>
+            <p className="text-xs text-muted-foreground">Version 1.0.0</p>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Quantum-Resistant Digital Asset Security
+            </p>
+          </div>
+
+          <Card className="glass border-border/50">
+            <CardContent className="p-1.5 space-y-0.5">
+              <MenuItem
+                icon={ExternalLink}
+                label="Website"
+                description="qrdx.org"
+                onClick={() => window.open('https://qrdx.org', '_blank')}
+              />
+              <MenuItem
+                icon={ExternalLink}
+                label="Block Explorer"
+                description="explorer.qrdx.org"
+                onClick={() => window.open('https://explorer.qrdx.org', '_blank')}
+              />
+              <MenuItem
+                icon={ExternalLink}
+                label="Documentation"
+                description="docs.qrdx.org"
+                onClick={() => window.open('https://docs.qrdx.org', '_blank')}
+              />
+              <MenuItem
+                icon={ExternalLink}
+                label="Source Code"
+                description="Open source on GitHub"
+                onClick={() => window.open('https://github.com/qrdx-org', '_blank')}
+              />
+            </CardContent>
+          </Card>
+
+          <p className="text-center text-[10px] text-muted-foreground px-4 leading-relaxed">
+            © 2026 QRDX Foundation. Built with post-quantum cryptography
+            for a secure decentralized future.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return null
+}
