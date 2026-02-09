@@ -24,6 +24,12 @@ import {
   ToggleRight,
   Pencil,
   Save,
+  Link,
+  Unplug,
+  Blocks,
+  Code,
+  Zap,
+  X,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -102,6 +108,39 @@ const NETWORKS: Network[] = [
   { id: 'zksync-mainnet', name: 'zkSync Era', rpc: 'https://mainnet.era.zksync.io', chainId: 324, symbol: 'ETH', explorer: 'https://explorer.zksync.io', isTestnet: false },
 ]
 
+interface ConnectedSite {
+  id: string
+  origin: string
+  name: string
+  favicon?: string
+  connectedAt: string
+  permissions: string[]
+}
+
+const MOCK_CONNECTED_SITES: ConnectedSite[] = [
+  { id: '1', origin: 'https://app.uniswap.org', name: 'Uniswap', connectedAt: '2026-01-15', permissions: ['View accounts', 'Request transactions'] },
+  { id: '2', origin: 'https://opensea.io', name: 'OpenSea', connectedAt: '2026-01-22', permissions: ['View accounts'] },
+  { id: '3', origin: 'https://aave.com', name: 'Aave', connectedAt: '2026-02-01', permissions: ['View accounts', 'Request transactions', 'Sign messages'] },
+  { id: '4', origin: 'https://trade.qrdx.org', name: 'QRDX Trade', connectedAt: '2026-02-05', permissions: ['View accounts', 'Request transactions', 'Sign messages'] },
+]
+
+interface InjectedApi {
+  id: string
+  name: string
+  description: string
+  namespace: string
+  enabled: boolean
+  icon: 'ethereum' | 'qrdx' | 'legacy'
+}
+
+const DEFAULT_INJECTED_APIS: InjectedApi[] = [
+  { id: 'eip1193', name: 'EIP-1193 Provider', description: 'Standard window.ethereum provider for dApps', namespace: 'window.ethereum', enabled: true, icon: 'ethereum' },
+  { id: 'eip6963', name: 'EIP-6963 Multi-Provider', description: 'Multi-wallet discovery protocol', namespace: 'EIP-6963 events', enabled: true, icon: 'ethereum' },
+  { id: 'web3', name: 'Legacy Web3', description: 'Deprecated window.web3 injection for older dApps', namespace: 'window.web3', enabled: false, icon: 'legacy' },
+  { id: 'qrdx', name: 'QRDX API', description: 'Quantum-resistant signing & QRDX chain methods', namespace: 'window.qrdx', enabled: true, icon: 'qrdx' },
+  { id: 'qrdx-pq', name: 'QRDX Post-Quantum', description: 'Dilithium & SPHINCS+ signature schemes', namespace: 'window.qrdx.pq', enabled: true, icon: 'qrdx' },
+]
+
 // Theme preview colors for the picker
 const THEME_PREVIEWS: Record<ThemeValue, { bg: string; card: string; accent: string; text: string; label: string }> = {
   dark: { bg: '#020817', card: '#0c1425', accent: '#8A50FF', text: '#f8fafc', label: 'QRDX Purple Dark' },
@@ -121,6 +160,8 @@ type SettingsPage =
   | 'notifications'
   | 'network'
   | 'network-detail'
+  | 'connected-sites'
+  | 'injected-apis'
   | 'about'
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -142,6 +183,8 @@ export function Settings({ onBack }: SettingsProps) {
   const [testnetMode, setTestnetMode] = useState(false)
   const [selectedNetwork, setSelectedNetwork] = useState<Network | null>(null)
   const [editingNetwork, setEditingNetwork] = useState<Network | null>(null)
+  const [connectedSites, setConnectedSites] = useState<ConnectedSite[]>(MOCK_CONNECTED_SITES)
+  const [injectedApis, setInjectedApis] = useState<InjectedApi[]>(DEFAULT_INJECTED_APIS)
 
   const goBack = () => {
     if (page === 'main') {
@@ -358,11 +401,11 @@ export function Settings({ onBack }: SettingsProps) {
             </Card>
           </div>
 
-          {/* Network section */}
+          {/* Network & Web3 section */}
           <div className="space-y-0.5">
             <div className="px-1 mb-1.5">
               <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Network
+                Network & Web3
               </span>
             </div>
             <Card className="glass border-border/50">
@@ -374,6 +417,22 @@ export function Settings({ onBack }: SettingsProps) {
                   value="QRDX Mainnet"
                   onClick={() => setPage('network')}
                   gradient="from-teal-500 to-emerald-500"
+                />
+                <MenuItem
+                  icon={Link}
+                  label="Connected Sites"
+                  description="Manage dApp connections"
+                  value={`${connectedSites.length} sites`}
+                  onClick={() => setPage('connected-sites')}
+                  gradient="from-blue-500 to-indigo-500"
+                />
+                <MenuItem
+                  icon={Code}
+                  label="Injected APIs"
+                  description="Web3 provider & QRDX API"
+                  value={`${injectedApis.filter(a => a.enabled).length}/${injectedApis.length} active`}
+                  onClick={() => setPage('injected-apis')}
+                  gradient="from-orange-500 to-amber-500"
                 />
               </CardContent>
             </Card>
@@ -930,6 +989,215 @@ export function Settings({ onBack }: SettingsProps) {
             <Trash2 className="h-4 w-4 mr-2" />
             Remove Network
           </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Connected Sites ───────────────────────────────────────────────────────
+  if (page === 'connected-sites') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Header title="Connected Sites" />
+        <div className="px-4 py-3 space-y-3">
+          {connectedSites.length === 0 ? (
+            <div className="flex flex-col items-center py-10 animate-fade-in">
+              <div className="h-14 w-14 rounded-2xl bg-muted/50 flex items-center justify-center mb-3">
+                <Unplug className="h-7 w-7 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium text-muted-foreground">No connected sites</p>
+              <p className="text-[11px] text-muted-foreground/70 mt-1">
+                Connect to a dApp to see it here
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="px-1">
+                <p className="text-[11px] text-muted-foreground">
+                  These sites can view your account addresses and request transactions.
+                </p>
+              </div>
+              <Card className="glass border-border/50">
+                <CardContent className="p-1.5 space-y-0.5">
+                  {connectedSites.map((site) => (
+                    <div
+                      key={site.id}
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-accent/30 transition-all group"
+                    >
+                      <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0 uppercase">
+                        {site.name.slice(0, 2)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium">{site.name}</div>
+                        <div className="text-[10px] text-muted-foreground font-mono truncate">
+                          {site.origin}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground/60 mt-0.5">
+                          {site.permissions.length} permission{site.permissions.length !== 1 ? 's' : ''} · Connected {site.connectedAt}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() =>
+                          setConnectedSites(connectedSites.filter((s) => s.id !== site.id))
+                        }
+                        className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                        title="Disconnect"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Button
+                variant="outline"
+                onClick={() => setConnectedSites([])}
+                className="w-full h-10 font-medium glass text-red-400 hover:bg-red-500/10 hover:border-red-500/30"
+              >
+                <Unplug className="h-4 w-4 mr-2" />
+                Disconnect All Sites
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ── Injected APIs ─────────────────────────────────────────────────────────
+  if (page === 'injected-apis') {
+    const apiIcon = (type: InjectedApi['icon']) => {
+      switch (type) {
+        case 'ethereum':
+          return <Blocks className="h-4 w-4 text-blue-400" />
+        case 'qrdx':
+          return <Zap className="h-4 w-4 text-primary" />
+        case 'legacy':
+          return <Code className="h-4 w-4 text-amber-400" />
+      }
+    }
+
+    const toggleApi = (id: string) => {
+      setInjectedApis(
+        injectedApis.map((api) =>
+          api.id === id ? { ...api, enabled: !api.enabled } : api
+        )
+      )
+    }
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Header title="Injected APIs" />
+        <div className="px-4 py-3 space-y-3">
+          <div className="px-1">
+            <p className="text-[11px] text-muted-foreground">
+              Control which Web3 APIs are injected into web pages. Disabling an API may break
+              compatibility with some dApps.
+            </p>
+          </div>
+
+          {/* Ethereum / EVM APIs */}
+          <div className="space-y-0.5">
+            <div className="px-1 mb-1.5">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Ethereum / EVM
+              </span>
+            </div>
+            <Card className="glass border-border/50">
+              <CardContent className="p-1.5 space-y-0.5">
+                {injectedApis
+                  .filter((api) => api.icon === 'ethereum' || api.icon === 'legacy')
+                  .map((api) => (
+                    <div
+                      key={api.id}
+                      className="flex items-center gap-3 p-3 rounded-xl transition-all"
+                    >
+                      <div className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center shrink-0">
+                        {apiIcon(api.icon)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{api.name}</span>
+                          {api.icon === 'legacy' && (
+                            <span className="text-[9px] bg-amber-500/15 text-amber-400 px-1.5 py-0.5 rounded-full font-medium">
+                              Deprecated
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">{api.description}</div>
+                        <div className="text-[10px] font-mono text-muted-foreground/60 mt-0.5">
+                          {api.namespace}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => toggleApi(api.id)}
+                        className="shrink-0"
+                      >
+                        {api.enabled ? (
+                          <ToggleRight className="h-6 w-6 text-primary" />
+                        ) : (
+                          <ToggleLeft className="h-6 w-6 text-muted-foreground" />
+                        )}
+                      </button>
+                    </div>
+                  ))}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* QRDX APIs */}
+          <div className="space-y-0.5">
+            <div className="px-1 mb-1.5">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                QRDX / Post-Quantum
+              </span>
+            </div>
+            <Card className="glass border-border/50">
+              <CardContent className="p-1.5 space-y-0.5">
+                {injectedApis
+                  .filter((api) => api.icon === 'qrdx')
+                  .map((api) => (
+                    <div
+                      key={api.id}
+                      className="flex items-center gap-3 p-3 rounded-xl transition-all"
+                    >
+                      <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        {apiIcon(api.icon)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium">{api.name}</div>
+                        <div className="text-[10px] text-muted-foreground">{api.description}</div>
+                        <div className="text-[10px] font-mono text-muted-foreground/60 mt-0.5">
+                          {api.namespace}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => toggleApi(api.id)}
+                        className="shrink-0"
+                      >
+                        {api.enabled ? (
+                          <ToggleRight className="h-6 w-6 text-primary" />
+                        ) : (
+                          <ToggleLeft className="h-6 w-6 text-muted-foreground" />
+                        )}
+                      </button>
+                    </div>
+                  ))}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Warning note */}
+          <div className="px-1 py-2">
+            <div className="flex gap-2 items-start text-[10px] text-muted-foreground/70">
+              <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>
+                Changes take effect on the next page load. The EIP-1193 provider is required for
+                most Ethereum dApps. Only disable it if you know what you&apos;re doing.
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     )
