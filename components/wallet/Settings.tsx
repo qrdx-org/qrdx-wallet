@@ -20,6 +20,10 @@ import {
   Monitor,
   Info,
   ExternalLink,
+  ToggleLeft,
+  ToggleRight,
+  Pencil,
+  Save,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -56,9 +60,46 @@ const CURRENCIES = [
   { code: 'ETH', symbol: 'Ξ', label: 'Ethereum' },
 ]
 
-const NETWORKS = [
-  { id: 'qrdx-mainnet', name: 'QRDX Mainnet', rpc: 'https://rpc.qrdx.org', active: true },
-  { id: 'qrdx-testnet', name: 'QRDX Testnet', rpc: 'https://testnet-rpc.qrdx.org', active: false },
+interface Network {
+  id: string
+  name: string
+  rpc: string
+  chainId: number
+  symbol: string
+  explorer: string
+  isTestnet: boolean
+  icon?: string
+}
+
+const NETWORKS: Network[] = [
+  // ── QRDX ──
+  { id: 'qrdx-mainnet', name: 'QRDX Mainnet', rpc: 'https://rpc.qrdx.org', chainId: 7225, symbol: 'QRDX', explorer: 'https://explorer.qrdx.org', isTestnet: false },
+  { id: 'qrdx-testnet', name: 'QRDX Testnet', rpc: 'https://testnet-rpc.qrdx.org', chainId: 7226, symbol: 'QRDX', explorer: 'https://testnet.explorer.qrdx.org', isTestnet: true },
+  // ── Ethereum ──
+  { id: 'eth-mainnet', name: 'Ethereum', rpc: 'https://eth.llamarpc.com', chainId: 1, symbol: 'ETH', explorer: 'https://etherscan.io', isTestnet: false },
+  { id: 'eth-sepolia', name: 'Ethereum Sepolia', rpc: 'https://rpc.sepolia.org', chainId: 11155111, symbol: 'ETH', explorer: 'https://sepolia.etherscan.io', isTestnet: true },
+  // ── Polygon ──
+  { id: 'polygon-mainnet', name: 'Polygon', rpc: 'https://polygon-rpc.com', chainId: 137, symbol: 'POL', explorer: 'https://polygonscan.com', isTestnet: false },
+  { id: 'polygon-amoy', name: 'Polygon Amoy', rpc: 'https://rpc-amoy.polygon.technology', chainId: 80002, symbol: 'POL', explorer: 'https://amoy.polygonscan.com', isTestnet: true },
+  // ── Arbitrum ──
+  { id: 'arb-mainnet', name: 'Arbitrum One', rpc: 'https://arb1.arbitrum.io/rpc', chainId: 42161, symbol: 'ETH', explorer: 'https://arbiscan.io', isTestnet: false },
+  { id: 'arb-sepolia', name: 'Arbitrum Sepolia', rpc: 'https://sepolia-rollup.arbitrum.io/rpc', chainId: 421614, symbol: 'ETH', explorer: 'https://sepolia.arbiscan.io', isTestnet: true },
+  // ── Optimism ──
+  { id: 'op-mainnet', name: 'Optimism', rpc: 'https://mainnet.optimism.io', chainId: 10, symbol: 'ETH', explorer: 'https://optimistic.etherscan.io', isTestnet: false },
+  { id: 'op-sepolia', name: 'OP Sepolia', rpc: 'https://sepolia.optimism.io', chainId: 11155420, symbol: 'ETH', explorer: 'https://sepolia-optimistic.etherscan.io', isTestnet: true },
+  // ── Base ──
+  { id: 'base-mainnet', name: 'Base', rpc: 'https://mainnet.base.org', chainId: 8453, symbol: 'ETH', explorer: 'https://basescan.org', isTestnet: false },
+  { id: 'base-sepolia', name: 'Base Sepolia', rpc: 'https://sepolia.base.org', chainId: 84532, symbol: 'ETH', explorer: 'https://sepolia.basescan.org', isTestnet: true },
+  // ── Avalanche ──
+  { id: 'avax-mainnet', name: 'Avalanche C-Chain', rpc: 'https://api.avax.network/ext/bc/C/rpc', chainId: 43114, symbol: 'AVAX', explorer: 'https://snowtrace.io', isTestnet: false },
+  { id: 'avax-fuji', name: 'Avalanche Fuji', rpc: 'https://api.avax-test.network/ext/bc/C/rpc', chainId: 43113, symbol: 'AVAX', explorer: 'https://testnet.snowtrace.io', isTestnet: true },
+  // ── BNB Chain ──
+  { id: 'bsc-mainnet', name: 'BNB Smart Chain', rpc: 'https://bsc-dataseed.binance.org', chainId: 56, symbol: 'BNB', explorer: 'https://bscscan.com', isTestnet: false },
+  { id: 'bsc-testnet', name: 'BNB Testnet', rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545', chainId: 97, symbol: 'BNB', explorer: 'https://testnet.bscscan.com', isTestnet: true },
+  // ── Fantom ──
+  { id: 'ftm-mainnet', name: 'Fantom Opera', rpc: 'https://rpc.ftm.tools', chainId: 250, symbol: 'FTM', explorer: 'https://ftmscan.com', isTestnet: false },
+  // ── zkSync ──
+  { id: 'zksync-mainnet', name: 'zkSync Era', rpc: 'https://mainnet.era.zksync.io', chainId: 324, symbol: 'ETH', explorer: 'https://explorer.zksync.io', isTestnet: false },
 ]
 
 // Theme preview colors for the picker
@@ -79,6 +120,7 @@ type SettingsPage =
   | 'security'
   | 'notifications'
   | 'network'
+  | 'network-detail'
   | 'about'
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -97,10 +139,17 @@ export function Settings({ onBack }: SettingsProps) {
   })
   const [autoLock, setAutoLock] = useState('5')
   const [biometrics, setBiometrics] = useState(false)
+  const [testnetMode, setTestnetMode] = useState(false)
+  const [selectedNetwork, setSelectedNetwork] = useState<Network | null>(null)
+  const [editingNetwork, setEditingNetwork] = useState<Network | null>(null)
 
   const goBack = () => {
     if (page === 'main') {
       onBack()
+    } else if (page === 'network-detail') {
+      setSelectedNetwork(null)
+      setEditingNetwork(null)
+      setPage('network')
     } else {
       setPage('main')
     }
@@ -715,34 +764,63 @@ export function Settings({ onBack }: SettingsProps) {
 
   // ── Networks ──────────────────────────────────────────────────────────────
   if (page === 'network') {
+    const filtered = NETWORKS.filter((n) => (testnetMode ? n.isTestnet : !n.isTestnet))
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
         <Header title="Networks" />
         <div className="px-4 py-3 space-y-3">
+          {/* Testnet Mode Toggle */}
           <Card className="glass border-border/50">
-            <CardContent className="p-1.5 space-y-0.5">
-              {NETWORKS.map((net) => (
-                <div
-                  key={net.id}
-                  className={`flex items-center gap-3 p-3 rounded-xl transition-all ${
-                    net.active
-                      ? 'bg-primary/10 border border-primary/30'
-                      : 'hover:bg-accent/30'
-                  }`}
-                >
-                  <div
-                    className={`h-3 w-3 rounded-full ${
-                      net.active ? 'bg-green-500' : 'bg-muted-foreground/30'
-                    }`}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium">{net.name}</div>
-                    <div className="text-[10px] text-muted-foreground font-mono truncate">
-                      {net.rpc}
+            <CardContent className="p-3">
+              <button
+                onClick={() => setTestnetMode(!testnetMode)}
+                className="flex items-center justify-between w-full"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-orange-500/15 flex items-center justify-center">
+                    <Globe className="h-4 w-4 text-orange-400" />
+                  </div>
+                  <div className="text-left">
+                    <div className="text-sm font-medium">Testnet Mode</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {testnetMode ? 'Showing test networks' : 'Showing main networks'}
                     </div>
                   </div>
-                  {net.active && <Check className="h-4 w-4 text-primary shrink-0" />}
                 </div>
+                {testnetMode ? (
+                  <ToggleRight className="h-6 w-6 text-primary" />
+                ) : (
+                  <ToggleLeft className="h-6 w-6 text-muted-foreground" />
+                )}
+              </button>
+            </CardContent>
+          </Card>
+
+          {/* Network List */}
+          <Card className="glass border-border/50">
+            <CardContent className="p-1.5 space-y-0.5">
+              {filtered.map((net) => (
+                <button
+                  key={net.id}
+                  onClick={() => {
+                    setSelectedNetwork(net)
+                    setEditingNetwork({ ...net })
+                    setPage('network-detail')
+                  }}
+                  className="flex items-center gap-3 p-3 rounded-xl transition-all hover:bg-accent/30 w-full text-left"
+                >
+                  <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                    {net.symbol.slice(0, 3)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium">{net.name}</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      Chain ID: {net.chainId} · {net.symbol}
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </button>
               ))}
             </CardContent>
           </Card>
@@ -753,6 +831,104 @@ export function Settings({ onBack }: SettingsProps) {
           >
             <Plus className="h-4 w-4 mr-2" />
             Add Custom Network
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Network Detail / Edit ─────────────────────────────────────────────────
+  if (page === 'network-detail' && editingNetwork) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Header title={selectedNetwork?.name ?? 'Network'} />
+        <div className="px-4 py-3 space-y-3">
+          {/* Network Icon & Name */}
+          <div className="flex flex-col items-center py-3 animate-fade-in">
+            <div className="h-14 w-14 rounded-2xl bg-primary/15 flex items-center justify-center text-lg font-bold text-primary shadow-lg shadow-primary/10 mb-2">
+              {editingNetwork.symbol.slice(0, 3)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {editingNetwork.isTestnet ? 'Testnet' : 'Mainnet'}
+            </p>
+          </div>
+
+          {/* Editable Fields */}
+          <Card className="glass border-border/50">
+            <CardContent className="p-3 space-y-3">
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                  Network Name
+                </label>
+                <input
+                  type="text"
+                  value={editingNetwork.name}
+                  onChange={(e) => setEditingNetwork({ ...editingNetwork, name: e.target.value })}
+                  className="mt-1 w-full rounded-lg bg-background/60 border border-border/50 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                  RPC URL
+                </label>
+                <input
+                  type="text"
+                  value={editingNetwork.rpc}
+                  onChange={(e) => setEditingNetwork({ ...editingNetwork, rpc: e.target.value })}
+                  className="mt-1 w-full rounded-lg bg-background/60 border border-border/50 px-3 py-2 text-sm font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                    Chain ID
+                  </label>
+                  <input
+                    type="number"
+                    value={editingNetwork.chainId}
+                    onChange={(e) =>
+                      setEditingNetwork({ ...editingNetwork, chainId: parseInt(e.target.value) || 0 })
+                    }
+                    className="mt-1 w-full rounded-lg bg-background/60 border border-border/50 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                    Currency Symbol
+                  </label>
+                  <input
+                    type="text"
+                    value={editingNetwork.symbol}
+                    onChange={(e) => setEditingNetwork({ ...editingNetwork, symbol: e.target.value })}
+                    className="mt-1 w-full rounded-lg bg-background/60 border border-border/50 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                  Block Explorer URL
+                </label>
+                <input
+                  type="text"
+                  value={editingNetwork.explorer}
+                  onChange={(e) => setEditingNetwork({ ...editingNetwork, explorer: e.target.value })}
+                  className="mt-1 w-full rounded-lg bg-background/60 border border-border/50 px-3 py-2 text-sm font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Button className="w-full h-10 font-medium bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/25">
+            <Save className="h-4 w-4 mr-2" />
+            Save Changes
+          </Button>
+
+          <Button
+            variant="outline"
+            className="w-full h-10 font-medium glass text-red-400 hover:bg-red-500/10 hover:border-red-500/30"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Remove Network
           </Button>
         </div>
       </div>
