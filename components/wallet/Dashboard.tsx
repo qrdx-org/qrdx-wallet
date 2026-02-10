@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { QuickActions } from './QuickActions'
 import type { QuickActionType } from './QuickActions'
 import { TokenList } from './TokenList'
+import { AllTokens } from './AllTokens'
 import { ActivityList } from './ActivityList'
 import { PortfolioChart } from './PortfolioChart'
 import { Settings } from './Settings'
@@ -28,6 +29,9 @@ export function Dashboard() {
   const [showSettings, setShowSettings] = useState(false)
   const [activeModal, setActiveModal] = useState<QuickActionType | null>(null)
   const [addressMode, setAddressMode] = useState<'eth' | 'pq'>('eth')
+  const [showAllTokens, setShowAllTokens] = useState(false)
+  const [pinnedSymbols, setPinnedSymbols] = useState<string[]>(['QRDX', 'ETH', 'USDC', 'BTC'])
+  const [favoritedSymbols, setFavoritedSymbols] = useState<string[]>(['QRDX', 'ETH'])
 
   const accountName = currentWallet?.name ?? 'Account 1'
   const ethAddress = currentWallet?.ethAddress ?? currentWallet?.address ?? '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'
@@ -72,6 +76,19 @@ export function Dashboard() {
   }
   if (activeModal === 'stake') {
     return <StakeModal onClose={() => setActiveModal(null)} />
+  }
+
+  // Show all tokens view
+  if (showAllTokens) {
+    return (
+      <AllTokens
+        pinnedSymbols={pinnedSymbols}
+        favoritedSymbols={favoritedSymbols}
+        onPinnedChange={setPinnedSymbols}
+        onFavoritedChange={setFavoritedSymbols}
+        onClose={() => setShowAllTokens(false)}
+      />
+    )
   }
 
   const tabs = [
@@ -216,7 +233,7 @@ export function Dashboard() {
         {/* Tab Content */}
         <Card className="glass border-border/50">
           <CardContent className="p-2">
-            {activeTab === 'tokens' && <TokenList />}
+            {activeTab === 'tokens' && <TokenList pinnedSymbols={pinnedSymbols} onViewAll={() => setShowAllTokens(true)} />}
             {activeTab === 'nfts' && (
               <div className="py-10 text-center">
                 <div className="h-12 w-12 rounded-xl bg-accent/50 flex items-center justify-center mx-auto mb-3">
