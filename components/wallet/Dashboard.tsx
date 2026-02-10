@@ -5,10 +5,18 @@ import { Lock, Settings as SettingsIcon, Copy, Check, Eye, EyeOff, Shield, Bell,
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { QuickActions } from './QuickActions'
+import type { QuickActionType } from './QuickActions'
 import { TokenList } from './TokenList'
 import { ActivityList } from './ActivityList'
 import { PortfolioChart } from './PortfolioChart'
 import { Settings } from './Settings'
+import { SendModal } from './SendModal'
+import { ReceiveModal } from './ReceiveModal'
+import { SwapModal } from './SwapModal'
+import { BuyModal } from './BuyModal'
+import { ShieldModal } from './ShieldModal'
+import { TradeModal } from './TradeModal'
+import { StakeModal } from './StakeModal'
 import { formatAddress } from '@/lib/utils'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 
@@ -18,6 +26,7 @@ export function Dashboard() {
   const [balanceVisible, setBalanceVisible] = useState(true)
   const [activeTab, setActiveTab] = useState<'tokens' | 'nfts' | 'activity'>('tokens')
   const [showSettings, setShowSettings] = useState(false)
+  const [activeModal, setActiveModal] = useState<QuickActionType | null>(null)
   const [addressMode, setAddressMode] = useState<'eth' | 'pq'>('eth')
 
   const accountName = currentWallet?.name ?? 'Account 1'
@@ -40,6 +49,29 @@ export function Dashboard() {
   // Show settings page
   if (showSettings) {
     return <Settings onBack={() => setShowSettings(false)} />
+  }
+
+  // Show action modals
+  if (activeModal === 'send') {
+    return <SendModal ethAddress={ethAddress} pqAddress={pqAddress} onClose={() => setActiveModal(null)} />
+  }
+  if (activeModal === 'receive') {
+    return <ReceiveModal ethAddress={ethAddress} pqAddress={pqAddress} accountName={accountName} onClose={() => setActiveModal(null)} />
+  }
+  if (activeModal === 'swap') {
+    return <SwapModal onClose={() => setActiveModal(null)} />
+  }
+  if (activeModal === 'buy') {
+    return <BuyModal onClose={() => setActiveModal(null)} />
+  }
+  if (activeModal === 'shield') {
+    return <ShieldModal onClose={() => setActiveModal(null)} />
+  }
+  if (activeModal === 'trade') {
+    return <TradeModal onClose={() => setActiveModal(null)} />
+  }
+  if (activeModal === 'stake') {
+    return <StakeModal onClose={() => setActiveModal(null)} />
   }
 
   const tabs = [
@@ -157,7 +189,7 @@ export function Dashboard() {
         </Card>
 
         {/* Quick Actions */}
-        <QuickActions />
+        <QuickActions onAction={setActiveModal} />
 
         {/* Tabs */}
         <div className="flex gap-1 p-1 bg-accent/30 rounded-xl">
