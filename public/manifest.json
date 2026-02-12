@@ -1,0 +1,37 @@
+{
+  "name": "QRDX Wallet",
+  "short_name": "QRDX",
+  "description": "Quantum Resistant Digital Assets Wallet — secure your crypto with post-quantum cryptography.",
+  "start_url": "/wallet",
+  "scope": "/wallet",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#7c3aed",
+  "background_color": "#030711",
+  "categories": ["finance", "utilities"],
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

@@ -1,12 +1,15 @@
 /** @type {import('next').NextConfig} */
+
+const isWebBuild = process.env.BUILD_TARGET === 'web'
+
 const nextConfig = {
   output: 'export',
   
-  // Use relative paths for browser extension compatibility
-  assetPrefix: './',
+  // Use relative paths for extension builds (default), standard paths for web/PWA
+  assetPrefix: isWebBuild ? undefined : './',
   basePath: '',
   
-  // Critical for browser extensions
+  // Critical for browser extensions & static export
   images: {
     unoptimized: true,
   },

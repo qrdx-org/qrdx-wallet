@@ -1,7 +1,6 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import { ClientLayout } from '@/components/ClientLayout'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -12,9 +11,24 @@ export const metadata: Metadata = {
   authors: [{ name: 'QRDX Foundation' }],
   creator: 'QRDX Foundation',
   publisher: 'QRDX Foundation',
+  manifest: '/manifest.json',
   icons: {
     icon: '/logo.png',
+    apple: '/icons/icon-192.png',
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'QRDX Wallet',
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#7c3aed',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 }
 
 export default function RootLayout({
@@ -24,8 +38,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.className} w-[375px] h-[600px] overflow-hidden`}>
-        <ClientLayout>{children}</ClientLayout>
+      <body className={`${inter.className} min-h-screen`}>
+        {children}
       </body>
     </html>
   )
