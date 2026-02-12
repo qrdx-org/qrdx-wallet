@@ -1,12 +1,15 @@
 /** @type {import('next').NextConfig} */
+
+const isExtensionBuild = process.env.BUILD_TARGET === 'extension'
+
 const nextConfig = {
   output: 'export',
   
-  // Use relative paths for browser extension compatibility
-  assetPrefix: './',
+  // Use relative paths only for browser extension builds
+  assetPrefix: isExtensionBuild ? './' : undefined,
   basePath: '',
   
-  // Critical for browser extensions
+  // Critical for browser extensions & static export
   images: {
     unoptimized: true,
   },

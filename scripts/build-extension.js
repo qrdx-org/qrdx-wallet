@@ -113,7 +113,8 @@ function buildWithNext() {
         ...process.env, 
         NODE_ENV: 'production', 
         NEXT_TELEMETRY_DISABLED: '1',
-        TURBOPACK: '0'
+        TURBOPACK: '0',
+        BUILD_TARGET: 'extension'
       }
     });
     log('Next.js build completed');
