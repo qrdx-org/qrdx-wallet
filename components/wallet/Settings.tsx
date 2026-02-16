@@ -41,6 +41,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useTheme } from 'next-themes'
 import { THEME_OPTIONS, type ThemeValue } from '@/components/theme-provider'
+import { CHAIN_LIST, type ChainConfig, supportsWeb3, supportsPQ } from '@/src/core/chains'
 
 interface SettingsProps {
   onBack: () => void
@@ -109,38 +110,24 @@ interface Network {
   explorer: string
   isTestnet: boolean
   icon?: string
+  /** Transport capabilities from chains.ts */
+  transport?: string
 }
 
-const NETWORKS: Network[] = [
-  // ── QRDX ──
-  { id: 'qrdx-mainnet', name: 'QRDX Mainnet', rpc: 'https://rpc.qrdx.org', chainId: 7225, symbol: 'QRDX', explorer: 'https://explorer.qrdx.org', isTestnet: false },
-  { id: 'qrdx-testnet', name: 'QRDX Testnet', rpc: 'https://testnet-rpc.qrdx.org', chainId: 7226, symbol: 'QRDX', explorer: 'https://testnet.explorer.qrdx.org', isTestnet: true },
-  // ── Ethereum ──
-  { id: 'eth-mainnet', name: 'Ethereum', rpc: 'https://eth.llamarpc.com', chainId: 1, symbol: 'ETH', explorer: 'https://etherscan.io', isTestnet: false },
-  { id: 'eth-sepolia', name: 'Ethereum Sepolia', rpc: 'https://rpc.sepolia.org', chainId: 11155111, symbol: 'ETH', explorer: 'https://sepolia.etherscan.io', isTestnet: true },
-  // ── Polygon ──
-  { id: 'polygon-mainnet', name: 'Polygon', rpc: 'https://polygon-rpc.com', chainId: 137, symbol: 'POL', explorer: 'https://polygonscan.com', isTestnet: false },
-  { id: 'polygon-amoy', name: 'Polygon Amoy', rpc: 'https://rpc-amoy.polygon.technology', chainId: 80002, symbol: 'POL', explorer: 'https://amoy.polygonscan.com', isTestnet: true },
-  // ── Arbitrum ──
-  { id: 'arb-mainnet', name: 'Arbitrum One', rpc: 'https://arb1.arbitrum.io/rpc', chainId: 42161, symbol: 'ETH', explorer: 'https://arbiscan.io', isTestnet: false },
-  { id: 'arb-sepolia', name: 'Arbitrum Sepolia', rpc: 'https://sepolia-rollup.arbitrum.io/rpc', chainId: 421614, symbol: 'ETH', explorer: 'https://sepolia.arbiscan.io', isTestnet: true },
-  // ── Optimism ──
-  { id: 'op-mainnet', name: 'Optimism', rpc: 'https://mainnet.optimism.io', chainId: 10, symbol: 'ETH', explorer: 'https://optimistic.etherscan.io', isTestnet: false },
-  { id: 'op-sepolia', name: 'OP Sepolia', rpc: 'https://sepolia.optimism.io', chainId: 11155420, symbol: 'ETH', explorer: 'https://sepolia-optimistic.etherscan.io', isTestnet: true },
-  // ── Base ──
-  { id: 'base-mainnet', name: 'Base', rpc: 'https://mainnet.base.org', chainId: 8453, symbol: 'ETH', explorer: 'https://basescan.org', isTestnet: false },
-  { id: 'base-sepolia', name: 'Base Sepolia', rpc: 'https://sepolia.base.org', chainId: 84532, symbol: 'ETH', explorer: 'https://sepolia.basescan.org', isTestnet: true },
-  // ── Avalanche ──
-  { id: 'avax-mainnet', name: 'Avalanche C-Chain', rpc: 'https://api.avax.network/ext/bc/C/rpc', chainId: 43114, symbol: 'AVAX', explorer: 'https://snowtrace.io', isTestnet: false },
-  { id: 'avax-fuji', name: 'Avalanche Fuji', rpc: 'https://api.avax-test.network/ext/bc/C/rpc', chainId: 43113, symbol: 'AVAX', explorer: 'https://testnet.snowtrace.io', isTestnet: true },
-  // ── BNB Chain ──
-  { id: 'bsc-mainnet', name: 'BNB Smart Chain', rpc: 'https://bsc-dataseed.binance.org', chainId: 56, symbol: 'BNB', explorer: 'https://bscscan.com', isTestnet: false },
-  { id: 'bsc-testnet', name: 'BNB Testnet', rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545', chainId: 97, symbol: 'BNB', explorer: 'https://testnet.bscscan.com', isTestnet: true },
-  // ── Fantom ──
-  { id: 'ftm-mainnet', name: 'Fantom Opera', rpc: 'https://rpc.ftm.tools', chainId: 250, symbol: 'FTM', explorer: 'https://ftmscan.com', isTestnet: false },
-  // ── zkSync ──
-  { id: 'zksync-mainnet', name: 'zkSync Era', rpc: 'https://mainnet.era.zksync.io', chainId: 324, symbol: 'ETH', explorer: 'https://explorer.zksync.io', isTestnet: false },
-]
+/**
+ * Derive the Settings-local Network list from the canonical CHAIN_LIST
+ * so there's a single source of truth.
+ */
+const NETWORKS: Network[] = CHAIN_LIST.map((c) => ({
+  id: c.id,
+  name: c.name,
+  rpc: c.rpcUrl,
+  chainId: c.chainId,
+  symbol: c.nativeCurrency.symbol,
+  explorer: c.explorerUrl,
+  isTestnet: c.isTestnet,
+  transport: c.transport,
+}))
 
 interface ConnectedSite {
   id: string

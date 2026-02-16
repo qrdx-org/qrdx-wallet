@@ -173,6 +173,22 @@ function processHTMLFiles(dir) {
     content = content.replace(/src="\/_next\//g, 'src="./_next/');
     content = content.replace(/href="\/logo\.png"/g, 'href="./logo.png"');
     content = content.replace(/src="\/logo\.png"/g, 'src="./logo.png"');
+
+    // Lock <body> to fixed extension popup dimensions (375×600).
+    // We use inline styles because Tailwind arbitrary-value classes
+    // (e.g. w-[375px]) aren't in the CSS — they were never in the
+    // source code when Next.js/Tailwind ran, so no rules were generated.
+    content = content.replace(
+      /<body([^>]*)class="([^"]*)"/,
+      (match, before, classes) => {
+        // Strip web-only sizing classes
+        const cleaned = classes
+          .replace(/\bmin-h-screen\b/g, '')
+          .replace(/\s{2,}/g, ' ')
+          .trim();
+        return `<body${before}style="width:375px;height:600px;overflow:hidden;" class="${cleaned}"`;
+      }
+    );
     
     // Remove inline event handlers that violate CSP
     content = content.replace(/\son\w+="[^"]*"/gi, '');
@@ -232,9 +248,47 @@ function copyNextOutput(targetDir) {
   const popupDir = path.join(targetDir, 'popup');
   fs.mkdirSync(popupDir, { recursive: true });
 
-  // Copy Next.js output to popup directory
-  copyRecursive(outDir, popupDir);
-  
+  // Only copy extension-relevant files from the Next.js output.
+  // The full web build (landing page, PWA manifest, service worker, error pages,
+  // debug .txt files, etc.) should NOT be included in the extension bundle.
+  const allowList = [
+    '_next',       // JS/CSS chunks required by the wallet UI
+    'wallet.html', // The wallet page used as the extension popup
+    'wallet',      // Wallet route assets
+  ];
+
+  // Files/dirs in out/ that are web-only and must be excluded
+  const denyList = new Set([
+    'index.html',       // Web landing page
+    '404.html',         // Web 404 page
+    '_not-found',       // Next.js not-found route assets
+    '_not-found.html',  // Next.js not-found page
+    'manifest.json',    // PWA manifest (conflicts with extension manifest)
+    'sw.js',            // PWA service worker
+    'popup.html',       // Static popup shell (extension gets its own copy below)
+    'icons',            // Web icons (extension creates its own)
+  ]);
+
+  fs.readdirSync(outDir).forEach((entry) => {
+    // Skip .txt debug/trace files
+    if (entry.endsWith('.txt')) return;
+    // Skip explicitly denied entries
+    if (denyList.has(entry)) return;
+
+    const src = path.join(outDir, entry);
+    const dest = path.join(popupDir, entry);
+    copyRecursive(src, dest);
+  });
+
+  // Copy wallet.html as index.html so the popup loads it at popup/index.html
+  const walletHtml = path.join(outDir, 'wallet.html');
+  if (fs.existsSync(walletHtml)) {
+    fs.copyFileSync(walletHtml, path.join(popupDir, 'index.html'));
+    log('Copied wallet.html → popup/index.html');
+  } else {
+    log('Warning: wallet.html not found in Next.js output');
+  }
+
   // Post-process HTML to ensure CSP compliance
   processHTMLFiles(popupDir);
 }

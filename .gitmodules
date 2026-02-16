@@ -1,0 +1,8 @@
+[submodule "lib/external/web3.js"]
+	path = lib/external/web3.js
+	url = https://github.com/qrdx-org/web3.js
+[submodule "lib/external/qrdx.js"]
+	path = lib/external/qrdx.js
+	url = https://github.com/qrdx-org/qrdx.js
+[submodule "lib/external/qrpay.js"]
+	path = lib/external/qrpay.js        url = https://github.com/qrdx-org/qrpay.js

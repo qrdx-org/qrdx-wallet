@@ -1,28 +1,41 @@
+/**
+ * Backwards-compatible re-exports.
+ * All chain/network data now lives in chains.ts — this file maps the
+ * old API surface so existing code doesn't break.
+ */
 import type { Network } from './types'
+import {
+  CHAINS,
+  DEFAULT_CHAIN,
+  CHAIN_LIST,
+  MAINNET_CHAINS,
+  TESTNET_CHAINS,
+} from './chains'
 
+// Re-export the full chain registry under the names other code expects
+export {
+  CHAINS,
+  CHAIN_LIST,
+  MAINNET_CHAINS,
+  TESTNET_CHAINS,
+} from './chains'
+
+/** Legacy NETWORKS map — keys 'mainnet' / 'testnet' pointing to QRDX chains */
 export const NETWORKS: Record<string, Network> = {
   mainnet: {
-    chainId: 1,
-    name: 'QRDX Mainnet',
-    rpcUrl: 'https://rpc.qrdx.org',
-    explorerUrl: 'https://explorer.qrdx.org',
-    nativeCurrency: {
-      name: 'QRDX',
-      symbol: 'QRDX',
-      decimals: 18
-    }
+    chainId: CHAINS['qrdx-mainnet'].chainId,
+    name: CHAINS['qrdx-mainnet'].name,
+    rpcUrl: CHAINS['qrdx-mainnet'].rpcUrl,
+    explorerUrl: CHAINS['qrdx-mainnet'].explorerUrl,
+    nativeCurrency: CHAINS['qrdx-mainnet'].nativeCurrency,
   },
   testnet: {
-    chainId: 2,
-    name: 'QRDX Testnet',
-    rpcUrl: 'https://testnet-rpc.qrdx.org',
-    explorerUrl: 'https://testnet-explorer.qrdx.org',
-    nativeCurrency: {
-      name: 'QRDX',
-      symbol: 'QRDX',
-      decimals: 18
-    }
-  }
+    chainId: CHAINS['qrdx-testnet'].chainId,
+    name: CHAINS['qrdx-testnet'].name,
+    rpcUrl: CHAINS['qrdx-testnet'].rpcUrl,
+    explorerUrl: CHAINS['qrdx-testnet'].explorerUrl,
+    nativeCurrency: CHAINS['qrdx-testnet'].nativeCurrency,
+  },
 }
 
 export const DEFAULT_NETWORK = NETWORKS.mainnet

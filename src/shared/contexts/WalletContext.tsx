@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useRef, ReactNod
 import type { WalletState, StoredWallet } from '../../core/types'
 import { WalletManager } from '../../core/wallet-manager'
 import { WalletStorage, type IStorage } from '../../core/storage'
+import { type ChainConfig, DEFAULT_CHAIN, CHAIN_LIST, getChain, supportsWeb3 } from '../../core/chains'
+import { getEvmProvider, type TokenBalance } from '../../core/ethereum'
 
 // ─── Public context type ────────────────────────────────────────────────────
 export interface WalletContextType {
@@ -16,6 +18,19 @@ export interface WalletContextType {
   initialize: (password: string) => Promise<void>
   createWallet: (name: string, password: string) => Promise<void>
   importWallet: (name: string, privateKey: string, password: string) => Promise<void>
+  // ── Chain-aware EVM operations ─────────────────────────────────────────
+  /** Currently selected chain */
+  activeChain: ChainConfig
+  /** Switch the active chain */
+  setActiveChain: (chainId: string) => void
+  /** All chains available */
+  chains: ChainConfig[]
+  /** Fetch native + ERC-20 balances for current wallet on active chain */
+  fetchBalances: () => Promise<TokenBalance[]>
+  /** Balances cache for the active chain */
+  balances: TokenBalance[]
+  /** Whether balances are currently loading */
+  balancesLoading: boolean
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined)
@@ -51,6 +66,9 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
   const [currentWallet, setCurrentWallet] = useState<StoredWallet | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [activeChain, setActiveChainState] = useState<ChainConfig>(DEFAULT_CHAIN)
+  const [balances, setBalances] = useState<TokenBalance[]>([])
+  const [balancesLoading, setBalancesLoading] = useState(false)
 
   // Derived convenience flags
   const initialized = state?.initialized ?? false
@@ -136,6 +154,41 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     }
   }
 
+  // ── Chain / EVM ─────────────────────────────────────────────────────────
+
+  const setActiveChain = (chainId: string) => {
+    const chain = getChain(chainId)
+    if (chain) {
+      setActiveChainState(chain)
+      setBalances([]) // clear stale balances
+    }
+  }
+
+  const fetchBalances = async (): Promise<TokenBalance[]> => {
+    if (!currentWallet) return []
+    if (!supportsWeb3(activeChain)) return []
+
+    setBalancesLoading(true)
+    try {
+      const provider = getEvmProvider(activeChain.id)
+      const result = await provider.getAllBalances(currentWallet.ethAddress)
+      setBalances(result)
+      return result
+    } catch (err) {
+      console.warn('Failed to fetch balances:', err)
+      return []
+    } finally {
+      setBalancesLoading(false)
+    }
+  }
+
+  // Auto-fetch balances when wallet or chain changes
+  useEffect(() => {
+    if (currentWallet && !locked && supportsWeb3(activeChain)) {
+      fetchBalances()
+    }
+  }, [currentWallet?.id, activeChain.id, locked]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const value: WalletContextType = {
     state,
     currentWallet,
@@ -148,6 +201,12 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     initialize,
     createWallet,
     importWallet,
+    activeChain,
+    setActiveChain,
+    chains: CHAIN_LIST,
+    fetchBalances,
+    balances,
+    balancesLoading,
   }
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>
