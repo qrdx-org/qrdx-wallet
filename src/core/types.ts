@@ -57,14 +57,38 @@ export interface Network {
 export interface StoredWallet {
   id: string
   name: string
+  /** AES-256-GCM encrypted hex private key (ETH + PQ seed combined) */
   encryptedPrivateKey: string
-  publicKey: string
-  /** Primary QRDX / EVM-compatible address (0x…) */
+
+  // ── ETH (secp256k1) ────────────────────────────────────────────────────
+  /** Compressed secp256k1 public key (33 bytes as hex) */
+  ethPublicKey: string
+  /** EIP-55 checksummed 0x address derived from uncompressed pubkey */
   ethAddress: string
-  /** Post-Quantum address (qr_…) */
+
+  // ── PQ (ML-DSA-65 / Dilithium3) ────────────────────────────────────────
+  /**
+   * Full PQ public key (1952 bytes as hex).
+   * MUST be stored — Dilithium key generation is non-deterministic,
+   * so the pubkey cannot be rederived from the private key alone.
+   */
+  pqPublicKey: string
+  /** 0xPQ-prefixed checksummed address */
   pqAddress: string
-  /** @deprecated kept for backwards compat — resolves to ethAddress */
+  /** First 8 bytes of SHA-256(pqPublicKey) as hex — for quick ID */
+  pqFingerprint: string
+
+  // ── Backwards compat ───────────────────────────────────────────────────
+  /** @deprecated Use ethPublicKey instead */
+  publicKey: string
+  /** @deprecated Use ethAddress instead — resolves to ethAddress */
   address: string
+
+  /** AES-256-GCM encrypted BIP-39 mnemonic phrase (if created from mnemonic) */
+  encryptedMnemonic?: string
+  /** HD derivation index (default 0) */
+  hdIndex?: number
+
   createdAt: number
 }
 

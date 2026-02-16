@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   ArrowLeft,
   ArrowDownUp,
@@ -10,6 +10,8 @@ import {
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useWallet } from '@/src/shared/contexts/WalletContext'
+import { formatUsd } from '@/src/core/prices'
 
 interface SwapModalProps {
   onClose: () => void
@@ -23,30 +25,64 @@ interface TokenOption {
   price: number
 }
 
-const TOKENS: TokenOption[] = [
-  { symbol: 'QRDX', name: 'QRDX Ledger', balance: '1,234.56', color: 'from-primary to-primary/60', price: 10.0 },
-  { symbol: 'ETH', name: 'Ethereum', balance: '2.5', color: 'from-blue-500 to-blue-600', price: 3293.80 },
-  { symbol: 'USDC', name: 'USD Coin', balance: '5,000.00', color: 'from-blue-400 to-cyan-500', price: 1.0 },
-  { symbol: 'BTC', name: 'Bitcoin', balance: '0.05', color: 'from-orange-400 to-amber-500', price: 82469.0 },
-]
+const TOKEN_COLORS: Record<string, string> = {
+  QRDX: 'from-primary to-primary/60',
+  ETH: 'from-blue-500 to-blue-600',
+  USDC: 'from-blue-400 to-cyan-500',
+  USDT: 'from-green-400 to-emerald-500',
+  DAI: 'from-yellow-400 to-amber-500',
+  WBTC: 'from-orange-400 to-amber-500',
+  WETH: 'from-blue-500 to-blue-600',
+  LINK: 'from-blue-600 to-indigo-600',
+  UNI: 'from-pink-400 to-pink-600',
+  AAVE: 'from-sky-400 to-indigo-500',
+  BNB: 'from-yellow-500 to-yellow-600',
+  AVAX: 'from-red-500 to-red-600',
+  ARB: 'from-blue-500 to-sky-600',
+  OP: 'from-red-500 to-rose-600',
+  POL: 'from-purple-500 to-violet-600',
+}
 
 export function SwapModal({ onClose }: SwapModalProps) {
-  const [fromToken, setFromToken] = useState(TOKENS[0])
-  const [toToken, setToToken] = useState(TOKENS[1])
+  const { balances, prices, estimateGas, activeChain } = useWallet()
+
+  // Build token options from real balances + prices
+  const TOKENS: TokenOption[] = useMemo(() => {
+    return balances.map((b) => {
+      const bal = parseFloat(b.formattedBalance) || 0
+      const price = prices.get(b.symbol.toUpperCase())
+      return {
+        symbol: b.symbol,
+        name: b.name ?? b.symbol,
+        balance: bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 }),
+        color: TOKEN_COLORS[b.symbol] ?? 'from-gray-500 to-gray-600',
+        price: price?.usd ?? 0,
+      }
+    }).filter(t => t.price > 0 || t.symbol === activeChain.nativeCurrency?.symbol) // only show tokens with known prices + native
+  }, [balances, prices, activeChain])
+  const [fromToken, setFromToken] = useState<TokenOption | null>(null)
+  const [toToken, setToToken] = useState<TokenOption | null>(null)
   const [fromAmount, setFromAmount] = useState('')
   const [showFromPicker, setShowFromPicker] = useState(false)
   const [showToPicker, setShowToPicker] = useState(false)
   const [swapping, setSwapping] = useState(false)
+  const [gasEstimateStr, setGasEstimateStr] = useState<string | null>(null)
 
-  const toAmount = fromAmount
-    ? ((parseFloat(fromAmount) * fromToken.price) / toToken.price).toFixed(6)
+  // Auto-set initial tokens when TOKENS becomes available
+  const from = fromToken ?? TOKENS[0] ?? { symbol: '?', name: '', balance: '0', color: 'from-gray-500 to-gray-600', price: 0 }
+  const to = toToken ?? TOKENS[1] ?? TOKENS[0] ?? { symbol: '?', name: '', balance: '0', color: 'from-gray-500 to-gray-600', price: 0 }
+
+  const toAmount = fromAmount && from.price > 0 && to.price > 0
+    ? ((parseFloat(fromAmount) * from.price) / to.price).toFixed(6)
     : ''
 
-  const rate = (fromToken.price / toToken.price).toFixed(6)
+  const rate = from.price > 0 && to.price > 0
+    ? (from.price / to.price).toFixed(6)
+    : '—'
 
   const handleSwapTokens = () => {
-    const tmp = fromToken
-    setFromToken(toToken)
+    const tmp = from
+    setFromToken(to)
     setToToken(tmp)
     setFromAmount('')
   }
@@ -114,7 +150,7 @@ export function SwapModal({ onClose }: SwapModalProps) {
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">You pay</span>
               <span className="text-[10px] text-muted-foreground">
-                Balance: {fromToken.balance}
+                Balance: {from.balance}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -122,10 +158,10 @@ export function SwapModal({ onClose }: SwapModalProps) {
                 onClick={() => { setShowFromPicker(!showFromPicker); setShowToPicker(false) }}
                 className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-background/60 border border-border/50 hover:border-primary/30 transition-colors shrink-0"
               >
-                <div className={`h-6 w-6 rounded-md bg-gradient-to-br ${fromToken.color} flex items-center justify-center`}>
-                  <span className="text-white text-[9px] font-bold">{fromToken.symbol.slice(0, 2)}</span>
+                <div className={`h-6 w-6 rounded-md bg-gradient-to-br ${from.color} flex items-center justify-center`}>
+                  <span className="text-white text-[9px] font-bold">{from.symbol.slice(0, 2)}</span>
                 </div>
-                <span className="text-sm font-semibold">{fromToken.symbol}</span>
+                <span className="text-sm font-semibold">{from.symbol}</span>
                 <ChevronDown className="h-3 w-3 text-muted-foreground" />
               </button>
               <input
@@ -142,7 +178,7 @@ export function SwapModal({ onClose }: SwapModalProps) {
 
         {showFromPicker && (
           <TokenPicker
-            exclude={toToken.symbol}
+            exclude={to.symbol}
             onSelect={(t) => { setFromToken(t); setShowFromPicker(false) }}
           />
         )}
@@ -163,7 +199,7 @@ export function SwapModal({ onClose }: SwapModalProps) {
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">You receive</span>
               <span className="text-[10px] text-muted-foreground">
-                Balance: {toToken.balance}
+                Balance: {to.balance}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -171,10 +207,10 @@ export function SwapModal({ onClose }: SwapModalProps) {
                 onClick={() => { setShowToPicker(!showToPicker); setShowFromPicker(false) }}
                 className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-background/60 border border-border/50 hover:border-primary/30 transition-colors shrink-0"
               >
-                <div className={`h-6 w-6 rounded-md bg-gradient-to-br ${toToken.color} flex items-center justify-center`}>
-                  <span className="text-white text-[9px] font-bold">{toToken.symbol.slice(0, 2)}</span>
+                <div className={`h-6 w-6 rounded-md bg-gradient-to-br ${to.color} flex items-center justify-center`}>
+                  <span className="text-white text-[9px] font-bold">{to.symbol.slice(0, 2)}</span>
                 </div>
-                <span className="text-sm font-semibold">{toToken.symbol}</span>
+                <span className="text-sm font-semibold">{to.symbol}</span>
                 <ChevronDown className="h-3 w-3 text-muted-foreground" />
               </button>
               <div className="flex-1 text-right text-xl font-semibold text-muted-foreground min-w-0 truncate">
@@ -186,7 +222,7 @@ export function SwapModal({ onClose }: SwapModalProps) {
 
         {showToPicker && (
           <TokenPicker
-            exclude={fromToken.symbol}
+            exclude={from.symbol}
             onSelect={(t) => { setToToken(t); setShowToPicker(false) }}
           />
         )}
@@ -196,7 +232,7 @@ export function SwapModal({ onClose }: SwapModalProps) {
           <CardContent className="p-3 space-y-2">
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-muted-foreground">Rate</span>
-              <span className="font-medium">1 {fromToken.symbol} = {rate} {toToken.symbol}</span>
+              <span className="font-medium">1 {from.symbol} = {rate} {to.symbol}</span>
             </div>
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-muted-foreground">Slippage tolerance</span>

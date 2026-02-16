@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { ALL_TOKENS, type Token } from './TokenList'
+import { useTokenList, type Token } from './TokenList'
 
 interface AllTokensProps {
   pinnedSymbols: string[]
@@ -42,6 +42,7 @@ export function AllTokens({
   onFavoritedChange,
   onClose,
 }: AllTokensProps) {
+  const allTokens = useTokenList()
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortOption>('value')
   const [showSortMenu, setShowSortMenu] = useState(false)
@@ -65,7 +66,7 @@ export function AllTokens({
   }
 
   const sortedAndFiltered = useMemo(() => {
-    let tokens = [...ALL_TOKENS]
+    let tokens = [...allTokens]
 
     // Filter
     if (search.trim()) {
@@ -119,7 +120,7 @@ export function AllTokens({
             </Button>
             <div className="flex-1">
               <h1 className="text-base font-semibold">All Tokens</h1>
-              <p className="text-[10px] text-muted-foreground">{ALL_TOKENS.length} tokens · {pinnedCount}/{MAX_PINS} pinned</p>
+              <p className="text-[10px] text-muted-foreground">{allTokens.length} tokens · {pinnedCount}/{MAX_PINS} pinned</p>
             </div>
           </div>
         </div>
@@ -185,7 +186,7 @@ export function AllTokens({
           </div>
           <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mx-1 px-1" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>
             {pinnedSymbols.map((sym, index) => {
-              const token = ALL_TOKENS.find((t) => t.symbol === sym)
+              const token = allTokens.find((t) => t.symbol === sym)
               if (!token) return null
               return (
                 <div

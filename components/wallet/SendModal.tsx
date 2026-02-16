@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -11,9 +11,11 @@ import {
   Wallet,
   Send,
   CheckCircle2,
+  AlertCircle,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useWallet } from '@/src/shared/contexts/WalletContext'
 
 interface SendModalProps {
   ethAddress: string
@@ -29,41 +31,95 @@ interface TokenOption {
   value: string
   color: string
   icon: string
+  /** Contract address for ERC-20, empty for native token */
+  contractAddress?: string
+  decimals: number
 }
 
-const TOKENS: TokenOption[] = [
-  { symbol: 'QRDX', name: 'QRDX Ledger', balance: '1,234.56', balanceNum: 1234.56, value: '$12,345.67', color: 'from-primary to-primary/60', icon: 'QR' },
-  { symbol: 'ETH', name: 'Ethereum', balance: '2.5000', balanceNum: 2.5, value: '$8,234.50', color: 'from-blue-500 to-blue-600', icon: 'Ξ' },
-  { symbol: 'USDC', name: 'USD Coin', balance: '5,000.00', balanceNum: 5000, value: '$5,000.00', color: 'from-blue-400 to-cyan-500', icon: '$' },
-  { symbol: 'BTC', name: 'Bitcoin', balance: '0.0500', balanceNum: 0.05, value: '$4,123.45', color: 'from-orange-400 to-amber-500', icon: '₿' },
-  { symbol: 'DAI', name: 'Dai Stablecoin', balance: '250.00', balanceNum: 250, value: '$250.00', color: 'from-yellow-400 to-amber-500', icon: 'D' },
-  { symbol: 'LINK', name: 'Chainlink', balance: '42.80', balanceNum: 42.8, value: '$612.04', color: 'from-blue-600 to-indigo-600', icon: 'LN' },
-  { symbol: 'UNI', name: 'Uniswap', balance: '15.00', balanceNum: 15, value: '$112.50', color: 'from-pink-400 to-pink-600', icon: 'UN' },
-  { symbol: 'MATIC', name: 'Polygon', balance: '890.00', balanceNum: 890, value: '$534.00', color: 'from-purple-500 to-violet-600', icon: 'M' },
-]
+// Gradient colors for known tokens
+const TOKEN_COLORS: Record<string, string> = {
+  QRDX: 'from-primary to-primary/60',
+  ETH: 'from-blue-500 to-blue-600',
+  USDC: 'from-blue-400 to-cyan-500',
+  BTC: 'from-orange-400 to-amber-500',
+  DAI: 'from-yellow-400 to-amber-500',
+  LINK: 'from-blue-600 to-indigo-600',
+  UNI: 'from-pink-400 to-pink-600',
+  MATIC: 'from-purple-500 to-violet-600',
+  BNB: 'from-yellow-500 to-yellow-600',
+  AVAX: 'from-red-500 to-red-600',
+}
 
 type Step = 'select-token' | 'send-form'
+type TxStatus = 'idle' | 'estimating' | 'sending' | 'success' | 'error'
 
 export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
+  const { balances, activeChain, estimateGas, sendTransaction, sendTokenTransaction } = useWallet()
+
   const [step, setStep] = useState<Step>('select-token')
   const [search, setSearch] = useState('')
   const [recipient, setRecipient] = useState('')
   const [amount, setAmount] = useState('')
   const [selectedToken, setSelectedToken] = useState<TokenOption | null>(null)
-  const [sending, setSending] = useState(false)
+  const [txStatus, setTxStatus] = useState<TxStatus>('idle')
+  const [txError, setTxError] = useState<string | null>(null)
+  const [txHash, setTxHash] = useState<string | null>(null)
   const [addressType, setAddressType] = useState<'eth' | 'pq'>('eth')
+  const [gasEstimate, setGasEstimate] = useState<string | null>(null)
 
   const fromAddress = addressType === 'eth' ? ethAddress : pqAddress
 
+  // Helper to format wei to readable ETH
+  const formatWeiToEth = (wei: bigint): string => {
+    const divisor = 10n ** 18n
+    const whole = wei / divisor
+    const remainder = wei % divisor
+    const fracStr = remainder.toString().padStart(18, '0').slice(0, 6)
+    return `${whole}.${fracStr}`
+  }
+
+  // Build token list from real balances
+  const tokenOptions: TokenOption[] = useMemo(() => {
+    if (balances.length === 0) {
+      // If no balances loaded yet, show native token with 0 balance
+      const nativeSym = activeChain.nativeCurrency?.symbol ?? 'ETH'
+      return [{
+        symbol: nativeSym,
+        name: activeChain.nativeCurrency?.name ?? 'Ether',
+        balance: '0.0000',
+        balanceNum: 0,
+        value: '$0.00',
+        color: TOKEN_COLORS[nativeSym] ?? 'from-gray-500 to-gray-600',
+        icon: nativeSym.slice(0, 2),
+        decimals: activeChain.nativeCurrency?.decimals ?? 18,
+      }]
+    }
+
+    return balances.map((b) => {
+      const bal = parseFloat(b.formattedBalance)
+      return {
+        symbol: b.symbol,
+        name: b.name ?? b.symbol,
+        balance: bal.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }),
+        balanceNum: bal,
+        value: '', // Price oracle not yet connected
+        color: TOKEN_COLORS[b.symbol] ?? 'from-gray-500 to-gray-600',
+        icon: b.symbol.slice(0, 2),
+        contractAddress: b.address, // TokenBalance uses 'address' for contract
+        decimals: b.decimals ?? 18,
+      }
+    })
+  }, [balances, activeChain])
+
   const filteredTokens = useMemo(() => {
-    if (!search.trim()) return TOKENS
+    if (!search.trim()) return tokenOptions
     const q = search.toLowerCase()
-    return TOKENS.filter(
+    return tokenOptions.filter(
       (t) =>
         t.symbol.toLowerCase().includes(q) ||
         t.name.toLowerCase().includes(q)
     )
-  }, [search])
+  }, [search, tokenOptions])
 
   const handleSelectToken = (token: TokenOption) => {
     setSelectedToken(token)
@@ -75,15 +131,81 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
     if (step === 'send-form') {
       setStep('select-token')
       setAmount('')
+      setTxError(null)
+      setTxStatus('idle')
     } else {
       onClose()
     }
   }
 
-  const handleSend = () => {
+  // Estimate gas whenever recipient and amount change
+  useEffect(() => {
+    if (!recipient || !amount || !selectedToken) {
+      setGasEstimate(null)
+      return
+    }
+
+    const amountNum = parseFloat(amount.replace(/,/g, ''))
+    if (isNaN(amountNum) || amountNum <= 0) {
+      setGasEstimate(null)
+      return
+    }
+
+    // Only estimate for valid eth addresses
+    if (!recipient.startsWith('0x') || recipient.length !== 42) {
+      setGasEstimate(null)
+      return
+    }
+
+    let cancelled = false
+    setTxStatus('estimating')
+
+    estimateGas(recipient, amount.replace(/,/g, ''))
+      .then((est) => {
+        if (!cancelled) {
+          setGasEstimate(formatWeiToEth(est.estimatedCostWei))
+          setTxStatus('idle')
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGasEstimate(null)
+          setTxStatus('idle')
+        }
+      })
+
+    return () => { cancelled = true }
+  }, [recipient, amount, selectedToken?.symbol]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSend = async () => {
     if (!recipient || !amount || !selectedToken) return
-    setSending(true)
-    setTimeout(() => setSending(false), 2000)
+    setTxError(null)
+    setTxHash(null)
+    setTxStatus('sending')
+
+    try {
+      const cleanAmount = amount.replace(/,/g, '')
+
+      let result: { hash: string }
+      if (selectedToken.contractAddress) {
+        // ERC-20 token transfer: sign + broadcast
+        result = await sendTokenTransaction(
+          selectedToken.contractAddress,
+          recipient,
+          cleanAmount,
+          selectedToken.decimals
+        )
+      } else {
+        // Native currency transfer: sign + broadcast
+        result = await sendTransaction(recipient, cleanAmount)
+      }
+
+      setTxHash(result.hash)
+      setTxStatus('success')
+    } catch (err) {
+      setTxError(err instanceof Error ? err.message : 'Transaction failed')
+      setTxStatus('error')
+    }
   }
 
   const handleMax = () => {
@@ -328,14 +450,22 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
               <Fuel className="h-3 w-3 text-muted-foreground" />
               <span className="text-[11px] text-muted-foreground">Network fee</span>
             </div>
-            <span className="text-[11px] font-medium">~0.002 ETH <span className="text-muted-foreground">($6.58)</span></span>
+            <span className="text-[11px] font-medium">
+              {txStatus === 'estimating' ? (
+                <Loader2 className="h-3 w-3 animate-spin inline" />
+              ) : gasEstimate ? (
+                <>~{gasEstimate} {activeChain.nativeCurrency?.symbol ?? 'ETH'}</>
+              ) : (
+                <span className="text-muted-foreground/50">Enter amount to estimate</span>
+              )}
+            </span>
           </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="h-3 w-3 text-muted-foreground" />
-              <span className="text-[11px] text-muted-foreground">Estimated time</span>
+              <span className="text-[11px] text-muted-foreground">Network</span>
             </div>
-            <span className="text-[11px] font-medium">~15 seconds</span>
+            <span className="text-[11px] font-medium">{activeChain.name}</span>
           </div>
         </div>
 
@@ -348,16 +478,44 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
             </span>
           </div>
         )}
+
+        {/* Error message */}
+        {txError && (
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
+            <AlertCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
+            <span className="text-[10px] text-red-400/90">{txError}</span>
+          </div>
+        )}
+
+        {/* Success message */}
+        {txStatus === 'success' && (
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-green-500/10 border border-green-500/20">
+            <CheckCircle2 className="h-3.5 w-3.5 text-green-400 shrink-0 mt-0.5" />
+            <div className="text-[10px] text-green-400/90">
+              <p>Transaction sent successfully!</p>
+              {txHash && (
+                <a
+                  href={`${activeChain.explorerUrl}/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-green-300 underline break-all mt-1 block"
+                >
+                  {txHash.slice(0, 16)}...{txHash.slice(-8)}
+                </a>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sticky send button */}
       <div className="sticky bottom-0 p-4 glass-strong">
         <Button
           onClick={handleSend}
-          disabled={!recipient || !amount || sending}
+          disabled={!recipient || !amount || txStatus === 'sending' || txStatus === 'estimating'}
           className="w-full h-12 font-semibold text-base rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 disabled:opacity-40 disabled:shadow-none transition-all"
         >
-          {sending ? (
+          {txStatus === 'sending' ? (
             <Loader2 className="h-5 w-5 animate-spin" />
           ) : (
             <>

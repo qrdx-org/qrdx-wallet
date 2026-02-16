@@ -22,7 +22,8 @@ import { formatAddress } from '@/lib/utils'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 
 export function Dashboard() {
-  const { lock, currentWallet } = useWallet()
+  const { lock, currentWallet, balances, balancesLoading, activeChain, fetchBalances, portfolioValue, portfolioChange24h, priceHistory, prices } = useWallet()
+  const nativeSym = activeChain.nativeCurrency?.symbol ?? 'ETH'
   const [copied, setCopied] = useState<'eth' | 'pq' | null>(null)
   const [balanceVisible, setBalanceVisible] = useState(true)
   const [activeTab, setActiveTab] = useState<'tokens' | 'nfts' | 'activity'>('tokens')
@@ -30,14 +31,26 @@ export function Dashboard() {
   const [activeModal, setActiveModal] = useState<QuickActionType | null>(null)
   const [addressMode, setAddressMode] = useState<'eth' | 'pq'>('eth')
   const [showAllTokens, setShowAllTokens] = useState(false)
-  const [pinnedSymbols, setPinnedSymbols] = useState<string[]>(['QRDX', 'ETH', 'USDC', 'BTC'])
-  const [favoritedSymbols, setFavoritedSymbols] = useState<string[]>(['QRDX', 'ETH'])
+  const [pinnedSymbols, setPinnedSymbols] = useState<string[]>([nativeSym])
+  const [favoritedSymbols, setFavoritedSymbols] = useState<string[]>([nativeSym])
 
   const accountName = currentWallet?.name ?? 'Account 1'
-  const ethAddress = currentWallet?.ethAddress ?? currentWallet?.address ?? '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'
-  const pqAddress = (currentWallet as any)?.pqAddress ?? 'qr_8f3a91d2e6b5c047f1a2d3e4f5a6b7c8d9e0f1a2'
+  const ethAddress = currentWallet?.ethAddress ?? currentWallet?.address ?? ''
+  const pqAddress = currentWallet?.pqAddress ?? ''
   const activeAddress = addressMode === 'eth' ? ethAddress : pqAddress
-  const totalBalance = '$29,703.62'
+
+  // Compute total balance
+  // When prices are available, show USD value
+  // Otherwise, show native token balance
+  const nativeBalance = balances.find(b => b.address === '')
+  const nativeBalanceStr = nativeBalance ? nativeBalance.formattedBalance : '0'
+  const totalBalance = balancesLoading
+    ? '...'
+    : portfolioValue > 0
+      ? `$${portfolioValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : nativeBalance
+        ? `${parseFloat(nativeBalanceStr).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 })} ${nativeSym}`
+        : `0.0000 ${nativeSym}`
 
   const handleCopy = (type: 'eth' | 'pq') => {
     const addr = type === 'eth' ? ethAddress : pqAddress
@@ -176,7 +189,7 @@ export function Dashboard() {
             <Shield className="h-3 w-3 text-primary" />
             <span className="text-[10px] font-semibold text-primary">Quantum-Safe</span>
           </div>
-          <span className="text-[10px] text-muted-foreground">QRDX Mainnet</span>
+          <span className="text-[10px] text-muted-foreground">{activeChain.name}</span>
         </div>
 
         {/* Balance Card */}
@@ -201,7 +214,7 @@ export function Dashboard() {
             <div className="text-3xl font-bold tracking-tight mb-1">
               {balanceVisible ? totalBalance : '••••••••'}
             </div>
-            <PortfolioChart change24h={4.34} />
+            <PortfolioChart data={priceHistory} change24h={portfolioChange24h || 4.34} />
           </CardContent>
         </Card>
 

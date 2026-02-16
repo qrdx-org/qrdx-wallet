@@ -2,7 +2,41 @@
  * Core barrel export — everything platform-agnostic lives here.
  * Both the extension/web UI and the mobile app import from @core/*.
  */
-export { QuantumCrypto } from './crypto'
+export {
+  // Legacy class (deprecated)
+  QuantumCrypto,
+  // ETH / secp256k1
+  generateEthKeyPair,
+  ethKeyPairFromPrivateKey,
+  publicKeyToEthAddress,
+  toChecksumAddress,
+  ecdsaSign,
+  signEthMessage,
+  signHash,
+  recoverAddress,
+  // PQ / Dilithium3
+  generatePqKeyPair,
+  pqKeyPairFromSeed,
+  pqKeyPairFromStored,
+  toPqChecksumAddress,
+  pqSign,
+  pqSignWithPrefix,
+  pqVerify,
+  isPqAvailable,
+  // Encryption
+  encrypt,
+  decrypt,
+  // Utilities
+  bytesToHex,
+  hexToBytes,
+  // Constants
+  ETH_KEY_SIZES,
+  PQ_KEY_SIZES,
+  // Types
+  type EthKeyPair,
+  type PqKeyPair,
+} from './crypto'
+
 export { WalletManager } from './wallet-manager'
 export {
   type IStorage,
@@ -49,6 +83,42 @@ export {
   type GasEstimate,
   type TokenBalance,
 } from './ethereum'
+
+// ── Transaction signing ─────────────────────────────────────────────────────
+export {
+  signTransaction,
+  signLegacyTransaction,
+  signEip1559Transaction,
+  type SignedTransaction,
+} from './transaction'
+
+// ── RLP encoding ────────────────────────────────────────────────────────────
+export { rlpEncode, rlpDecode, bigIntToBytes } from './rlp'
+
+// ── Price oracle ────────────────────────────────────────────────────────────
+export {
+  fetchPrices,
+  fetchPricesBySymbol,
+  getTokenPrice,
+  fetchPriceHistory,
+  computePortfolioValue,
+  formatUsd,
+  clearPriceCache,
+  symbolToCoingeckoId,
+  type TokenPrice,
+  type PriceHistoryPoint,
+} from './prices'
+
+// ── Transaction history ─────────────────────────────────────────────────────
+export {
+  fetchTransactionHistory,
+  fetchTokenTransferHistory,
+  fetchAllTransactionHistory,
+  recordPendingTransaction,
+  updatePendingTransaction,
+  getPendingTransactions,
+  type TransactionHistoryItem,
+} from './history'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 export type {

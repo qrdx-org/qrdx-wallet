@@ -4,9 +4,10 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { createChart, ColorType, AreaSeries, CrosshairMode } from 'lightweight-charts'
 import type { IChartApi, ISeriesApi } from 'lightweight-charts'
+import type { PriceHistoryPoint } from '@/src/core/prices'
 
 interface PortfolioChartProps {
-  data?: Array<{ time: number; value: number }>
+  data?: PriceHistoryPoint[]
   change24h?: number
 }
 
@@ -60,7 +61,7 @@ function generateMockData(isPositive: boolean) {
   return points
 }
 
-export function PortfolioChart({ change24h = 4.34 }: PortfolioChartProps) {
+export function PortfolioChart({ data, change24h = 4.34 }: PortfolioChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartInstanceRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<any>(null)
@@ -138,8 +139,17 @@ export function PortfolioChart({ change24h = 4.34 }: PortfolioChartProps) {
       lastValueVisible: false,
     })
 
-    const mockData = generateMockData(isPositive)
-    series.setData(mockData)
+    // Use real price history data if available, otherwise generate mock data
+    let chartData: any[]
+    if (data && data.length > 0) {
+      chartData = data.map(p => ({
+        time: Math.floor(p.timestamp / 1000) as any,
+        value: p.price,
+      }))
+    } else {
+      chartData = generateMockData(isPositive)
+    }
+    series.setData(chartData)
     chart.timeScale().fitContent()
 
     chartInstanceRef.current = chart
