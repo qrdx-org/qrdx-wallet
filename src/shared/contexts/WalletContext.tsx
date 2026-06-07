@@ -2,12 +2,13 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import type { WalletState, StoredWallet } from '../../core/types'
 import { WalletManager } from '../../core/wallet-manager'
 import { WalletStorage, type IStorage } from '../../core/storage'
-import { type ChainConfig, DEFAULT_CHAIN, CHAIN_LIST, getChain, supportsWeb3 } from '../../core/chains'
-import { getEvmProvider, type TokenBalance, type EthTransactionRequest, type EthTransactionReceipt, type GasEstimate } from '../../core/ethereum'
+import { type ChainConfig, DEFAULT_CHAIN, CHAIN_LIST, getChain, supportsWeb3, isQrdxChain } from '../../core/chains'
+import { getEvmProvider, type TokenBalance, type EthTransactionRequest, type EthTransactionReceipt, type GasEstimate, weiToEth } from '../../core/ethereum'
 import { fetchPricesBySymbol, computePortfolioValue, fetchPriceHistory, type TokenPrice, type PriceHistoryPoint } from '../../core/prices'
 import { fetchAllTransactionHistory, type TransactionHistoryItem } from '../../core/history'
 import { type SignedTransaction } from '../../core/transaction'
 import { generateMnemonic as generateMnemonicCrypto } from '../../core/crypto'
+import { getQrdxApiClient, smallestToQrdx, type QrdxQrc20Balance } from '../../core/qrdx-api'
 
 // ─── Public context type ────────────────────────────────────────────────────
 export interface WalletContextType {
@@ -54,12 +55,18 @@ export interface WalletContextType {
   setActiveChain: (chainId: string) => void
   /** All chains available */
   chains: ChainConfig[]
-  /** Fetch native + ERC-20 balances for current wallet on active chain */
+  /** Fetch native + ERC-20/QRC-20 balances for current wallet on active chain */
   fetchBalances: () => Promise<TokenBalance[]>
   /** Balances cache for the active chain */
   balances: TokenBalance[]
   /** Whether balances are currently loading */
   balancesLoading: boolean
+  /**
+   * Active wallet address for the current chain.
+   * On QRDX chains this is the secp256k1 0x address by default.
+   * Use pqAddress from currentWallet for the post-quantum address.
+   */
+  activeAddress: string
   // ── Signing & Transactions ─────────────────────────────────────────────
   /** Sign a message with the ETH key (EIP-191 personal_sign) */
   signMessage: (message: string) => Promise<string>
@@ -336,12 +343,25 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     }
   }
 
+  // The address shown for the active chain.
+  // On QRDX both 0x and 0xPQ addresses are valid — we show the secp256k1 one.
+  const activeAddress = currentWallet?.ethAddress ?? ''
+
+  /**
+   * Fetch balances for the active chain.
+   * QRDX chains: uses the node REST API for native balance + QRC-20 tokens.
+   * All other chains: uses standard EVM JSON-RPC.
+   */
   const fetchBalances = async (): Promise<TokenBalance[]> => {
     if (!currentWallet) return []
-    if (!supportsWeb3(activeChain)) return []
 
     setBalancesLoading(true)
     try {
+      if (isQrdxChain(activeChain) && activeChain.nodeUrl) {
+        return await fetchQrdxBalances(activeChain, currentWallet)
+      }
+
+      if (!supportsWeb3(activeChain)) return []
       const provider = getEvmProvider(activeChain.id)
       const result = await provider.getAllBalances(currentWallet.ethAddress)
       setBalances(result)
@@ -354,9 +374,68 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     }
   }
 
+  /**
+   * Fetch balances from the QRDX REST API for both the secp256k1 (0x) address
+   * and the post-quantum (0xPQ) address, then merge them.
+   */
+  const fetchQrdxBalances = async (
+    chain: ChainConfig,
+    wallet: StoredWallet
+  ): Promise<TokenBalance[]> => {
+    const nodeUrl = chain.nodeUrl!
+    const client = getQrdxApiClient(nodeUrl)
+    const results: TokenBalance[] = []
+
+    // Fetch native balance for both address types in parallel
+    const [ethInfo, pqInfo] = await Promise.allSettled([
+      client.getAddressInfo(wallet.ethAddress, { transactionsLimit: 0 }),
+      wallet.pqAddress
+        ? client.getAddressInfo(wallet.pqAddress, { transactionsLimit: 0 })
+        : Promise.resolve(null),
+    ])
+
+    const ethBalance = ethInfo.status === 'fulfilled' ? (ethInfo.value?.balance ?? 0) : 0
+    const pqBalance = pqInfo.status === 'fulfilled' && pqInfo.value ? (pqInfo.value.balance ?? 0) : 0
+    const totalBalance = ethBalance + pqBalance
+
+    // QRDX has 6 decimal places (SMALLEST = 1_000_000)
+    const decimals = chain.nativeCurrency.decimals // 6
+    const nativeToken = chain.tokens[0]
+    results.push({
+      address: '',
+      symbol: nativeToken.symbol,
+      name: nativeToken.name,
+      decimals,
+      rawBalance: BigInt(totalBalance),
+      formattedBalance: smallestToQrdx(totalBalance),
+    })
+
+    // Fetch QRC-20 tokens for the secp256k1 address
+    try {
+      const tokens = await client.getAddressTokens(wallet.ethAddress, 'QRC-20')
+      for (const token of tokens.qrc20 ?? []) {
+        const tokenDecimals = token.decimals ?? 18
+        const raw = BigInt(Math.round(parseFloat(token.balance) * 10 ** tokenDecimals))
+        results.push({
+          address: token.token_address,
+          symbol: token.symbol,
+          name: token.name,
+          decimals: tokenDecimals,
+          rawBalance: raw,
+          formattedBalance: weiToEth(raw, tokenDecimals),
+        })
+      }
+    } catch {
+      // QRC-20 fetch failed — continue with native only
+    }
+
+    setBalances(results)
+    return results
+  }
+
   // Auto-fetch balances when wallet or chain changes
   useEffect(() => {
-    if (currentWallet && !locked && supportsWeb3(activeChain)) {
+    if (currentWallet && !locked) {
       fetchBalances()
     }
   }, [currentWallet?.id, activeChain.id, locked]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -502,6 +581,7 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     fetchBalances,
     balances,
     balancesLoading,
+    activeAddress,
     signMessage,
     signMessagePQ,
     buildSend,

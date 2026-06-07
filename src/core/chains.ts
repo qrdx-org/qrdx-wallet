@@ -56,10 +56,16 @@ export interface ChainConfig {
   shortName: string
   /** EIP-155 chain ID (decimal) */
   chainId: number
-  /** Primary JSON-RPC endpoint */
+  /** Primary JSON-RPC endpoint (web3 compatible) */
   rpcUrl: string
   /** Fallback RPC endpoints (tried in order when primary is down) */
   rpcFallbacks?: string[]
+  /**
+   * QRDX node REST API base URL (port 3007).
+   * Only set for QRDX chains. Used for native balance, UTXO data,
+   * token queries, and transaction history via the QRDX REST API.
+   */
+  nodeUrl?: string
   /** Block explorer base URL */
   explorerUrl: string
   /** Native currency */
@@ -164,7 +170,7 @@ const QRDX_NATIVE: ChainToken = {
   address: '',
   symbol: 'QRDX',
   name: 'QRDX Ledger',
-  decimals: 18,
+  decimals: 6,  // SMALLEST = 1_000_000 (6 decimal places)
   coingeckoId: 'qrdx',
 }
 
@@ -207,8 +213,9 @@ export const CHAINS: Record<string, ChainConfig> = {
     shortName: 'QRDX',
     chainId: 7225,
     rpcUrl: 'https://rpc.qrdx.org',
+    nodeUrl: 'http://node.qrdx.org:3007',
     explorerUrl: 'https://explorer.qrdx.org',
-    nativeCurrency: { name: 'QRDX', symbol: 'QRDX', decimals: 18 },
+    nativeCurrency: { name: 'QRDX', symbol: 'QRDX', decimals: 6 },
     transport: 'web3+pq',
     isEvm: true,
     isTestnet: false,
@@ -224,8 +231,9 @@ export const CHAINS: Record<string, ChainConfig> = {
     shortName: 'QRDX Test',
     chainId: 7226,
     rpcUrl: 'https://testnet-rpc.qrdx.org',
+    nodeUrl: 'http://testnet-node.qrdx.org:3007',
     explorerUrl: 'https://testnet.explorer.qrdx.org',
-    nativeCurrency: { name: 'QRDX', symbol: 'QRDX', decimals: 18 },
+    nativeCurrency: { name: 'QRDX', symbol: 'QRDX', decimals: 6 },
     transport: 'web3+pq',
     isEvm: true,
     isTestnet: true,
@@ -659,6 +667,11 @@ export function toAddChainParam(chain: ChainConfig): AddEthereumChainParameter {
     rpcUrls: [chain.rpcUrl, ...(chain.rpcFallbacks ?? [])],
     blockExplorerUrls: [chain.explorerUrl],
   }
+}
+
+/** Whether a chain is QRDX (has a node REST API endpoint) */
+export function isQrdxChain(chain: ChainConfig): boolean {
+  return chain.nodeUrl != null
 }
 
 // ─── Default chains ─────────────────────────────────────────────────────────

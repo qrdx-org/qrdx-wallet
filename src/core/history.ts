@@ -11,8 +11,9 @@
  *  they appear on chain.
  */
 
-import { type ChainConfig, CHAINS } from './chains'
+import { type ChainConfig, CHAINS, isQrdxChain } from './chains'
 import { type EthTransactionReceipt, weiToEth, fromHex } from './ethereum'
+import { fetchQrdxTransactionHistory, smallestToQrdx, type QrdxTxSummary } from './qrdx-api'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -281,8 +282,102 @@ export async function fetchTokenTransferHistory(
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  QRDX-native transaction history
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Convert a QRDX REST API transaction summary into the common
+ * TransactionHistoryItem format used across the wallet UI.
+ */
+function qrdxTxToHistoryItem(
+  tx: QrdxTxSummary,
+  address: string,
+  chain: ChainConfig
+): TransactionHistoryItem {
+  const addr = address.toLowerCase()
+
+  // Determine if this address sent or received
+  const inputAddresses = tx.inputs.map(i => (i.address ?? '').toLowerCase())
+  const outputAddresses = tx.outputs.map(o => o.address.toLowerCase())
+
+  const isSender = inputAddresses.some(a => a === addr)
+  const isReceiver = outputAddresses.some(a => a === addr)
+  const type: TransactionHistoryItem['type'] = isSender ? 'send' : isReceiver ? 'receive' : 'contract'
+
+  // Best-effort "to" address for display
+  const toAddress = isSender
+    ? (tx.outputs.find(o => o.address.toLowerCase() !== addr)?.address ?? tx.outputs[0]?.address ?? '')
+    : address
+
+  // Sum outputs to the receiving address
+  const valueSmallest = isSender
+    ? tx.outputs.filter(o => o.address.toLowerCase() !== addr).reduce((s, o) => s + o.amount, 0)
+    : tx.outputs.filter(o => o.address.toLowerCase() === addr).reduce((s, o) => s + o.amount, 0)
+
+  const formattedValue = smallestToQrdx(valueSmallest)
+
+  return {
+    hash: tx.hash,
+    from: isSender ? addr : (tx.inputs[0]?.address ?? '').toLowerCase(),
+    to: toAddress.toLowerCase(),
+    value: `${formattedValue} QRDX`,
+    valueRaw: String(valueSmallest),
+    timestamp: tx.timestamp ?? 0,
+    blockNumber: tx.block_height ?? 0,
+    status: tx.status === 'confirmed' ? 'confirmed'
+      : tx.status === 'failed' ? 'failed'
+      : 'pending',
+    type,
+    chainId: chain.id,
+    explorerUrl: `${chain.explorerUrl}/tx/${tx.hash}`,
+  }
+}
+
+/**
+ * Fetch QRDX-native transaction history for an address.
+ * Uses the node REST API at port 3007 (not Etherscan).
+ * Merges locally-tracked pending transactions with confirmed on-chain data.
+ */
+async function fetchQrdxHistory(
+  address: string,
+  chain: ChainConfig,
+  page = 1,
+  pageSize = 20
+): Promise<TransactionHistoryItem[]> {
+  if (!chain.nodeUrl) return []
+
+  const results: TransactionHistoryItem[] = []
+
+  // Include locally-tracked pending transactions first
+  if (page === 1) {
+    results.push(...getPendingTransactions(address, chain.id))
+  }
+
+  const rawTxs = await fetchQrdxTransactionHistory(chain.nodeUrl, address, page, pageSize)
+
+  for (const tx of rawTxs) {
+    // Skip if we already have it as a locally-tracked pending tx
+    if (pendingTxs.has(tx.hash)) {
+      const pending = pendingTxs.get(tx.hash)!
+      if (tx.status && tx.status !== 'pending') {
+        pending.status = tx.status
+        pending.blockNumber = tx.block_height ?? 0
+        pending.timestamp = tx.timestamp ?? pending.timestamp
+      }
+      continue
+    }
+
+    results.push(qrdxTxToHistoryItem(tx, address, chain))
+  }
+
+  results.sort((a, b) => b.timestamp - a.timestamp)
+  return results
+}
+
 /**
  * Fetch combined (native + token) transaction history.
+ * Routes QRDX chains to the native REST API; all other chains use Etherscan.
  */
 export async function fetchAllTransactionHistory(
   address: string,
@@ -290,6 +385,14 @@ export async function fetchAllTransactionHistory(
   page = 1,
   pageSize = 20
 ): Promise<TransactionHistoryItem[]> {
+  const chain = CHAINS[chainId]
+  if (!chain) return []
+
+  // QRDX chains use the native REST API for history
+  if (isQrdxChain(chain)) {
+    return fetchQrdxHistory(address, chain, page, pageSize)
+  }
+
   const [nativeTxs, tokenTxs] = await Promise.all([
     fetchTransactionHistory(address, chainId, page, pageSize),
     fetchTokenTransferHistory(address, chainId, page, pageSize),
