@@ -44,6 +44,7 @@
     "@radix-ui/react-tooltip": "^1.1.15",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "ethereum-cryptography": "^3.2.0",
     "framer-motion": "^12.23.24",
     "lightweight-charts": "^5.0.9",
     "lucide-react": "^0.552.0",
