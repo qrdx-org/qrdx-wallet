@@ -11,57 +11,17 @@ interface PortfolioChartProps {
   change24h?: number
 }
 
-// Generate realistic mock data with random walk and volatility
-function generateMockData(isPositive: boolean) {
-  const now = Math.floor(Date.now() / 1000)
-  const baseValue = 29000
-  const points = []
-  
-  // Seed random number generator for consistency (based on current day)
-  const seed = Math.floor(now / 86400)
-  const random = (n: number) => {
-    const x = Math.sin(seed + n) * 10000
-    return x - Math.floor(x)
-  }
-  
-  let currentValue = baseValue
-  const trendStrength = isPositive ? 12 : -8
-  
-  for (let i = 0; i < 48; i++) {
-    const time = now - (47 - i) * 1800
-    
-    // Random walk component (each step depends on previous)
-    const randomWalk = (random(i * 3) - 0.5) * 250
-    
-    // Trend component (overall direction)
-    const trend = (i / 48) * trendStrength * 40
-    
-    // Volatility spikes (occasional larger movements)
-    const volatilitySpike = random(i * 7) > 0.85 ? (random(i * 11) - 0.5) * 600 : 0
-    
-    // Mean reversion (pull towards base + trend)
-    const targetValue = baseValue + trend
-    const meanReversion = (targetValue - currentValue) * 0.15
-    
-    // Multi-frequency noise for more natural movement
-    const noise1 = Math.sin(i * 0.4 + random(i)) * 120 * random(i * 2)
-    const noise2 = Math.cos(i * 1.1 + random(i * 5)) * 80 * random(i * 4)
-    const noise3 = Math.sin(i * 2.3 + random(i * 9)) * 50 * random(i * 6)
-    
-    // Combine all components
-    currentValue += randomWalk + meanReversion + volatilitySpike * 0.3
-    const finalValue = currentValue + noise1 + noise2 + noise3
-    
-    points.push({
-      time: time as any,
-      value: Math.max(finalValue, baseValue * 0.85), // Floor to prevent going too low
-    })
-  }
-  
-  return points
-}
-
-export function PortfolioChart({ data, change24h = 4.34 }: PortfolioChartProps) {
+/**
+ * Renders real price history only.
+ *
+ * An earlier version synthesised a plausible-looking random walk around $29,000
+ * whenever `data` was empty. In a wallet that is not a harmless placeholder: it
+ * renders an invented portfolio trend indistinguishable from a real one, on a
+ * screen people use to make financial decisions. When there is no price history
+ * — a new chain, an unpriced token, an offline oracle — the honest answer is to
+ * say so.
+ */
+export function PortfolioChart({ data, change24h = 0 }: PortfolioChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartInstanceRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<any>(null)
@@ -69,9 +29,11 @@ export function PortfolioChart({ data, change24h = 4.34 }: PortfolioChartProps) 
   const [ready, setReady] = useState(false)
   const [hoverData, setHoverData] = useState<{ price: string; time: string } | null>(null)
 
+  const hasData = !!data && data.length > 0
+
   const setupChart = useCallback(() => {
     const container = chartContainerRef.current
-    if (!container) return
+    if (!container || !hasData) return
 
     // Destroy previous instance if exists
     if (chartInstanceRef.current) {
@@ -139,17 +101,12 @@ export function PortfolioChart({ data, change24h = 4.34 }: PortfolioChartProps) 
       lastValueVisible: false,
     })
 
-    // Use real price history data if available, otherwise generate mock data
-    let chartData: any[]
-    if (data && data.length > 0) {
-      chartData = data.map(p => ({
+    series.setData(
+      data!.map(p => ({
         time: Math.floor(p.timestamp / 1000) as any,
         value: p.price,
-      }))
-    } else {
-      chartData = generateMockData(isPositive)
-    }
-    series.setData(chartData)
+      })),
+    )
     chart.timeScale().fitContent()
 
     chartInstanceRef.current = chart
@@ -186,7 +143,7 @@ export function PortfolioChart({ data, change24h = 4.34 }: PortfolioChartProps) 
         ;(el as HTMLElement).style.display = 'none'
       })
     })
-  }, [isPositive])
+  }, [isPositive, data, hasData])
 
   useEffect(() => {
     const container = chartContainerRef.current
@@ -229,6 +186,21 @@ export function PortfolioChart({ data, change24h = 4.34 }: PortfolioChartProps) 
       }
     }
   }, [setupChart])
+
+  if (!hasData) {
+    return (
+      <div className="mt-2">
+        <div
+          className="w-full rounded-lg border border-dashed border-border/60 flex items-center justify-center"
+          style={{ height: 90 }}
+        >
+          <p className="text-[11px] text-muted-foreground">
+            No price history for this network yet
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-2 mt-2">

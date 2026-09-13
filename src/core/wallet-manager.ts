@@ -542,7 +542,22 @@ export class WalletManager {
    * Get current wallet state
    */
   async getState(): Promise<WalletState | null> {
-    return this.storage.getState()
+    const state = await this.storage.getState()
+    if (!state) return null
+
+    // An unlocked session exists only in memory: `currentPassword` is what
+    // actually decrypts keys, and it does not survive a page reload, a service
+    // worker restart, or the app being reopened.
+    //
+    // The persisted `locked` flag therefore cannot be trusted on its own — it
+    // is written as `false` while unlocked and stays that way on disk. Reading
+    // it back verbatim made the wallet present itself as unlocked after a
+    // restart: balances rendered and the send form accepted input, and only the
+    // final signing step failed with "Wallet is locked".
+    //
+    // Derive the flag from whether key material is actually held, so the UI
+    // asks for the password instead of offering actions it cannot complete.
+    return { ...state, locked: state.locked || !this.currentPassword }
   }
 
   // ─── Account management ─────────────────────────────────────────────────

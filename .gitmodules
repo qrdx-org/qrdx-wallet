@@ -5,4 +5,5 @@
 	path = lib/external/qrdx.js
 	url = https://github.com/qrdx-org/qrdx.js
 [submodule "lib/external/qrpay.js"]
-	path = lib/external/qrpay.js        url = https://github.com/qrdx-org/qrpay.js
+	path = lib/external/qrpay.js
+	url = https://github.com/qrdx-org/qrpay.js

@@ -17,7 +17,14 @@
  *  with the external web3.js submodule for production signing).
  */
 
-import { type ChainConfig, getChain, CHAINS, supportsWeb3 } from './chains'
+import {
+  type ChainConfig,
+  getChain,
+  CHAINS,
+  supportsWeb3,
+  getFeeModel,
+} from './chains'
+import { resolveSigningChainId } from './chain-identity'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -341,7 +348,12 @@ export class EvmProvider {
 
   /**
    * Get a full gas estimate including price and total cost.
-   * Tries EIP-1559 first, falls back to legacy gasPrice.
+   *
+   * The fee model comes from the chain registry, never from probing the node.
+   * Inferring it from `eth_feeHistory` is unsafe: QRDX answers that call with a
+   * populated `baseFeePerGas` array of zeroes, which reads as EIP-1559 support,
+   * yet its `eth_sendRawTransaction` can only decode legacy nine-field payloads.
+   * Sniffing would therefore produce transactions the chain cannot accept.
    */
   async getGasEstimate(tx: EthTransactionRequest): Promise<GasEstimate> {
     const [gasLimit, gasPrice] = await Promise.all([
@@ -349,7 +361,15 @@ export class EvmProvider {
       this.getGasPrice(),
     ])
 
-    // Try EIP-1559 fee data
+    if (getFeeModel(this.chain) === 'legacy') {
+      return {
+        gasLimit,
+        gasPrice,
+        estimatedCostWei: gasLimit * gasPrice,
+      }
+    }
+
+    // EIP-1559 chains: derive the fee cap from the current base fee.
     let maxFeePerGas: bigint | undefined
     let maxPriorityFeePerGas: bigint | undefined
     try {
@@ -361,13 +381,14 @@ export class EvmProvider {
       if (feeHistory?.baseFeePerGas?.length) {
         const baseFee = fromHex(feeHistory.baseFeePerGas[0])
         maxPriorityFeePerGas = gasPrice / 10n // ~10% tip
-        if (maxPriorityFeePerGas < 1000000000n) {
-          maxPriorityFeePerGas = 1000000000n // minimum 1 gwei tip
+        if (maxPriorityFeePerGas < 1_000_000_000n) {
+          maxPriorityFeePerGas = 1_000_000_000n // minimum 1 gwei tip
         }
+        // Allow for the base fee rising over the next few blocks.
         maxFeePerGas = baseFee * 2n + maxPriorityFeePerGas
       }
     } catch {
-      // EIP-1559 not supported — use legacy
+      // Endpoint does not implement eth_feeHistory — fall back to legacy pricing.
     }
 
     const effectiveGasPrice = maxFeePerGas ?? gasPrice
@@ -393,13 +414,14 @@ export class EvmProvider {
     to: string,
     amountWei: bigint
   ): Promise<EthTransactionRequest> {
-    const [nonce, gasEstimate] = await Promise.all([
+    const [nonce, gasEstimate, chainId] = await Promise.all([
       this.getTransactionCount(from),
       this.getGasEstimate({
         from,
         to,
         value: toHex(amountWei),
       }),
+      resolveSigningChainId(this.chain),
     ])
 
     const tx: EthTransactionRequest = {
@@ -407,19 +429,34 @@ export class EvmProvider {
       to,
       value: toHex(amountWei),
       nonce: toHex(nonce),
-      chainId: toHex(this.chain.chainId),
+      chainId: toHex(chainId),
       gas: toHex(gasEstimate.gasLimit),
     }
 
-    // Prefer EIP-1559 if available
-    if (gasEstimate.maxFeePerGas != null) {
-      tx.maxFeePerGas = toHex(gasEstimate.maxFeePerGas)
+    this.applyFeeFields(tx, gasEstimate)
+    return tx
+  }
+
+  /**
+   * Populate the fee fields that match this chain's envelope.
+   *
+   * `signTransaction` selects legacy vs. type-2 encoding by the presence of
+   * `maxFeePerGas`, so a legacy chain must never carry those fields — setting
+   * them would silently produce a payload QRDX cannot decode.
+   */
+  private applyFeeFields(
+    tx: EthTransactionRequest,
+    gasEstimate: GasEstimate
+  ): void {
+    const useEip1559 =
+      getFeeModel(this.chain) === 'eip1559' && gasEstimate.maxFeePerGas != null
+
+    if (useEip1559) {
+      tx.maxFeePerGas = toHex(gasEstimate.maxFeePerGas!)
       tx.maxPriorityFeePerGas = toHex(gasEstimate.maxPriorityFeePerGas!)
     } else {
       tx.gasPrice = toHex(gasEstimate.gasPrice)
     }
-
-    return tx
   }
 
   /**
@@ -434,13 +471,14 @@ export class EvmProvider {
     const data =
       ERC20_TRANSFER + encodeAddress(to) + encodeUint256(amount)
 
-    const [nonce, gasEstimate] = await Promise.all([
+    const [nonce, gasEstimate, chainId] = await Promise.all([
       this.getTransactionCount(from),
       this.getGasEstimate({
         from,
         to: tokenAddress,
         data,
       }),
+      resolveSigningChainId(this.chain),
     ])
 
     const tx: EthTransactionRequest = {
@@ -449,17 +487,11 @@ export class EvmProvider {
       data,
       value: '0x0',
       nonce: toHex(nonce),
-      chainId: toHex(this.chain.chainId),
+      chainId: toHex(chainId),
       gas: toHex(gasEstimate.gasLimit),
     }
 
-    if (gasEstimate.maxFeePerGas != null) {
-      tx.maxFeePerGas = toHex(gasEstimate.maxFeePerGas)
-      tx.maxPriorityFeePerGas = toHex(gasEstimate.maxPriorityFeePerGas!)
-    } else {
-      tx.gasPrice = toHex(gasEstimate.gasPrice)
-    }
-
+    this.applyFeeFields(tx, gasEstimate)
     return tx
   }
 

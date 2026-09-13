@@ -57,17 +57,35 @@ export {
   BRIDGEABLE_CHAINS,
   DEFAULT_CHAIN,
   DEFAULT_EVM_CHAIN,
+  QRDX_CHAINS,
   getChain,
   getChainById,
   supportsWeb3,
   supportsPQ,
+  getFeeModel,
+  isQrdxChain,
   getNativeToken,
   toAddChainParam,
   type ChainConfig,
   type ChainToken,
   type TransportCapability,
+  type FeeModel,
   type AddEthereumChainParameter,
 } from './chains'
+
+// ── Live chain identity (runtime chain-id reconciliation) ───────────────────
+export {
+  probeChainIdentity,
+  resolveSigningChainId,
+  getCachedChainIdentity,
+  clearChainIdentityCache,
+  trustChainId,
+  untrustChainId,
+  getTrustedChainIds,
+  setTrustedChainIds,
+  ChainIdentityError,
+  type ChainIdentity,
+} from './chain-identity'
 
 // ── EVM / Ethereum provider ─────────────────────────────────────────────────
 export {

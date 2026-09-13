@@ -108,6 +108,21 @@ export interface WalletSettings {
   language: string
   autoLock: boolean
   autoLockTimeout: number
+  developerMode?: boolean
+  /**
+   * Registry slug of the selected chain (see `core/chains.ts`), e.g.
+   * `qrdx-mainnet` or `qrdx-local`. Persisted so the wallet reopens on the
+   * network the user was last using instead of silently reverting to mainnet.
+   */
+  activeChainId?: string
+  /** Show testnets in the network selector. Off by default. */
+  showTestnets?: boolean
+  /**
+   * Chain slug → chain ID the user explicitly accepted despite it differing
+   * from the registry. Restored into `core/chain-identity.ts` at startup.
+   * Only ever written through an explicit user confirmation.
+   */
+  trustedChainIds?: Record<string, number>
 }
 
 // Message Types

@@ -53,6 +53,10 @@ import { Button } from '@/components/ui/button'
 import { useTheme } from 'next-themes'
 import { THEME_OPTIONS, type ThemeValue } from '@/components/theme-provider'
 import { CHAIN_LIST, type ChainConfig, supportsWeb3, supportsPQ } from '@/src/core/chains'
+import { CAPABILITY_LABELS } from '@/src/core/permissions'
+import type { AddressBookEntry } from '@/src/core/address-book'
+import { validateAddress } from '@/src/core/address'
+import { getChain } from '@/src/core/chains'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 
 interface SettingsProps {
@@ -109,21 +113,19 @@ const NETWORKS: Network[] = CHAIN_LIST.map((c) => ({
   transport: c.transport,
 }))
 
-interface ConnectedSite {
-  id: string
-  origin: string
-  name: string
-  favicon?: string
-  connectedAt: string
-  permissions: string[]
+/**
+ * Best-effort hostname for display when a site supplied no name.
+ *
+ * Origins in the permission store are already normalised and parseable, but
+ * this never throws so a malformed stored value cannot blank the settings page.
+ */
+function hostnameOf(origin: string): string {
+  try {
+    return new URL(origin).hostname
+  } catch {
+    return origin
+  }
 }
-
-const MOCK_CONNECTED_SITES: ConnectedSite[] = [
-  { id: '1', origin: 'https://app.uniswap.org', name: 'Uniswap', connectedAt: '2026-01-15', permissions: ['View accounts', 'Request transactions'] },
-  { id: '2', origin: 'https://opensea.io', name: 'OpenSea', connectedAt: '2026-01-22', permissions: ['View accounts'] },
-  { id: '3', origin: 'https://aave.com', name: 'Aave', connectedAt: '2026-02-01', permissions: ['View accounts', 'Request transactions', 'Sign messages'] },
-  { id: '4', origin: 'https://trade.qrdx.org', name: 'QRDX Trade', connectedAt: '2026-02-05', permissions: ['View accounts', 'Request transactions', 'Sign messages'] },
-]
 
 interface InjectedApi {
   id: string
@@ -140,23 +142,6 @@ const DEFAULT_INJECTED_APIS: InjectedApi[] = [
   { id: 'web3', name: 'Legacy Web3', description: 'Deprecated window.web3 injection for older dApps', namespace: 'window.web3', enabled: false, icon: 'legacy' },
   { id: 'qrdx', name: 'QRDX API', description: 'Quantum-resistant signing & QRDX chain methods', namespace: 'window.qrdx', enabled: true, icon: 'qrdx' },
   { id: 'qrdx-pq', name: 'QRDX Post-Quantum', description: 'Dilithium & SPHINCS+ signature schemes', namespace: 'window.qrdx.pq', enabled: true, icon: 'qrdx' },
-]
-
-interface AddressBookEntry {
-  id: string
-  name: string
-  address: string
-  addressType: 'eth' | 'pq'
-  chain: string
-  isFavorite: boolean
-}
-
-const MOCK_ADDRESS_BOOK: AddressBookEntry[] = [
-  { id: '1', name: 'Coinbase', address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', addressType: 'eth', chain: 'Ethereum', isFavorite: true },
-  { id: '2', name: 'Alice', address: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984', addressType: 'eth', chain: 'Ethereum', isFavorite: false },
-  { id: '3', name: 'QRDX Staking', address: 'qr_7a250d5630B4cF539739dF2C5dAcb4c659F2488D', addressType: 'pq', chain: 'QRDX', isFavorite: true },
-  { id: '4', name: 'Bob (Polygon)', address: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', addressType: 'eth', chain: 'Polygon', isFavorite: false },
-  { id: '5', name: 'Treasury (PQ)', address: 'qr_6B175474E89094C44Da98b954EedeAC495271d0F', addressType: 'pq', chain: 'QRDX', isFavorite: true },
 ]
 
 // Theme preview colors for the picker
@@ -183,6 +168,7 @@ type SettingsPage =
   | 'address-book'
   | 'smart-wallet'
   | 'about'
+  | 'developer'
 
 // ─── Component ──────────────────────────────────────────────────────────────
 export function Settings({ onBack }: SettingsProps) {
@@ -207,6 +193,14 @@ export function Settings({ onBack }: SettingsProps) {
     importFromKeystoreJSON,
     createWalletFromMnemonic,
     generateMnemonic,
+    addressBook,
+    addContact,
+    updateContact,
+    removeContact,
+    toggleContactFavorite,
+    connectedSites,
+    disconnectSite,
+    disconnectAllSites,
   } = useWallet()
 
   // Settings state (initialised from persisted settings if available)
@@ -227,12 +221,27 @@ export function Settings({ onBack }: SettingsProps) {
       : '5'
   )
   const [biometrics, setBiometrics] = useState(false)
-  const [testnetMode, setTestnetMode] = useState(false)
+  // Mirrors the persisted `showTestnets` setting so the network list here and
+  // the dashboard's network selector agree, and the choice survives a restart.
+  const [testnetMode, setTestnetModeLocal] = useState(savedSettings?.showTestnets ?? false)
+  const setTestnetMode = (next: boolean) => {
+    setTestnetModeLocal(next)
+    void updateSettings({ showTestnets: next })
+  }
   const [selectedNetwork, setSelectedNetwork] = useState<Network | null>(null)
   const [editingNetwork, setEditingNetwork] = useState<Network | null>(null)
-  const [connectedSites, setConnectedSites] = useState<ConnectedSite[]>(MOCK_CONNECTED_SITES)
   const [injectedApis, setInjectedApis] = useState<InjectedApi[]>(DEFAULT_INJECTED_APIS)
-  const [addressBook, setAddressBook] = useState<AddressBookEntry[]>(MOCK_ADDRESS_BOOK)
+
+  // ── Address book: add-contact form ──────────────────────────────────────
+  const [showAddContact, setShowAddContact] = useState(false)
+  const [contactName, setContactName] = useState('')
+  const [contactAddress, setContactAddress] = useState('')
+  const [contactChainId, setContactChainId] = useState<string>('')
+  const [contactError, setContactError] = useState<string | null>(null)
+  const [contactSaving, setContactSaving] = useState(false)
+
+  // Developer settings
+  const [developerMode, setDeveloperMode] = useState(savedSettings?.developerMode ?? false)
 
   // ── Account management dialogs ──────────────────────────────────────────
   const [showAddAccount, setShowAddAccount] = useState(false)
@@ -843,13 +852,22 @@ export function Settings({ onBack }: SettingsProps) {
               </span>
             </div>
             <Card className="glass border-border/50">
-              <CardContent className="p-1.5">
+              <CardContent className="p-1.5 space-y-0.5">
                 <MenuItem
                   icon={Info}
                   label="About QRDX Wallet"
                   description="v1.0.0 · Quantum-resistant"
                   onClick={() => setPage('about')}
                 />
+                {developerMode && (
+                  <MenuItem
+                    icon={Code}
+                    label="Developer Options"
+                    description="Mock GUI, testnets, UI debugging"
+                    onClick={() => setPage('developer')}
+                    gradient="from-purple-500 to-indigo-500"
+                  />
+                )}
               </CardContent>
             </Card>
           </div>
@@ -2168,40 +2186,50 @@ export function Settings({ onBack }: SettingsProps) {
               </div>
               <Card className="glass border-border/50">
                 <CardContent className="p-1.5 space-y-0.5">
-                  {connectedSites.map((site) => (
-                    <div
-                      key={site.id}
-                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-accent/30 transition-all group"
-                    >
-                      <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0 uppercase">
-                        {site.name.slice(0, 2)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium">{site.name}</div>
-                        <div className="text-[10px] text-muted-foreground font-mono truncate">
-                          {site.origin}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground/60 mt-0.5">
-                          {site.permissions.length} permission{site.permissions.length !== 1 ? 's' : ''} · Connected {site.connectedAt}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() =>
-                          setConnectedSites(connectedSites.filter((s) => s.id !== site.id))
-                        }
-                        className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                        title="Disconnect"
+                  {connectedSites.map((site) => {
+                    // The site-supplied name is untrusted page metadata; fall
+                    // back to the origin, which is the actual security boundary.
+                    const label = site.name?.trim() || hostnameOf(site.origin)
+                    return (
+                      <div
+                        key={site.origin}
+                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-accent/30 transition-all group"
                       >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
+                        <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0 uppercase">
+                          {label.slice(0, 2)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">{label}</div>
+                          <div className="text-[10px] text-muted-foreground font-mono truncate">
+                            {site.origin}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground/60 mt-0.5">
+                            {site.capabilities.length === 0
+                              ? 'No permissions'
+                              : site.capabilities
+                                  .map((c) => CAPABILITY_LABELS[c])
+                                  .join(' · ')}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground/60">
+                            Connected {new Date(site.connectedAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => { void disconnectSite(site.origin) }}
+                          className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                          title="Disconnect"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )
+                  })}
                 </CardContent>
               </Card>
 
               <Button
                 variant="outline"
-                onClick={() => setConnectedSites([])}
+                onClick={() => { void disconnectAllSites() }}
                 className="w-full h-10 font-medium glass text-red-400 hover:bg-red-500/10 hover:border-red-500/30"
               >
                 <Unplug className="h-4 w-4 mr-2" />
@@ -2426,15 +2454,43 @@ export function Settings({ onBack }: SettingsProps) {
   if (page === 'address-book') {
     const favorites = addressBook.filter((c) => c.isFavorite)
     const others = addressBook.filter((c) => !c.isFavorite)
+    const addressPreview = validateAddress(contactAddress)
 
+    // Both persist through the address-book store, so the list re-reads from
+    // storage rather than diverging into local component state.
     const toggleFavorite = (id: string) => {
-      setAddressBook(
-        addressBook.map((c) => (c.id === id ? { ...c, isFavorite: !c.isFavorite } : c))
-      )
+      void toggleContactFavorite(id)
     }
 
-    const removeContact = (id: string) => {
-      setAddressBook(addressBook.filter((c) => c.id !== id))
+    const deleteContact = (id: string) => {
+      void removeContact(id)
+    }
+
+    const resetContactForm = () => {
+      setShowAddContact(false)
+      setContactName('')
+      setContactAddress('')
+      setContactChainId('')
+      setContactError(null)
+    }
+
+    const handleSaveContact = async () => {
+      setContactSaving(true)
+      setContactError(null)
+      try {
+        await addContact({
+          name: contactName,
+          address: contactAddress,
+          chainId: contactChainId || undefined,
+        })
+        resetContactForm()
+      } catch (err) {
+        // The store rejects duplicates and malformed addresses with a
+        // user-facing reason; show it rather than a generic failure.
+        setContactError(err instanceof Error ? err.message : 'Could not save contact')
+      } finally {
+        setContactSaving(false)
+      }
     }
 
     const ContactRow = ({ contact }: { contact: AddressBookEntry }) => (
@@ -2452,9 +2508,11 @@ export function Settings({ onBack }: SettingsProps) {
             }`}>
               {contact.addressType === 'pq' ? 'PQ' : 'ETH'}
             </span>
-            <span className="text-[9px] bg-muted/80 text-muted-foreground px-1.5 py-0.5 rounded-full">
-              {contact.chain}
-            </span>
+            {contact.chainId && (
+              <span className="text-[9px] bg-muted/80 text-muted-foreground px-1.5 py-0.5 rounded-full">
+                {getChain(contact.chainId)?.shortName ?? contact.chainId}
+              </span>
+            )}
           </div>
           <div className="text-[10px] text-muted-foreground font-mono truncate">
             {contact.address}
@@ -2473,7 +2531,7 @@ export function Settings({ onBack }: SettingsProps) {
             <Star className={`h-3.5 w-3.5 ${contact.isFavorite ? 'fill-amber-400' : ''}`} />
           </button>
           <button
-            onClick={() => removeContact(contact.id)}
+            onClick={() => deleteContact(contact.id)}
             className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
             title="Remove"
           >
@@ -2535,13 +2593,98 @@ export function Settings({ onBack }: SettingsProps) {
             </>
           )}
 
-          <Button
-            variant="outline"
-            className="w-full h-10 font-medium glass hover:bg-accent/50 hover:border-primary/30"
-          >
-            <UserPlus className="h-4 w-4 mr-2" />
-            Add Contact
-          </Button>
+          {showAddContact ? (
+            <Card className="glass border-primary/20">
+              <CardContent className="p-3 space-y-2.5">
+                <div className="text-xs font-semibold">New contact</div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-medium text-muted-foreground">
+                    Name
+                  </label>
+                  <input
+                    value={contactName}
+                    onChange={(e) => setContactName(e.target.value)}
+                    placeholder="e.g. Alice"
+                    maxLength={64}
+                    className="w-full h-9 px-2.5 rounded-lg bg-accent/30 border border-border/50 text-sm outline-none focus:border-primary/50"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-medium text-muted-foreground">
+                    Address
+                  </label>
+                  <input
+                    value={contactAddress}
+                    onChange={(e) => setContactAddress(e.target.value)}
+                    placeholder="0x… or 0xPQ…"
+                    spellCheck={false}
+                    className="w-full h-9 px-2.5 rounded-lg bg-accent/30 border border-border/50 text-xs font-mono outline-none focus:border-primary/50"
+                  />
+                  {/* Validate as the user types, but stay quiet while the field
+                      is still obviously incomplete. */}
+                  {contactAddress.trim().length > 6 && !addressPreview.valid && (
+                    <p className="text-[10px] text-red-400">{addressPreview.error}</p>
+                  )}
+                  {addressPreview.valid && (
+                    <p className="text-[10px] text-green-500">
+                      Valid {addressPreview.kind === 'pq' ? 'post-quantum' : 'EVM'} address
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-medium text-muted-foreground">
+                    Network (optional)
+                  </label>
+                  <select
+                    value={contactChainId}
+                    onChange={(e) => setContactChainId(e.target.value)}
+                    className="w-full h-9 px-2 rounded-lg bg-accent/30 border border-border/50 text-xs outline-none focus:border-primary/50"
+                  >
+                    <option value="">Any network</option>
+                    {CHAIN_LIST.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {contactError && (
+                  <p className="text-[10px] text-red-400">{contactError}</p>
+                )}
+
+                <div className="flex gap-2 pt-0.5">
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-9 text-xs glass"
+                    onClick={resetContactForm}
+                    disabled={contactSaving}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1 h-9 text-xs"
+                    disabled={!addressPreview.valid || contactName.trim() === '' || contactSaving}
+                    onClick={handleSaveContact}
+                  >
+                    {contactSaving ? 'Saving…' : 'Save contact'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Button
+              variant="outline"
+              className="w-full h-10 font-medium glass hover:bg-accent/50 hover:border-primary/30"
+              onClick={() => setShowAddContact(true)}
+            >
+              <UserPlus className="h-4 w-4 mr-2" />
+              Add Contact
+            </Button>
+          )}
         </div>
       </div>
     )
@@ -2594,10 +2737,99 @@ export function Settings({ onBack }: SettingsProps) {
             </CardContent>
           </Card>
 
+          <Card className="glass border-border/50">
+            <CardContent className="p-1.5">
+              <ToggleItem
+                label="Developer Mode"
+                description="Enable advanced features and GUI mocks"
+                checked={developerMode}
+                onChange={(checked) => {
+                  setDeveloperMode(checked)
+                  updateSettings({ developerMode: checked })
+                }}
+              />
+            </CardContent>
+          </Card>
+
           <p className="text-center text-[10px] text-muted-foreground px-4 leading-relaxed">
             © 2026 QRDX Foundation. Built with post-quantum cryptography
             for a secure decentralized future.
           </p>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Developer Options ─────────────────────────────────────────────────────
+  if (page === 'developer') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <Header title="Developer Options" />
+        <div className="px-4 py-3 space-y-4">
+          <div className="bg-orange-500/10 border border-orange-500/20 text-orange-500/90 text-[11px] p-3 rounded-lg flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+            <p>
+              These options are for core development and debugging only. Changing values here
+              will only affect local UI state and mock balances, not real blockchain data.
+            </p>
+          </div>
+
+          {/* Mock Global UI State */}
+          <div className="space-y-1.5">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
+              Mock GUI State
+            </h3>
+            <Card className="glass border-border/50">
+              <CardContent className="p-3 space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">Mock Native Balance (ETH/QRDX)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      placeholder="e.g. 100.5"
+                      className="flex-1 h-9 px-3 rounded-lg bg-background/60 border border-border/50 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          // Emit custom event for WalletHome to pickup
+                          window.dispatchEvent(new CustomEvent('qrdx:mockBalance', { detail: e.target.value }))
+                        }
+                      }}
+                    />
+                    <Button variant="outline" className="h-9 px-3 glass" onClick={() => window.dispatchEvent(new CustomEvent('qrdx:mockBalance', { detail: '100' }))}>
+                      Set 100
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="pt-2 border-t border-border/50">
+                  <label className="text-xs font-medium block mb-1.5">Mock Token Balances</label>
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1 h-9 text-xs glass" onClick={() => window.dispatchEvent(new CustomEvent('qrdx:mockTokens', { detail: 'reset' }))}>
+                      Reset
+                    </Button>
+                    <Button variant="outline" className="flex-1 h-9 text-xs glass" onClick={() => window.dispatchEvent(new CustomEvent('qrdx:mockTokens', { detail: 'high' }))}>
+                      High Balances
+                    </Button>
+                    <Button variant="outline" className="flex-1 h-9 text-xs glass" onClick={() => window.dispatchEvent(new CustomEvent('qrdx:mockTokens', { detail: 'whale' }))}>
+                      Whale Mode
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-border/50">
+                  <label className="text-xs font-medium block mb-1.5">Triggers</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" className="h-9 text-xs justify-start glass" onClick={() => window.dispatchEvent(new CustomEvent('qrdx:mockNotification'))}>
+                      <Bell className="h-3.5 w-3.5 mr-1.5" /> Notification
+                    </Button>
+                    <Button variant="outline" className="h-9 text-xs justify-start glass" onClick={() => window.dispatchEvent(new CustomEvent('qrdx:mockActivity'))}>
+                      <Zap className="h-3.5 w-3.5 mr-1.5" /> Activity Item
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     )

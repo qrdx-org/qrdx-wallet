@@ -70,6 +70,47 @@ qrdx-wallet/
 pnpm install
 ```
 
+### Local QRDX Testnet
+
+The wallet develops against a real QRDX node rather than a mock. `scripts/local-chain.sh`
+wraps the node in `ref/qrdx-chain` and adds the things that make it usable day to day:
+it puts the chain's virtualenv on PATH, makes liboqs discoverable, and waits for the
+JSON-RPC surface to actually answer before reporting success.
+
+```bash
+./scripts/local-chain.sh doctor    # check prerequisites without starting anything
+./scripts/local-chain.sh up        # start the node, wait until RPC responds
+./scripts/local-chain.sh status    # one-shot health report (exit 0 = healthy)
+./scripts/local-chain.sh watch     # continuous health check, reports block production
+./scripts/local-chain.sh logs      # tail the node log
+./scripts/local-chain.sh fund 0x... 10   # send test QRDX to an address
+./scripts/local-chain.sh down      # stop
+```
+
+`pnpm chain:up`, `chain:down`, `chain:status`, `chain:watch` and `chain:logs` are
+shorthands for the same commands.
+
+The local network is **chain ID 9999**, with JSON-RPC at `http://127.0.0.1:3007/rpc`.
+Note that `testnet.sh` also sets `QRDX_RPC_PORT=8545`, but the node never binds a
+listener there — `/rpc` on the node API port is the working endpoint.
+
+`watch` reports the block height each poll, so a node that is up but wedged (RPC
+answering, height frozen) is visible. From the wallet's side that state is otherwise
+indistinguishable from a healthy chain.
+
+### Testing
+
+```bash
+pnpm typecheck          # TypeScript, strict
+pnpm test               # unit + integration (integration skips with no node running)
+pnpm test:unit          # pure unit tests, no chain needed
+node tests/e2e/ui-check.mjs     # browser: onboarding, network switching, balances
+node tests/e2e/send-check.mjs   # browser: send validation and a real broadcast
+```
+
+The end-to-end scripts drive a real browser against a running dev server and the
+local chain. Start both first (`./scripts/local-chain.sh up` and `pnpm dev -- -p 3100`).
+
 ### Browser Extension Development
 
 ```bash

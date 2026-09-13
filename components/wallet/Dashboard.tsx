@@ -11,6 +11,7 @@ import { AllTokens } from './AllTokens'
 import { ActivityList } from './ActivityList'
 import { PortfolioChart } from './PortfolioChart'
 import { Settings } from './Settings'
+import { NetworkSelector, NetworkStatusBanner } from './NetworkSelector'
 import { SendModal } from './SendModal'
 import { ReceiveModal } from './ReceiveModal'
 import { SwapModal } from './SwapModal'
@@ -22,7 +23,7 @@ import { formatAddress } from '@/lib/utils'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 
 export function Dashboard() {
-  const { lock, currentWallet, balances, balancesLoading, activeChain, fetchBalances, portfolioValue, portfolioChange24h, priceHistory, prices } = useWallet()
+  const { lock, currentWallet, balances, balancesLoading, activeChain, portfolioValue, portfolioChange24h, priceHistory, transactions } = useWallet()
   const nativeSym = activeChain.nativeCurrency?.symbol ?? 'ETH'
   const [copied, setCopied] = useState<'eth' | 'pq' | null>(null)
   const [balanceVisible, setBalanceVisible] = useState(true)
@@ -105,9 +106,9 @@ export function Dashboard() {
   }
 
   const tabs = [
-    { key: 'tokens' as const, label: 'Tokens', count: 4 },
+    { key: 'tokens' as const, label: 'Tokens', count: balances.length },
     { key: 'nfts' as const, label: 'NFTs', count: 0 },
-    { key: 'activity' as const, label: 'Activity', count: 4 },
+    { key: 'activity' as const, label: 'Activity', count: transactions.length },
   ]
 
   return (
@@ -183,14 +184,19 @@ export function Dashboard() {
 
       {/* Main Content */}
       <div className="px-4 py-3 space-y-3">
-        {/* Network badge */}
+        {/* Network badge + selector */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20">
             <Shield className="h-3 w-3 text-primary" />
             <span className="text-[10px] font-semibold text-primary">Quantum-Safe</span>
           </div>
-          <span className="text-[10px] text-muted-foreground">{activeChain.name}</span>
+          <NetworkSelector />
         </div>
+
+        {/* Blocking network problems sit in the flow, above the balance, so the
+            figures below are never presented as trustworthy while the chain
+            cannot be verified. */}
+        <NetworkStatusBanner />
 
         {/* Balance Card */}
         <Card className="glass border-primary/10">
@@ -214,7 +220,7 @@ export function Dashboard() {
             <div className="text-3xl font-bold tracking-tight mb-1">
               {balanceVisible ? totalBalance : '••••••••'}
             </div>
-            <PortfolioChart data={priceHistory} change24h={portfolioChange24h || 4.34} />
+            <PortfolioChart data={priceHistory} change24h={portfolioChange24h} />
           </CardContent>
         </Card>
 

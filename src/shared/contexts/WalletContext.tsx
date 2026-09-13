@@ -3,11 +3,48 @@ import type { WalletState, StoredWallet } from '../../core/types'
 import { WalletManager } from '../../core/wallet-manager'
 import { WalletStorage, type IStorage } from '../../core/storage'
 import { type ChainConfig, DEFAULT_CHAIN, CHAIN_LIST, getChain, supportsWeb3 } from '../../core/chains'
+import {
+  probeChainIdentity,
+  clearChainIdentityCache,
+  trustChainId,
+  setTrustedChainIds,
+  ChainIdentityError,
+} from '../../core/chain-identity'
 import { getEvmProvider, type TokenBalance, type EthTransactionRequest, type EthTransactionReceipt, type GasEstimate } from '../../core/ethereum'
 import { fetchPricesBySymbol, computePortfolioValue, fetchPriceHistory, type TokenPrice, type PriceHistoryPoint } from '../../core/prices'
 import { fetchAllTransactionHistory, type TransactionHistoryItem } from '../../core/history'
 import { type SignedTransaction } from '../../core/transaction'
 import { generateMnemonic as generateMnemonicCrypto } from '../../core/crypto'
+import {
+  AddressBook,
+  type AddressBookEntry,
+  type AddressBookInput,
+} from '../../core/address-book'
+import {
+  SitePermissions,
+  type SitePermission,
+  type SiteCapability,
+} from '../../core/permissions'
+
+/**
+ * Connectivity and identity of the active chain's RPC endpoint.
+ *
+ * `mismatch` is deliberately distinct from `unreachable`: the endpoint answered,
+ * but with a chain ID other than the one this network is configured for. The
+ * wallet will refuse to sign in that state, so the UI must be able to say why
+ * and offer the explicit trust decision rather than showing a generic error.
+ */
+export type NetworkStatus =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'connected'; chainId: number; rpcUrl: string }
+  | {
+      state: 'mismatch'
+      liveChainId: number
+      configuredChainId: number
+      rpcUrl: string
+    }
+  | { state: 'unreachable'; message: string }
 
 // ─── Public context type ────────────────────────────────────────────────────
 export interface WalletContextType {
@@ -50,10 +87,23 @@ export interface WalletContextType {
   // ── Chain-aware EVM operations ─────────────────────────────────────────
   /** Currently selected chain */
   activeChain: ChainConfig
-  /** Switch the active chain */
+  /** Switch the active chain (persisted across restarts) */
   setActiveChain: (chainId: string) => void
   /** All chains available */
   chains: ChainConfig[]
+  /** Live connectivity / chain-id status of the active chain */
+  networkStatus: NetworkStatus
+  /** Re-probe the active chain's endpoint */
+  refreshNetworkStatus: () => Promise<void>
+  /**
+   * Accept the chain ID the active network's node actually reports, even though
+   * it differs from the registry, and persist that decision. Only call from an
+   * explicit user confirmation — it re-enables signing on a network whose
+   * identity did not verify.
+   */
+  trustActiveChainId: () => Promise<void>
+  /** Whether testnets are shown in network pickers */
+  showTestnets: boolean
   /** Fetch native + ERC-20 balances for current wallet on active chain */
   fetchBalances: () => Promise<TokenBalance[]>
   /** Balances cache for the active chain */
@@ -93,6 +143,28 @@ export interface WalletContextType {
   transactionsLoading: boolean
   /** Refresh transaction history */
   refreshTransactions: () => Promise<void>
+  // ── Address book ───────────────────────────────────────────────────────
+  /** Saved recipients, favourites first */
+  addressBook: AddressBookEntry[]
+  /** Add a contact. Rejects invalid or duplicate addresses. */
+  addContact: (input: AddressBookInput) => Promise<void>
+  /** Update a contact's fields */
+  updateContact: (id: string, changes: Partial<AddressBookInput>) => Promise<void>
+  /** Delete a contact */
+  removeContact: (id: string) => Promise<void>
+  /** Toggle a contact's favourite flag */
+  toggleContactFavorite: (id: string) => Promise<void>
+  // ── Connected sites ────────────────────────────────────────────────────
+  /** dApp origins holding permissions, most recently used first */
+  connectedSites: SitePermission[]
+  /** Remove specific capabilities from a site */
+  revokeSiteCapability: (origin: string, capability: SiteCapability) => Promise<void>
+  /** Disconnect a site entirely */
+  disconnectSite: (origin: string) => Promise<void>
+  /** Disconnect every site */
+  disconnectAllSites: () => Promise<void>
+  /** Re-read connected sites from storage */
+  refreshConnectedSites: () => Promise<void>
   /** Access the underlying WalletManager for advanced operations */
   manager: WalletManager
 }
@@ -126,6 +198,16 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
   }
   const manager = managerRef.current
 
+  // Both stores are thin wrappers over the same platform storage; keep one
+  // instance each so callers never race on separate caches.
+  const addressBookRef = useRef<AddressBook | null>(null)
+  if (!addressBookRef.current) addressBookRef.current = new AddressBook(storage)
+  const addressBookStore = addressBookRef.current
+
+  const sitePermissionsRef = useRef<SitePermissions | null>(null)
+  if (!sitePermissionsRef.current) sitePermissionsRef.current = new SitePermissions(storage)
+  const sitePermissions = sitePermissionsRef.current
+
   const [state, setState] = useState<WalletState | null>(null)
   const [currentWallet, setCurrentWallet] = useState<StoredWallet | null>(null)
   const [loading, setLoading] = useState(true)
@@ -139,6 +221,11 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
   const [priceHistory, setPriceHistory] = useState<PriceHistoryPoint[]>([])
   const [transactions, setTransactions] = useState<TransactionHistoryItem[]>([])
   const [transactionsLoading, setTransactionsLoading] = useState(false)
+  const [networkStatus, setNetworkStatus] = useState<NetworkStatus>({ state: 'idle' })
+  /** Monotonic probe counter; only the newest probe may publish a result. */
+  const probeSeqRef = useRef(0)
+  const [addressBook, setAddressBook] = useState<AddressBookEntry[]>([])
+  const [connectedSites, setConnectedSites] = useState<SitePermission[]>([])
 
   // Derived convenience flags
   const initialized = state?.initialized ?? false
@@ -330,10 +417,107 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
 
   const setActiveChain = (chainId: string) => {
     const chain = getChain(chainId)
-    if (chain) {
-      setActiveChainState(chain)
-      setBalances([]) // clear stale balances
+    if (!chain) return
+
+    setActiveChainState(chain)
+    // Balances, prices and history are all chain-scoped; showing the previous
+    // chain's figures under a new network's name would be actively misleading.
+    setBalances([])
+    setTransactions([])
+    setPriceHistory([])
+    setPortfolioValue(0)
+    setPortfolioChange24h(0)
+    setNetworkStatus({ state: 'idle' })
+
+    // Persist, but only once a wallet exists to hold settings.
+    if (state?.initialized) {
+      manager.updateSettings({ activeChainId: chainId }).catch(err => {
+        console.warn('Could not persist network selection:', err)
+      })
     }
+  }
+
+  /**
+   * Restore the persisted network selection and any trusted chain IDs once
+   * wallet state loads. Runs on `state?.settings` rather than on mount because
+   * settings are not readable until the wallet has been initialised.
+   */
+  const restoredChainRef = useRef(false)
+  useEffect(() => {
+    const settings = state?.settings
+    if (!settings || restoredChainRef.current) return
+    restoredChainRef.current = true
+
+    if (settings.trustedChainIds) {
+      setTrustedChainIds(settings.trustedChainIds)
+    }
+    const saved = settings.activeChainId ? getChain(settings.activeChainId) : undefined
+    if (saved) setActiveChainState(saved)
+  }, [state?.settings]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const refreshNetworkStatus = useCallback(async () => {
+    // Probes race: the wallet mounts on the default chain, then restores the
+    // persisted one, so two probes can be in flight at once. An unreachable
+    // endpoint fails only after a DNS or connect timeout, so the *older* probe
+    // frequently resolves last and would overwrite a good result — leaving a
+    // connected chain showing another chain's failure. Stamp each probe and
+    // discard any result that is no longer the current one.
+    const seq = ++probeSeqRef.current
+    const probedChain = activeChain
+    const isStale = () => seq !== probeSeqRef.current
+
+    setNetworkStatus({ state: 'checking' })
+    try {
+      const identity = await probeChainIdentity(probedChain, true)
+      if (isStale()) return
+
+      if (identity.matches || identity.trusted) {
+        setNetworkStatus({
+          state: 'connected',
+          chainId: identity.liveChainId,
+          rpcUrl: identity.rpcUrl,
+        })
+      } else {
+        setNetworkStatus({
+          state: 'mismatch',
+          liveChainId: identity.liveChainId,
+          configuredChainId: identity.configuredChainId,
+          rpcUrl: identity.rpcUrl,
+        })
+      }
+    } catch (err) {
+      if (isStale()) return
+      setNetworkStatus({
+        state: 'unreachable',
+        message:
+          err instanceof ChainIdentityError || err instanceof Error
+            ? err.message
+            : 'Could not reach the network',
+      })
+    }
+  }, [activeChain])
+
+  // Probe whenever the selected chain changes.
+  useEffect(() => {
+    refreshNetworkStatus()
+  }, [activeChain.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const trustActiveChainId = async () => {
+    if (networkStatus.state !== 'mismatch') return
+
+    trustChainId(activeChain.id, networkStatus.liveChainId)
+
+    const merged = {
+      ...(state?.settings.trustedChainIds ?? {}),
+      [activeChain.id]: networkStatus.liveChainId,
+    }
+    try {
+      await manager.updateSettings({ trustedChainIds: merged })
+      await refresh()
+    } catch (err) {
+      console.warn('Could not persist trusted chain id:', err)
+    }
+    await refreshNetworkStatus()
   }
 
   const fetchBalances = async (): Promise<TokenBalance[]> => {
@@ -472,6 +656,68 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     }
   }, [currentWallet?.id, activeChain.id, locked]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Address book ────────────────────────────────────────────────────────
+
+  const refreshAddressBook = useCallback(async () => {
+    setAddressBook(await addressBookStore.list())
+  }, [addressBookStore])
+
+  const refreshConnectedSites = useCallback(async () => {
+    setConnectedSites(await sitePermissions.list())
+  }, [sitePermissions])
+
+  // Both stores live outside the encrypted wallet blob, so they can be read as
+  // soon as the provider mounts rather than waiting for an unlock.
+  useEffect(() => {
+    refreshAddressBook().catch(err => console.warn('Address book load failed:', err))
+    refreshConnectedSites().catch(err => console.warn('Connected sites load failed:', err))
+  }, [refreshAddressBook, refreshConnectedSites])
+
+  /**
+   * Address-book mutations surface their failure reason through `error` and
+   * rethrow, so a form can show the specific problem ("already in your address
+   * book") while the caller still knows the write did not happen.
+   */
+  const runAddressBookOp = async (op: () => Promise<unknown>) => {
+    try {
+      setError(null)
+      await op()
+      await refreshAddressBook()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Address book update failed')
+      throw err
+    }
+  }
+
+  const addContact = (input: AddressBookInput) =>
+    runAddressBookOp(() => addressBookStore.add(input))
+
+  const updateContact = (id: string, changes: Partial<AddressBookInput>) =>
+    runAddressBookOp(() => addressBookStore.update(id, changes))
+
+  const removeContact = (id: string) =>
+    runAddressBookOp(() => addressBookStore.remove(id))
+
+  const toggleContactFavorite = (id: string) =>
+    runAddressBookOp(() => addressBookStore.toggleFavorite(id))
+
+  // ── Connected sites ─────────────────────────────────────────────────────
+
+  const revokeSiteCapability = async (origin: string, capability: SiteCapability) => {
+    await sitePermissions.revoke(origin, [capability])
+    await refreshConnectedSites()
+  }
+
+  const disconnectSite = async (origin: string) => {
+    await sitePermissions.revokeAll(origin)
+    await refreshConnectedSites()
+  }
+
+  const disconnectAllSites = async () => {
+    await sitePermissions.revokeEverything()
+    await refreshConnectedSites()
+  }
+
   const value: WalletContextType = {
     state,
     currentWallet,
@@ -499,6 +745,10 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     activeChain,
     setActiveChain,
     chains: CHAIN_LIST,
+    networkStatus,
+    refreshNetworkStatus,
+    trustActiveChainId,
+    showTestnets: state?.settings.showTestnets ?? false,
     fetchBalances,
     balances,
     balancesLoading,
@@ -517,6 +767,16 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     transactions,
     transactionsLoading,
     refreshTransactions,
+    addressBook,
+    addContact,
+    updateContact,
+    removeContact,
+    toggleContactFavorite,
+    connectedSites,
+    revokeSiteCapability,
+    disconnectSite,
+    disconnectAllSites,
+    refreshConnectedSites,
     manager,
   }
 

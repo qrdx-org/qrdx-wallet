@@ -16,6 +16,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
+import { validateAddress, addressesEqual, shortenAddress } from '@/src/core/address'
 
 interface SendModalProps {
   ethAddress: string
@@ -54,7 +55,15 @@ type Step = 'select-token' | 'send-form'
 type TxStatus = 'idle' | 'estimating' | 'sending' | 'success' | 'error'
 
 export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
-  const { balances, activeChain, estimateGas, sendTransaction, sendTokenTransaction } = useWallet()
+  const {
+    balances,
+    activeChain,
+    estimateGas,
+    sendTransaction,
+    sendTokenTransaction,
+    addressBook,
+    networkStatus,
+  } = useWallet()
 
   const [step, setStep] = useState<Step>('select-token')
   const [search, setSearch] = useState('')
@@ -138,6 +147,81 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
     }
   }
 
+  // ── Recipient validation ────────────────────────────────────────────────
+  //
+  // Sending to a wrong address is irreversible, so this gates the Send button
+  // rather than only informing gas estimation. Three distinct rejections
+  // matter here:
+  //
+  //  • Malformed / bad checksum — caught by validateAddress. A mixed-case
+  //    address whose EIP-55 checksum fails is a transcription error, which is
+  //    exactly what the checksum exists to detect.
+  //  • A post-quantum (0xPQ) recipient — the EVM `to` field is 20 bytes and a
+  //    PQ address is 32, so such a transaction cannot be encoded at all. It
+  //    must be refused with an explanation, not silently truncated.
+  //  • Your own address — almost always a mistake, and costs a fee for nothing.
+  const recipientCheck = useMemo(() => {
+    const raw = recipient.trim()
+    if (raw === '') return { state: 'empty' as const }
+
+    const result = validateAddress(raw)
+    if (!result.valid) {
+      return { state: 'invalid' as const, message: result.error ?? 'Invalid address' }
+    }
+
+    if (result.kind === 'pq') {
+      return {
+        state: 'invalid' as const,
+        message:
+          'Post-quantum (0xPQ) addresses cannot receive EVM transactions — ' +
+          'they are 32 bytes and the transaction recipient field holds 20.',
+      }
+    }
+
+    if (addressesEqual(result.normalized!, fromAddress)) {
+      return { state: 'invalid' as const, message: 'That is this account\u2019s own address' }
+    }
+
+    const contact = addressBook.find(c => addressesEqual(c.address, result.normalized!))
+    return {
+      state: 'valid' as const,
+      address: result.normalized!,
+      contactName: contact?.name,
+    }
+  }, [recipient, fromAddress, addressBook])
+
+  const recipientIsValid = recipientCheck.state === 'valid'
+
+  // ── Amount validation ───────────────────────────────────────────────────
+  const amountCheck = useMemo(() => {
+    const raw = amount.replace(/,/g, '').trim()
+    if (raw === '') return { state: 'empty' as const }
+
+    const value = Number(raw)
+    if (!Number.isFinite(value) || value <= 0) {
+      return { state: 'invalid' as const, message: 'Enter an amount greater than zero' }
+    }
+    if (selectedToken && value > selectedToken.balanceNum) {
+      return {
+        state: 'invalid' as const,
+        message: `Exceeds your balance of ${selectedToken.balance} ${selectedToken.symbol}`,
+      }
+    }
+    return { state: 'valid' as const, value }
+  }, [amount, selectedToken])
+
+  // The wallet refuses to sign unless the node's chain id verified, so surface
+  // that here instead of letting the user fill in a form that cannot be sent.
+  const networkBlocked =
+    networkStatus.state === 'mismatch' || networkStatus.state === 'unreachable'
+
+  const canSend =
+    recipientIsValid &&
+    amountCheck.state === 'valid' &&
+    !networkBlocked &&
+    txStatus !== 'sending' &&
+    txStatus !== 'estimating'
+
   // Estimate gas whenever recipient and amount change
   useEffect(() => {
     if (!recipient || !amount || !selectedToken) {
@@ -151,8 +235,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
       return
     }
 
-    // Only estimate for valid eth addresses
-    if (!recipient.startsWith('0x') || recipient.length !== 42) {
+    if (!recipientIsValid) {
       setGasEstimate(null)
       return
     }
@@ -175,10 +258,12 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
       })
 
     return () => { cancelled = true }
-  }, [recipient, amount, selectedToken?.symbol]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [recipient, amount, selectedToken?.symbol, recipientIsValid]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSend = async () => {
-    if (!recipient || !amount || !selectedToken) return
+    // Re-check rather than trusting the button's disabled state: this is the
+    // last point before an irreversible transfer.
+    if (!canSend || !selectedToken || recipientCheck.state !== 'valid') return
     setTxError(null)
     setTxHash(null)
     setTxStatus('sending')
@@ -191,13 +276,13 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
         // ERC-20 token transfer: sign + broadcast
         result = await sendTokenTransaction(
           selectedToken.contractAddress,
-          recipient,
+          recipientCheck.address,
           cleanAmount,
           selectedToken.decimals
         )
       } else {
         // Native currency transfer: sign + broadcast
-        result = await sendTransaction(recipient, cleanAmount)
+        result = await sendTransaction(recipientCheck.address, cleanAmount)
       }
 
       setTxHash(result.hash)
@@ -394,11 +479,64 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
             </div>
             <input
               type="text"
-              placeholder="0x... or qr_... address"
+              placeholder="0x… recipient address"
               value={recipient}
+              spellCheck={false}
               onChange={(e) => setRecipient(e.target.value)}
-              className="w-full bg-background/60 border border-border/50 rounded-xl px-3 py-2.5 text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/30 transition-all"
+              className={`w-full bg-background/60 border rounded-xl px-3 py-2.5 text-sm font-mono placeholder:text-muted-foreground/40 focus:outline-none focus:ring-1 transition-all ${
+                recipientCheck.state === 'invalid'
+                  ? 'border-red-500/50 focus:ring-red-500/40'
+                  : recipientCheck.state === 'valid'
+                    ? 'border-green-500/40 focus:ring-green-500/30'
+                    : 'border-border/50 focus:ring-primary/50 focus:border-primary/30'
+              }`}
             />
+
+            {recipientCheck.state === 'invalid' && (
+              <p className="flex items-start gap-1.5 mt-1.5 text-[10px] text-red-400">
+                <AlertCircle className="h-3 w-3 shrink-0 mt-px" />
+                <span>{recipientCheck.message}</span>
+              </p>
+            )}
+
+            {recipientCheck.state === 'valid' && (
+              <p className="flex items-center gap-1.5 mt-1.5 text-[10px] text-green-500">
+                <CheckCircle2 className="h-3 w-3 shrink-0" />
+                <span>
+                  {recipientCheck.contactName
+                    ? `Sending to ${recipientCheck.contactName}`
+                    : 'Valid address'}
+                </span>
+              </p>
+            )}
+
+            {/* Saved recipients. Picking one removes an opportunity to mistype
+                an address, which is the failure mode with no recovery. */}
+            {addressBook.length > 0 && (
+              <div className="mt-2.5">
+                <div className="text-[9px] uppercase tracking-wider text-muted-foreground/70 mb-1">
+                  Address book
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {addressBook
+                    .filter((c) => c.addressType === 'eth')
+                    .slice(0, 6)
+                    .map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => setRecipient(c.address)}
+                        className="px-2 py-1 rounded-lg bg-accent/40 hover:bg-accent/70 border border-border/50 text-[10px] transition-colors"
+                        title={c.address}
+                      >
+                        <span className="font-medium">{c.name}</span>
+                        <span className="text-muted-foreground ml-1 font-mono">
+                          {shortenAddress(c.address, 3)}
+                        </span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -434,11 +572,30 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
               <span className="text-[10px] text-muted-foreground">
                 Balance: {token.balance} {token.symbol}
               </span>
-              {amount && (
-                <span className="text-[10px] text-muted-foreground">
-                  ≈ ${(parseFloat(amount.replace(/,/g, '') || '0') * (parseFloat(token.value.replace(/[$,]/g, '')) / token.balanceNum)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              )}
+              {/* Only shown when a unit price can actually be derived. The
+                  previous form divided the holding's fiat value by its balance
+                  unconditionally, so a zero balance or an unpriced token (any
+                  chain without a price feed, including the local testnet)
+                  rendered "≈ $NaN" next to the amount being sent. */}
+              {(() => {
+                if (!amount) return null
+                const qty = parseFloat(amount.replace(/,/g, ''))
+                const holdingUsd = parseFloat(token.value.replace(/[$,]/g, ''))
+                if (!Number.isFinite(qty) || !Number.isFinite(holdingUsd)) return null
+                if (!token.balanceNum) return null
+
+                const unitPrice = holdingUsd / token.balanceNum
+                if (!Number.isFinite(unitPrice) || unitPrice <= 0) return null
+
+                return (
+                  <span className="text-[10px] text-muted-foreground">
+                    ≈ ${(qty * unitPrice).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                )
+              })()}
             </div>
           </CardContent>
         </Card>
@@ -509,10 +666,31 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
       </div>
 
       {/* Sticky send button */}
-      <div className="sticky bottom-0 p-4 glass-strong">
+      <div className="sticky bottom-0 p-4 glass-strong space-y-2">
+        {amountCheck.state === 'invalid' && (
+          <p className="flex items-start gap-1.5 text-[10px] text-red-400">
+            <AlertCircle className="h-3 w-3 shrink-0 mt-px" />
+            <span>{amountCheck.message}</span>
+          </p>
+        )}
+
+        {/* The wallet will not sign against a chain whose identity did not
+            verify, so say that here rather than failing at submit time. */}
+        {networkBlocked && (
+          <p className="flex items-start gap-1.5 text-[10px] text-amber-500">
+            <AlertTriangle className="h-3 w-3 shrink-0 mt-px" />
+            <span>
+              {networkStatus.state === 'mismatch'
+                ? `${activeChain.name} reports chain ID ${networkStatus.liveChainId}, not ` +
+                  `${networkStatus.configuredChainId}. Sending is disabled until this is resolved.`
+                : `Can't reach ${activeChain.name}. Sending is disabled until the network responds.`}
+            </span>
+          </p>
+        )}
+
         <Button
           onClick={handleSend}
-          disabled={!recipient || !amount || txStatus === 'sending' || txStatus === 'estimating'}
+          disabled={!canSend}
           className="w-full h-12 font-semibold text-base rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 disabled:opacity-40 disabled:shadow-none transition-all"
         >
           {txStatus === 'sending' ? (

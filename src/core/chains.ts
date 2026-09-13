@@ -19,6 +19,22 @@
 /** How a chain can submit transactions */
 export type TransportCapability = 'web3' | 'pq' | 'web3+pq'
 
+/**
+ * Which signed-transaction envelope a chain's `eth_sendRawTransaction` accepts.
+ *
+ *   • `eip1559` — typed transactions (`0x02 || RLP([...])`), the modern default.
+ *   • `legacy`  — untyped EIP-155 transactions, `RLP([nonce, gasPrice, gas, to,
+ *                 value, data, v, r, s])`.
+ *
+ * This is NOT cosmetic. The QRDX node decodes raw transactions with a bare
+ * `rlp.decode()` that expects exactly nine legacy fields, so a type-2 payload
+ * fails to decode. QRDX also advertises `eth_feeHistory` with a populated
+ * `baseFeePerGas` array, which makes naive 1559-sniffing pick the wrong
+ * envelope. Chains therefore declare their envelope explicitly rather than
+ * having it inferred.
+ */
+export type FeeModel = 'legacy' | 'eip1559'
+
 /** EIP-3085-style add-chain parameters for MetaMask / wallet_addEthereumChain */
 export interface AddEthereumChainParameter {
   chainId: string          // hex
@@ -60,6 +76,18 @@ export interface ChainConfig {
   rpcUrl: string
   /** Fallback RPC endpoints (tried in order when primary is down) */
   rpcFallbacks?: string[]
+  /**
+   * QRDX-only: base URL of the node's native REST API (the FastAPI surface
+   * exposing `/get_address_info`, `/get_transaction`, and friends). This is a
+   * different service from the JSON-RPC endpoint and exposes UTXO-layer data
+   * the `eth_*` namespace does not.
+   */
+  nodeApiUrl?: string
+  /**
+   * Which raw-transaction envelope this chain accepts. Defaults to `eip1559`
+   * when omitted; read it through {@link getFeeModel} rather than directly.
+   */
+  feeModel?: FeeModel
   /** Block explorer base URL */
   explorerUrl: string
   /** Native currency */
@@ -205,14 +233,17 @@ export const CHAINS: Record<string, ChainConfig> = {
     id: 'qrdx-mainnet',
     name: 'QRDX Mainnet',
     shortName: 'QRDX',
-    chainId: 7225,
+    chainId: 1337,
     rpcUrl: 'https://rpc.qrdx.org',
+    nodeApiUrl: 'https://node.qrdx.org',
     explorerUrl: 'https://explorer.qrdx.org',
     nativeCurrency: { name: 'QRDX', symbol: 'QRDX', decimals: 18 },
     transport: 'web3+pq',
+    feeModel: 'legacy',
     isEvm: true,
     isTestnet: false,
-    blockTimeSec: 2,
+    // QRDX targets a 180s block interval (qrdx/constants.py: BLOCK_TIME = 180).
+    blockTimeSec: 180,
     color: 'from-purple-500 to-violet-600',
     tokens: [QRDX_NATIVE, qETH, qBTC, qUSDC],
     pqBridgeTarget: undefined,
@@ -222,16 +253,45 @@ export const CHAINS: Record<string, ChainConfig> = {
     id: 'qrdx-testnet',
     name: 'QRDX Testnet',
     shortName: 'QRDX Test',
-    chainId: 7226,
-    rpcUrl: 'https://testnet-rpc.qrdx.org',
+    chainId: 31337,
+    rpcUrl: 'https://rpc.test.qrdx.org',
+    nodeApiUrl: 'https://node.test.qrdx.org',
     explorerUrl: 'https://testnet.explorer.qrdx.org',
     nativeCurrency: { name: 'QRDX', symbol: 'QRDX', decimals: 18 },
     transport: 'web3+pq',
+    feeModel: 'legacy',
     isEvm: true,
     isTestnet: true,
-    blockTimeSec: 2,
+    blockTimeSec: 180,
     color: 'from-purple-400 to-violet-500',
     tokens: [QRDX_NATIVE, qETH, qUSDC],
+  },
+
+  /**
+   * A node started by `scripts/testnet.sh` in the qrdx-chain repo, which pins
+   * `QRDX_CHAIN_ID=9999` and puts node N's REST API on port `3007 + N`.
+   *
+   * JSON-RPC is served at `/rpc` on that same port. The script also sets
+   * `QRDX_RPC_PORT=8545`, but the node never binds a standalone RPC listener —
+   * nothing accepts connections there — so pointing at 8545 yields a wallet
+   * that silently cannot reach the chain.
+   */
+  'qrdx-local': {
+    id: 'qrdx-local',
+    name: 'QRDX Local Testnet',
+    shortName: 'QRDX Local',
+    chainId: 9999,
+    rpcUrl: 'http://127.0.0.1:3007/rpc',
+    nodeApiUrl: 'http://127.0.0.1:3007',
+    explorerUrl: 'http://127.0.0.1:3000',
+    nativeCurrency: { name: 'QRDX', symbol: 'QRDX', decimals: 18 },
+    transport: 'web3+pq',
+    feeModel: 'legacy',
+    isEvm: true,
+    isTestnet: true,
+    blockTimeSec: 180,
+    color: 'from-slate-400 to-slate-500',
+    tokens: [QRDX_NATIVE],
   },
 
   // ── Ethereum ──────────────────────────────────────────────────────────────
@@ -642,6 +702,24 @@ export function supportsWeb3(chain: ChainConfig): boolean {
 export function supportsPQ(chain: ChainConfig): boolean {
   return chain.transport === 'pq' || chain.transport === 'web3+pq'
 }
+
+/**
+ * The raw-transaction envelope this chain accepts, defaulting to EIP-1559.
+ *
+ * Always sign through this rather than sniffing `eth_feeHistory` — see the
+ * {@link FeeModel} docs for why inference gets QRDX wrong.
+ */
+export function getFeeModel(chain: ChainConfig): FeeModel {
+  return chain.feeModel ?? 'eip1559'
+}
+
+/** Whether this is one of the QRDX chains (mainnet, testnet, or local). */
+export function isQrdxChain(chain: ChainConfig): boolean {
+  return chain.id.startsWith('qrdx-')
+}
+
+/** Every QRDX chain, in registry order. */
+export const QRDX_CHAINS: ChainConfig[] = CHAIN_LIST.filter(isQrdxChain)
 
 /** Get the native token for a chain */
 export function getNativeToken(chain: ChainConfig): ChainToken {
