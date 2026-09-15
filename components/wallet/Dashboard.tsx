@@ -23,7 +23,7 @@ import { formatAddress } from '@/lib/utils'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 
 export function Dashboard() {
-  const { lock, currentWallet, balances, balancesLoading, activeChain, portfolioValue, portfolioChange24h, priceHistory, transactions } = useWallet()
+  const { lock, currentWallet, balances, balancesLoading, activeChain, portfolioValue, portfolioChange24h, priceHistory, transactions, pqBalance, combinedNativeBalance } = useWallet()
   const nativeSym = activeChain.nativeCurrency?.symbol ?? 'ETH'
   const [copied, setCopied] = useState<'eth' | 'pq' | null>(null)
   const [balanceVisible, setBalanceVisible] = useState(true)
@@ -40,18 +40,34 @@ export function Dashboard() {
   const pqAddress = currentWallet?.pqAddress ?? ''
   const activeAddress = addressMode === 'eth' ? ethAddress : pqAddress
 
-  // Compute total balance
-  // When prices are available, show USD value
-  // Otherwise, show native token balance
+  // The wallet issues the EVM and post-quantum addresses as a pair, so the
+  // headline figure is the combined native holding across both. The per-identity
+  // amounts are shown underneath rather than hidden behind the address toggle:
+  // they are separate accounts, and which one holds the funds determines what
+  // can be spent and how.
   const nativeBalance = balances.find(b => b.address === '')
-  const nativeBalanceStr = nativeBalance ? nativeBalance.formattedBalance : '0'
+  const nativeDecimals = activeChain.nativeCurrency?.decimals ?? 18
+
+  const formatUnits = (wei: bigint, decimals: number, places = 4) => {
+    const divisor = 10n ** BigInt(decimals)
+    const whole = wei / divisor
+    const frac = (wei % divisor).toString().padStart(decimals, '0').slice(0, places)
+    return `${whole.toLocaleString('en-US')}.${frac}`
+  }
+
+  const evmNativeWei = nativeBalance?.rawBalance ?? 0n
+  const pqNativeWei = pqBalance ?? 0n
+  const hasPqFunds = pqNativeWei > 0n
+
   const totalBalance = balancesLoading
     ? '...'
     : portfolioValue > 0
-      ? `$${portfolioValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-      : nativeBalance
-        ? `${parseFloat(nativeBalanceStr).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 })} ${nativeSym}`
-        : `0.0000 ${nativeSym}`
+      // A fiat total only covers priced EVM assets, so it is shown only when
+      // the PQ side holds nothing that it would silently omit.
+      ? hasPqFunds
+        ? `${formatUnits(combinedNativeBalance, nativeDecimals)} ${nativeSym}`
+        : `$${portfolioValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : `${formatUnits(combinedNativeBalance, nativeDecimals)} ${nativeSym}`
 
   const handleCopy = (type: 'eth' | 'pq') => {
     const addr = type === 'eth' ? ethAddress : pqAddress
@@ -203,7 +219,9 @@ export function Dashboard() {
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/10 pointer-events-none" />
           <CardContent className="p-4 relative">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-muted-foreground font-medium">Total Balance</span>
+              <span className="text-xs text-muted-foreground font-medium">
+                Total Balance
+              </span>
               <Button
                 variant="ghost"
                 size="icon"
@@ -219,6 +237,30 @@ export function Dashboard() {
             </div>
             <div className="text-3xl font-bold tracking-tight mb-1">
               {balanceVisible ? totalBalance : '••••••••'}
+            </div>
+            {/* Breakdown of the combined figure. Always shown so the split is
+                visible rather than something the user has to go looking for. */}
+            <div className="flex items-center gap-3 mt-1.5">
+              <button
+                onClick={() => setAddressMode('eth')}
+                className={`flex items-center gap-1.5 text-[10px] transition-colors ${
+                  addressMode === 'eth' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-blue-400" />
+                <span className="font-medium uppercase tracking-wide">EVM</span>
+                <span className="font-mono">{formatUnits(evmNativeWei, nativeDecimals)}</span>
+              </button>
+              <button
+                onClick={() => setAddressMode('pq')}
+                className={`flex items-center gap-1.5 text-[10px] transition-colors ${
+                  addressMode === 'pq' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                <span className="font-medium uppercase tracking-wide">PQ</span>
+                <span className="font-mono">{formatUnits(pqNativeWei, nativeDecimals)}</span>
+              </button>
             </div>
             <PortfolioChart data={priceHistory} change24h={portfolioChange24h} />
           </CardContent>

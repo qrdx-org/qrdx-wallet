@@ -110,6 +110,29 @@ export interface WalletContextType {
   balances: TokenBalance[]
   /** Whether balances are currently loading */
   balancesLoading: boolean
+  /**
+   * Native balance held at this account's post-quantum (`0xPQ`) address, in wei.
+   *
+   * A separate figure from `balances`: the PQ address is a distinct on-chain
+   * identity with its own holdings, not a different rendering of the EVM
+   * account. `null` means it has not been read yet.
+   */
+  pqBalance: bigint | null
+  /**
+   * Native balance across both of the account's identities, in wei.
+   *
+   * The wallet issues the EVM and post-quantum addresses as a pair, so this is
+   * the figure that answers "how much do I have"; the per-identity numbers
+   * remain available for the breakdown and for deciding which one can fund a
+   * given transfer.
+   */
+  combinedNativeBalance: bigint
+  /** Send native QRDX from the post-quantum address (UTXO layer, ML-DSA signed) */
+  sendPqTransaction: (
+    to: string,
+    amount: string,
+    fee?: string,
+  ) => Promise<{ txHash: string; from: string; fee: string }>
   // ── Signing & Transactions ─────────────────────────────────────────────
   /** Sign a message with the ETH key (EIP-191 personal_sign) */
   signMessage: (message: string) => Promise<string>
@@ -215,6 +238,7 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
   const [activeChain, setActiveChainState] = useState<ChainConfig>(DEFAULT_CHAIN)
   const [balances, setBalances] = useState<TokenBalance[]>([])
   const [balancesLoading, setBalancesLoading] = useState(false)
+  const [pqBalance, setPqBalance] = useState<bigint | null>(null)
   const [prices, setPrices] = useState<Map<string, TokenPrice>>(new Map())
   const [portfolioValue, setPortfolioValue] = useState(0)
   const [portfolioChange24h, setPortfolioChange24h] = useState(0)
@@ -423,6 +447,7 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     // Balances, prices and history are all chain-scoped; showing the previous
     // chain's figures under a new network's name would be actively misleading.
     setBalances([])
+    setPqBalance(null)
     setTransactions([])
     setPriceHistory([])
     setPortfolioValue(0)
@@ -527,8 +552,19 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     setBalancesLoading(true)
     try {
       const provider = getEvmProvider(activeChain.id)
-      const result = await provider.getAllBalances(currentWallet.ethAddress)
+
+      // The PQ address holds native QRDX on the UTXO layer; eth_getBalance
+      // resolves it and converts to wei. Fetched alongside the EVM balances so
+      // the two identities are never shown with one another's figures.
+      const [result, pq] = await Promise.all([
+        provider.getAllBalances(currentWallet.ethAddress),
+        currentWallet.pqAddress
+          ? provider.getBalance(currentWallet.pqAddress).catch(() => null)
+          : Promise.resolve(null),
+      ])
+
       setBalances(result)
+      setPqBalance(pq)
       return result
     } catch (err) {
       console.warn('Failed to fetch balances:', err)
@@ -599,6 +635,36 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Token transfer failed'
       setError(msg)
+      throw err
+    }
+  }
+
+  /**
+   * Native holdings across both identities.
+   *
+   * Both figures are wei-denominated: `eth_getBalance` scales the node's
+   * microQRDX UTXO amounts up to wei, so the PQ balance arrives in the same
+   * units as the EVM one and they can be added directly.
+   */
+  const evmNativeWei = (() => {
+    const native = balances.find(b => b.address === '')
+    if (!native) return 0n
+    return native.rawBalance
+  })()
+
+  const combinedNativeBalance = evmNativeWei + (pqBalance ?? 0n)
+
+  const sendPqTransaction = async (to: string, amount: string, fee = '0') => {
+    try {
+      setError(null)
+      const result = await manager.sendNativePqTransaction(activeChain.id, to, amount, fee)
+      // The PQ balance lives outside `balances`, so refresh both.
+      fetchBalances()
+      refreshTransactions()
+      return result
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Post-quantum transfer failed'
+      setError(message)
       throw err
     }
   }
@@ -752,6 +818,9 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     fetchBalances,
     balances,
     balancesLoading,
+    pqBalance,
+    combinedNativeBalance,
+    sendPqTransaction,
     signMessage,
     signMessagePQ,
     buildSend,

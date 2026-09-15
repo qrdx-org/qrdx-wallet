@@ -3,6 +3,7 @@ import {
   ethKeyPairFromPrivateKey,
   generatePqKeyPair,
   pqKeyPairFromSeed,
+  pqKeyPairFromMnemonic,
   pqKeyPairFromStored,
   signEthMessage,
   signHash,
@@ -24,7 +25,12 @@ import { WalletStorage } from './storage'
 import type { WalletState, StoredWallet, Transaction } from './types'
 import { DEFAULT_NETWORK, APP_CONFIG } from './constants'
 import { getEvmProvider, ethToWei, toHex, type EthTransactionRequest, type EthTransactionReceipt } from './ethereum'
-import { DEFAULT_CHAIN, supportsWeb3, supportsPQ, type ChainConfig } from './chains'
+import { DEFAULT_CHAIN, getChain, supportsWeb3, supportsPQ, type ChainConfig } from './chains'
+import {
+  sendNativeTransfer,
+  fetchNativeBalance,
+  type NativeSendResult,
+} from './native-tx'
 import { signTransaction, type SignedTransaction } from './transaction'
 import { recordPendingTransaction, updatePendingTransaction } from './history'
 
@@ -117,8 +123,14 @@ export class WalletManager {
     // 1. Derive ETH key pair from mnemonic via BIP-32 HD path
     const eth: EthKeyPair = mnemonicToEthKeyPair(mnemonic, hdIndex)
 
-    // 2. Generate PQ key pair (fallback mode — deterministic from random seed)
-    const pq: PqKeyPair = await generatePqKeyPair()
+    // 2. Derive the PQ key pair from the same mnemonic.
+    //
+    // This used to call generatePqKeyPair(), which produces a *random* key.
+    // The recovery phrase therefore did not back up the PQ account at all:
+    // restoring from it yielded a different PQ address, and anything held at
+    // the original one was unrecoverable. ML-DSA-65 key generation is
+    // deterministic in its seed, so the phrase can and must reproduce it.
+    const pq: PqKeyPair = await pqKeyPairFromMnemonic(mnemonic, hdIndex)
 
     // 3. Combine private keys: ethPriv(64 hex) + ':' + pqSeed(128 hex)
     const combinedKey = `${eth.privateKey}:${pq.privateKey}`
@@ -167,27 +179,33 @@ export class WalletManager {
     privateKey: string,
     password: string
   ): Promise<StoredWallet> {
+    const state = await this.storage.getState()
+    if (!state) {
+      throw new Error('Wallet not initialized')
+    }
+
+    if (state.wallets.length >= APP_CONFIG.maxWallets) {
+      throw new Error(`Maximum ${APP_CONFIG.maxWallets} wallets allowed`)
+    }
+
     // Strip 0x prefix if present
     const cleanKey = privateKey.replace(/^0x/, '')
 
     // Derive real ETH key pair from the provided private key
     const eth = ethKeyPairFromPrivateKey(cleanKey)
 
-    // For imported keys we don't have a separate PQ seed.
-    // Generate a deterministic PQ seed from the ETH private key using SHA-256.
-    // This ensures the same import key always produces the same PQ address.
-    const ethKeyBytes = hexToBytes(cleanKey)
-    const seedPart1 = new Uint8Array(
-      await crypto.subtle.digest('SHA-256', ethKeyBytes.buffer as ArrayBuffer)
-    )
-    const seedPart2 = new Uint8Array(
-      await crypto.subtle.digest('SHA-256', seedPart1.buffer as ArrayBuffer)
-    )
-    const pqSeed = new Uint8Array(64)
-    pqSeed.set(seedPart1, 0)
-    pqSeed.set(seedPart2, 32)
-
-    const pq = await pqKeyPairFromSeed(pqSeed)
+    // A raw private key carries no mnemonic, so there is no independent source
+    // of PQ entropy to recover from. The PQ key is therefore derived from the
+    // imported key itself, which keeps the import reproducible — the same key
+    // always yields the same PQ address.
+    //
+    // The security limit is worth stating plainly: a PQ key derived from a
+    // secp256k1 key inherits that key's security. An adversary who can break
+    // secp256k1 can recompute this PQ key, so accounts imported this way do
+    // not get the quantum resistance that a mnemonic-derived account does.
+    // pqKeyPairFromSeed applies domain separation so the seed is at least not
+    // reusable as any other key material.
+    const pq = await pqKeyPairFromSeed(hexToBytes(cleanKey))
 
     // Store combined key: ethPriv + ':' + pqSeed
     const combinedKey = `${eth.privateKey}:${pq.privateKey}`
@@ -208,6 +226,15 @@ export class WalletManager {
     }
 
     await this.storage.addWallet(wallet)
+
+    // Select it when it is the first account, matching the mnemonic path.
+    // Without this an import into a fresh wallet left currentWalletId unset,
+    // so the dashboard had no account to show and every signing call failed
+    // with "No active wallet".
+    if (state.wallets.length === 0) {
+      await this.storage.setCurrentWallet(wallet.id)
+    }
+
     this.currentPassword = password
     return wallet
   }
@@ -228,6 +255,10 @@ export class WalletManager {
         this.currentPassword = password
         state.locked = false
         await this.storage.setState(state)
+
+        // Unlocking is the only point where the password is available to
+        // re-encrypt key material, so repair any stale PQ records here.
+        await this.upgradePqKeyMaterial(password)
         return true
       } catch {
         return false
@@ -235,6 +266,65 @@ export class WalletManager {
     }
 
     return false
+  }
+
+  /**
+   * Bring stored post-quantum key material up to date.
+   *
+   * Earlier builds stored PQ material from a placeholder implementation: the
+   * "public key" was a repeated SHA-256 digest and, for mnemonic wallets, the
+   * seed was generated randomly rather than derived from the phrase. Neither
+   * corresponds to a real ML-DSA-65 key pair, so such a record would display a
+   * PQ address that its own key cannot sign for.
+   *
+   * This re-derives the key pair the way the account is defined now — from the
+   * recovery phrase where there is one, otherwise from the imported private key
+   * — and rewrites the stored public key, address, fingerprint and seed when
+   * they disagree. Wallets already on the current scheme are left untouched.
+   *
+   * Discarding the old material is safe because it was never usable: no
+   * signature could ever have been produced for those addresses.
+   */
+  private async upgradePqKeyMaterial(password: string): Promise<void> {
+    const state = await this.storage.getState()
+    if (!state) return
+
+    let changed = false
+
+    for (const wallet of state.wallets) {
+      try {
+        const combined = await decrypt(wallet.encryptedPrivateKey, password)
+        const [ethPrivateKey, storedSeed] = combined.split(':')
+        if (!ethPrivateKey) continue
+
+        const pq = wallet.encryptedMnemonic
+          ? await pqKeyPairFromMnemonic(
+              await decrypt(wallet.encryptedMnemonic, password),
+              wallet.hdIndex ?? 0,
+            )
+          : await pqKeyPairFromSeed(hexToBytes(ethPrivateKey))
+
+        if (wallet.pqPublicKey === pq.publicKey && storedSeed === pq.privateKey) {
+          continue
+        }
+
+        wallet.pqPublicKey = pq.publicKey
+        wallet.pqAddress = pq.address
+        wallet.pqFingerprint = pq.fingerprint
+        wallet.encryptedPrivateKey = await encrypt(
+          `${ethPrivateKey}:${pq.privateKey}`,
+          password,
+        )
+        changed = true
+      } catch (err) {
+        // One unreadable record must not block unlocking the others.
+        console.warn(`Could not upgrade PQ material for wallet ${wallet.id}:`, err)
+      }
+    }
+
+    if (changed) {
+      await this.storage.setState(state)
+    }
   }
 
   /**
@@ -302,6 +392,58 @@ export class WalletManager {
 
     const { signature } = signEthMessage(message, ethPrivKey)
     return signature
+  }
+
+  /**
+   * Send native QRDX from this account's post-quantum address.
+   *
+   * A separate path from `signAndSendTransaction`, which builds an EVM
+   * transaction: PQ holdings live on the native UTXO layer and are spent with
+   * an ML-DSA-65 signature over a UTXO transaction. The two cannot be merged —
+   * the EVM recipient field is 20 bytes and a PQ address is 32.
+   *
+   * @param feeQrdx explicit fee in QRDX. The native layer requires inputs to
+   *                equal outputs plus fee exactly, so there is no estimation
+   *                step to defer this to.
+   */
+  async sendNativePqTransaction(
+    chainId: string,
+    to: string,
+    amountQrdx: string,
+    feeQrdx = '0',
+  ): Promise<NativeSendResult> {
+    const wallet = await this.storage.getCurrentWallet()
+    if (!wallet) throw new Error('No active wallet')
+    if (!wallet.pqAddress) throw new Error('This account has no post-quantum address')
+
+    const chain = getChain(chainId)
+    if (!chain) throw new Error(`Unknown chain: ${chainId}`)
+
+    const combined = await this.getDecryptedKey(wallet)
+    const pqSeed = combined.split(':')[1]
+    if (!pqSeed) throw new Error('No PQ key found for this account')
+
+    return sendNativeTransfer({
+      chain,
+      from: wallet.pqAddress,
+      to,
+      amountQrdx,
+      feeQrdx,
+      pqSeedHex: pqSeed,
+    })
+  }
+
+  /**
+   * Spendable native balance at this account's PQ address, in microQRDX.
+   */
+  async getPqNativeBalance(chainId: string): Promise<bigint> {
+    const wallet = await this.storage.getCurrentWallet()
+    if (!wallet?.pqAddress) return 0n
+
+    const chain = getChain(chainId)
+    if (!chain) throw new Error(`Unknown chain: ${chainId}`)
+
+    return fetchNativeBalance(chain, wallet.pqAddress)
   }
 
   /**

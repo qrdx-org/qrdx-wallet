@@ -98,6 +98,44 @@ listener there — `/rpc` on the node API port is the working endpoint.
 answering, height frozen) is visible. From the wallet's side that state is otherwise
 indistinguishable from a healthy chain.
 
+### Post-Quantum Accounts
+
+Every wallet has two on-chain identities, and they are separate accounts with
+separate holdings:
+
+| | Address | Signature | Layer |
+|---|---|---|---|
+| EVM | `0x…` (20 bytes) | secp256k1 / ECDSA | EVM account state |
+| Post-quantum | `0xPQ…` (32 bytes) | ML-DSA-65 (FIPS 204) | Native UTXO |
+
+PQ signing uses [`@noble/post-quantum`](https://github.com/paulmillr/noble-post-quantum),
+a pure-TypeScript FIPS 204 implementation — no native module, no WASM, so it
+runs unchanged in the extension, the web app and React Native. The node verifies
+with liboqs and `qrdx/crypto/pq/dilithium.py` states it has no fallback, so the
+two must agree byte-for-byte. `tests/integration/pq-liboqs.test.ts` checks both
+directions against the node's own liboqs build, and checks that address
+derivation matches the node's `public_key_to_address`.
+
+PQ keys are derived from the BIP-39 recovery phrase under a domain-separated
+seed, so the phrase restores the PQ account too. They are deliberately **not**
+derived from the account's secp256k1 key: that would make the post-quantum key
+only as strong as the classical one, against exactly the adversary ML-DSA exists
+to defend against. Accounts imported from a raw private key are the exception —
+there is no independent entropy to recover from, so their PQ key inherits the
+imported key's security.
+
+Two current limitations, both surfaced in the UI rather than hidden:
+
+- **A PQ address cannot receive an EVM transfer.** The transaction recipient
+  field is 20 bytes; a PQ address is 32. Send rejects `0xPQ…` recipients with
+  that explanation.
+- **Sending *from* a PQ address is not implemented.** It needs a native-layer
+  transaction signed with the ML-DSA key, not the EVM transaction the send
+  screen builds. The Send screen blocks PQ mode and says so.
+
+Wallets created by earlier builds hold placeholder PQ material (public keys were
+a repeated SHA-256 digest). Those records are repaired automatically on unlock.
+
 ### Testing
 
 ```bash

@@ -254,124 +254,40 @@ export function recoverAddress(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  Post-Quantum / ML-DSA-65 (Dilithium3) — FALLBACK MODE
+//  Post-Quantum (ML-DSA-65 / Dilithium3)
 // ═══════════════════════════════════════════════════════════════════════════════
 //
-//  This implements the same fallback mode as ref/qrdx-chain/qrdx/crypto/pq/dilithium.py
-//  when liboqs is not available. Keys are deterministic from a seed and
-//  signatures use SHA-256 expansion.
+//  The real implementation lives in ./pq.ts, which uses @noble/post-quantum
+//  (FIPS 204). It is re-exported here so existing imports from './crypto'
+//  keep working.
 //
-//  When a WASM/JS Dilithium implementation becomes available, the internal
-//  _generate / _sign / _verify functions can be swapped without changing
-//  the public API.
-// ═══════════════════════════════════════════════════════════════════════════════
+//  What used to be here was a placeholder: public keys were a SHA-256 digest
+//  repeated to 1952 bytes and signatures were SHA-256 expansion. The sizes
+//  looked right, but nothing verified — the node checks PQ signatures with
+//  liboqs and would have rejected all of them.
+//
+//  toPqChecksumAddress stays in this file because ./pq.ts depends on it and
+//  it is address formatting rather than signature logic.
 
-/** ML-DSA-65 (Dilithium3) key sizes — matches the reference */
-export const PQ_KEY_SIZES = {
-  privateKey: 4032,
-  publicKey: 1952,
-  signature: 3309,
-  seed: 64,
-  addressBytes: 32,  // 0xPQ + 64 hex chars
-} as const
+export {
+  PQ_SIZES,
+  PqKeyError,
+  generatePqKeyPair,
+  pqKeyPairFromSeed,
+  pqKeyPairFromMnemonic,
+  pqKeyPairFromStored,
+  derivePqSeedFromMnemonic,
+  pqPublicKeyToAddress,
+  pqSign,
+  pqSignWithPrefix,
+  pqVerify,
+  pqVerifyWithPrefix,
+  isPqAvailable,
+  type PqKeyPair,
+} from './pq'
 
-export interface PqKeyPair {
-  /** Hex-encoded seed (64 bytes) or full private key (4032 bytes with real liboqs) */
-  privateKey: string
-  /** Hex-encoded public key (1952 bytes) — MUST be stored; Dilithium keygen is non-deterministic */
-  publicKey: string
-  /** 0xPQ-prefixed checksummed address */
-  address: string
-  /** SHA-256 fingerprint of public key (first 8 bytes as hex) */
-  fingerprint: string
-}
-
-/**
- * Generate a new PQ key pair.
- *
- * In fallback mode (no liboqs / no WASM Dilithium), this generates
- * deterministic test keys from a random 64-byte seed, exactly matching
- * the Python reference: PQPrivateKey._generate_fallback_keys()
- */
-export async function generatePqKeyPair(): Promise<PqKeyPair> {
-  // Generate a 64-byte random seed
-  const seed = getRandomBytesSync(64)
-  return pqKeyPairFromSeed(seed)
-}
-
-/**
- * Derive a PQ key pair deterministically from a seed.
- * Matches ref/qrdx-chain: PQPrivateKey.from_seed() and _generate_fallback_keys()
- *
- * In production with liboqs, the seed would be expanded via SHAKE256 to
- * the full 4032-byte Dilithium private key. In fallback mode, we use
- * SHA-256 repetition to fill 1952 bytes of "public key" data.
- */
-export async function pqKeyPairFromSeed(seed: Uint8Array): Promise<PqKeyPair> {
-  const privateKeyHex = bytesToHex(seed)
-
-  // Deterministic public key: SHA-256(seed) repeated to fill 1952 bytes
-  // Matches: fake_pubkey = h.digest() * 61; fake_pubkey[:1952]
-  const seedHash = new Uint8Array(
-    await crypto.subtle.digest('SHA-256', seed.slice(0, 64).buffer as ArrayBuffer)
-  ) // 32 bytes
-
-  const pubKeyBytes = new Uint8Array(PQ_KEY_SIZES.publicKey)
-  for (let i = 0; i < PQ_KEY_SIZES.publicKey; i += 32) {
-    const remaining = Math.min(32, PQ_KEY_SIZES.publicKey - i)
-    pubKeyBytes.set(seedHash.slice(0, remaining), i)
-  }
-  const publicKeyHex = bytesToHex(pubKeyBytes)
-
-  // Derive PQ address: keccak256(pubkey)[:32] → 0xPQ prefix
-  const pubKeyHash = keccak256(pubKeyBytes)
-  const addressBytes = pubKeyHash.slice(0, 32) // first 32 bytes
-  const address = toPqChecksumAddress(bytesToHex(addressBytes))
-
-  // Fingerprint: first 8 bytes of SHA-256(pubkey) as hex
-  const fingerprintHash = new Uint8Array(
-    await crypto.subtle.digest('SHA-256', pubKeyBytes.buffer as ArrayBuffer)
-  )
-  const fingerprint = bytesToHex(fingerprintHash.slice(0, 8))
-
-  return {
-    privateKey: privateKeyHex,
-    publicKey: publicKeyHex,
-    address,
-    fingerprint,
-  }
-}
-
-/**
- * Restore a PQ key pair from stored private key + public key hex.
- *
- * Critical: The public key MUST be provided because Dilithium key generation
- * is not deterministic — restoring from private key alone would produce a
- * different keypair (and different address). The reference implementation
- * stores the public key in the keystore for exactly this reason.
- */
-export function pqKeyPairFromStored(
-  privateKeyHex: string,
-  publicKeyHex: string
-): PqKeyPair {
-  const pubKeyBytes = hexToBytes(publicKeyHex)
-
-  // Derive address from stored public key
-  const pubKeyHash = keccak256(pubKeyBytes)
-  const addressBytes = pubKeyHash.slice(0, 32)
-  const address = toPqChecksumAddress(bytesToHex(addressBytes))
-
-  // Compute fingerprint using keccak (sync, avoids async)
-  const fp = keccak256(pubKeyBytes).slice(0, 8)
-  const fingerprint = bytesToHex(fp)
-
-  return {
-    privateKey: privateKeyHex,
-    publicKey: publicKeyHex,
-    address,
-    fingerprint,
-  }
-}
+/** @deprecated Use {@link PQ_SIZES}. Kept so older imports keep resolving. */
+export { PQ_SIZES as PQ_KEY_SIZES } from './pq'
 
 /**
  * Convert a raw hex address to PQ checksummed format (0xPQ prefix).
@@ -405,83 +321,6 @@ export function toPqChecksumAddress(addressHex: string): string {
 
   return checksummed
 }
-
-/**
- * Sign a message with a PQ private key (fallback mode).
- *
- * In fallback mode, produces a deterministic signature via SHA-256 expansion,
- * matching ref/qrdx-chain: PQPrivateKey.sign() fallback.
- *
- * Real implementation would call liboqs ML-DSA-65 sign.
- */
-export async function pqSign(
-  message: Uint8Array,
-  privateKeyHex: string
-): Promise<string> {
-  const privBytes = hexToBytes(privateKeyHex)
-
-  // h = hashlib.sha256(self._key_bytes + message).digest()
-  const combined = new Uint8Array(privBytes.length + message.length)
-  combined.set(privBytes, 0)
-  combined.set(message, privBytes.length)
-
-  const hash = new Uint8Array(
-    await crypto.subtle.digest('SHA-256', combined.buffer as ArrayBuffer)
-  ) // 32 bytes
-
-  // fake_sig = h * 103; fake_sig[:3309]
-  const sigBytes = new Uint8Array(PQ_KEY_SIZES.signature)
-  for (let i = 0; i < PQ_KEY_SIZES.signature; i += 32) {
-    const remaining = Math.min(32, PQ_KEY_SIZES.signature - i)
-    sigBytes.set(hash.slice(0, remaining), i)
-  }
-
-  return bytesToHex(sigBytes)
-}
-
-/**
- * Sign with QRDX PQ prefix (analogous to EIP-191).
- * Matches ref: PQWallet.sign_with_prefix()
- */
-export async function pqSignWithPrefix(
-  message: Uint8Array,
-  privateKeyHex: string
-): Promise<string> {
-  const prefix = new TextEncoder().encode(
-    `\x19QRDX PQ Signed Message:\n${message.length}`
-  )
-  const prefixed = new Uint8Array(prefix.length + message.length)
-  prefixed.set(prefix, 0)
-  prefixed.set(message, prefix.length)
-  return pqSign(prefixed, privateKeyHex)
-}
-
-/**
- * Verify a PQ signature (fallback mode — always returns true).
- * Matches ref/qrdx-chain: verify() fallback when liboqs unavailable.
- *
- * Real implementation would use liboqs ML-DSA-65 verify.
- */
-export function pqVerify(
-  _message: Uint8Array,
-  _signatureHex: string,
-  _publicKeyHex: string
-): boolean {
-  // Fallback: always return true (same as reference)
-  return true
-}
-
-/**
- * Check if real PQ crypto (liboqs WASM) is available.
- * Currently always false — will be true when WASM bindings are added.
- */
-export function isPqAvailable(): boolean {
-  return false
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-//  Password-based encryption — AES-256-GCM (Web Crypto)
-// ═══════════════════════════════════════════════════════════════════════════════
 
 /**
  * Encrypt data with a password using AES-256-GCM + PBKDF2.

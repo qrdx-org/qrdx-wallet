@@ -10,6 +10,7 @@ import {
   Fuel,
   Wallet,
   Send,
+  Shield,
   CheckCircle2,
   AlertCircle,
 } from 'lucide-react'
@@ -17,6 +18,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { validateAddress, addressesEqual, shortenAddress } from '@/src/core/address'
+import { isQrdxChain } from '@/src/core/chains'
 
 interface SendModalProps {
   ethAddress: string
@@ -51,6 +53,14 @@ const TOKEN_COLORS: Record<string, string> = {
   AVAX: 'from-red-500 to-red-600',
 }
 
+/**
+ * Fee applied to native post-quantum transfers, in QRDX.
+ *
+ * The native layer requires inputs to equal outputs plus fee exactly, so this
+ * is an explicit constant rather than something estimated from the node.
+ */
+const PQ_FEE_QRDX = '0.01'
+
 type Step = 'select-token' | 'send-form'
 type TxStatus = 'idle' | 'estimating' | 'sending' | 'success' | 'error'
 
@@ -63,6 +73,8 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
     sendTokenTransaction,
     addressBook,
     networkStatus,
+    sendPqTransaction,
+    pqBalance,
   } = useWallet()
 
   const [step, setStep] = useState<Step>('select-token')
@@ -169,12 +181,17 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
       return { state: 'invalid' as const, message: result.error ?? 'Invalid address' }
     }
 
-    if (result.kind === 'pq') {
+    // Which recipient forms are valid depends on the sending identity. The
+    // native (PQ) layer addresses outputs by string and accepts either form;
+    // the EVM layer has a 20-byte recipient field that a 32-byte PQ address
+    // cannot fit.
+    if (addressType === 'eth' && result.kind === 'pq') {
       return {
         state: 'invalid' as const,
         message:
           'Post-quantum (0xPQ) addresses cannot receive EVM transactions — ' +
-          'they are 32 bytes and the transaction recipient field holds 20.',
+          'they are 32 bytes and the transaction recipient field holds 20. ' +
+          'Switch to PQ to send from your post-quantum balance.',
       }
     }
 
@@ -188,7 +205,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
       address: result.normalized!,
       contactName: contact?.name,
     }
-  }, [recipient, fromAddress, addressBook])
+  }, [recipient, fromAddress, addressBook, addressType])
 
   const recipientIsValid = recipientCheck.state === 'valid'
 
@@ -201,6 +218,19 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
     if (!Number.isFinite(value) || value <= 0) {
       return { state: 'invalid' as const, message: 'Enter an amount greater than zero' }
     }
+    // PQ transfers spend the native UTXO balance, which is a different pot
+    // from the EVM token balance shown on the token card.
+    if (addressType === 'pq') {
+      const availableQrdx = Number(pqBalance ?? 0n) / 1e18
+      if (value > availableQrdx) {
+        return {
+          state: 'invalid' as const,
+          message: `Exceeds your post-quantum balance of ${availableQrdx.toFixed(4)} ${activeChain.nativeCurrency?.symbol ?? 'QRDX'}`,
+        }
+      }
+      return { state: 'valid' as const, value }
+    }
+
     if (selectedToken && value > selectedToken.balanceNum) {
       return {
         state: 'invalid' as const,
@@ -208,14 +238,33 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
       }
     }
     return { state: 'valid' as const, value }
-  }, [amount, selectedToken])
+  }, [amount, selectedToken, addressType, pqBalance, activeChain])
 
   // The wallet refuses to sign unless the node's chain id verified, so surface
   // that here instead of letting the user fill in a form that cannot be sent.
   const networkBlocked =
     networkStatus.state === 'mismatch' || networkStatus.state === 'unreachable'
 
+  // Post-quantum transfers only exist on QRDX's native layer.
+  const pqSendUnavailable = addressType === 'pq' && !isQrdxChain(activeChain)
+
+  /**
+   * Spendable balance for the identity currently selected.
+   *
+   * The token card describes the EVM account. In PQ mode the funds come from
+   * the native UTXO balance instead, so showing the token figure there would
+   * state an amount the transfer cannot actually draw on.
+   */
+  const spendableLabel =
+    addressType === 'pq'
+      ? `${(Number(pqBalance ?? 0n) / 1e18).toLocaleString('en-US', {
+          minimumFractionDigits: 4,
+          maximumFractionDigits: 4,
+        })}`
+      : null
+
   const canSend =
+    !pqSendUnavailable &&
     recipientIsValid &&
     amountCheck.state === 'valid' &&
     !networkBlocked &&
@@ -271,6 +320,16 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
     try {
       const cleanAmount = amount.replace(/,/g, '')
 
+      // Post-quantum funds move via a native UTXO transaction signed with
+      // ML-DSA-65 — a different path from the EVM transaction below, not a
+      // variant of it.
+      if (addressType === 'pq') {
+        const pq = await sendPqTransaction(recipientCheck.address, cleanAmount, PQ_FEE_QRDX)
+        setTxHash(pq.txHash)
+        setTxStatus('success')
+        return
+      }
+
       let result: { hash: string }
       if (selectedToken.contractAddress) {
         // ERC-20 token transfer: sign + broadcast
@@ -294,6 +353,13 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
   }
 
   const handleMax = () => {
+    if (addressType === 'pq') {
+      // Leave room for the fee: the native layer requires inputs to equal
+      // outputs plus fee exactly, so spending the whole balance cannot settle.
+      const spendable = Number(pqBalance ?? 0n) / 1e18 - Number(PQ_FEE_QRDX)
+      setAmount(spendable > 0 ? String(Number(spendable.toFixed(6))) : '0')
+      return
+    }
     if (selectedToken) {
       setAmount(selectedToken.balance.replace(/,/g, ''))
     }
@@ -425,7 +491,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Available Balance</div>
-                <div className="text-lg font-bold mt-0.5">{token.balance} <span className="text-sm text-muted-foreground font-medium">{token.symbol}</span></div>
+                <div className="text-lg font-bold mt-0.5">{spendableLabel ?? token.balance} <span className="text-sm text-muted-foreground font-medium">{token.symbol}</span></div>
               </div>
               <div className="text-right">
                 <div className="text-sm font-semibold text-muted-foreground">{token.value}</div>
@@ -570,7 +636,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
             </div>
             <div className="flex justify-between items-center mt-1.5 px-0.5">
               <span className="text-[10px] text-muted-foreground">
-                Balance: {token.balance} {token.symbol}
+                Balance: {spendableLabel ?? token.balance} {token.symbol}
               </span>
               {/* Only shown when a unit price can actually be derived. The
                   previous form divided the holding's fiat value by its balance
@@ -626,38 +692,42 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
           </div>
         </div>
 
-        {/* Warning for PQ */}
         {addressType === 'pq' && (
-          <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
-            <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
-            <span className="text-[10px] text-amber-400/90 leading-relaxed">
-              Sending via post-quantum address uses Dilithium signatures. Ensure the recipient supports PQ transactions.
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-primary/10 border border-primary/20">
+            <Shield className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
+            <span className="text-[10px] text-primary/90 leading-relaxed">
+              {pqSendUnavailable
+                ? `${activeChain.name} has no post-quantum layer. Switch to a QRDX network to spend this balance.`
+                : `Signed with ML-DSA-65 and submitted as a native QRDX transaction. Network fee ${PQ_FEE_QRDX} ${activeChain.nativeCurrency?.symbol ?? 'QRDX'}.`}
             </span>
           </div>
         )}
 
-        {/* Error message */}
+        {/* Transaction outcome. Restored after an over-broad edit removed it:
+            the PQ path reached the node and settled while the screen still
+            showed the form, giving no confirmation and no transaction hash. */}
         {txError && (
           <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
             <AlertCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
-            <span className="text-[10px] text-red-400/90">{txError}</span>
+            <span className="text-[10px] text-red-400/90 leading-relaxed break-words">
+              {txError}
+            </span>
           </div>
         )}
 
-        {/* Success message */}
         {txStatus === 'success' && (
           <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-green-500/10 border border-green-500/20">
             <CheckCircle2 className="h-3.5 w-3.5 text-green-400 shrink-0 mt-0.5" />
-            <div className="text-[10px] text-green-400/90">
-              <p>Transaction sent successfully!</p>
+            <div className="text-[10px] text-green-400/90 leading-relaxed min-w-0">
+              <p className="font-medium">Transaction sent successfully!</p>
               {txHash && (
                 <a
                   href={`${activeChain.explorerUrl}/tx/${txHash}`}
                   target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-green-300 underline break-all mt-1 block"
+                  rel="noreferrer"
+                  className="underline break-all"
                 >
-                  {txHash.slice(0, 16)}...{txHash.slice(-8)}
+                  {txHash.slice(0, 16)}…{txHash.slice(-8)}
                 </a>
               )}
             </div>

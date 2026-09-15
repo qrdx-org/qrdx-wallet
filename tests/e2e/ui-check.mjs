@@ -222,9 +222,15 @@ if (address) {
     console.log('   funding failed:', (e.stdout || e.message || '').toString().slice(0, 400))
   }
 
-  // Re-enter the dashboard so balances refetch.
+  // Re-enter the dashboard so balances refetch. A reload drops the in-memory
+  // key material, so the wallet correctly asks for the password again.
   await page.reload({ waitUntil: 'networkidle' })
-  await page.waitForTimeout(5000)
+  await page.waitForTimeout(2500)
+  if (/unlock/i.test(await page.locator('body').innerText())) {
+    await page.locator('input[type="password"]:visible').first().fill(PASSWORD)
+    await page.getByRole('button', { name: /unlock/i }).first().click()
+  }
+  await page.waitForTimeout(4500)
   await shot('09-funded')
 
   const funded = await page.locator('body').innerText()
