@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck, lint, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      # Includes the wallet↔node conformance vectors (tests/conformance/vectors.json).
+      - run: pnpm test:unit
+
+  build-and-e2e:
+    name: Build web + extension, end-to-end
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      # Builds the Next static export (out/) and the Chrome/Firefox extensions (dist/).
+      - run: pnpm extension:build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extensions
+          path: |
+            dist/chrome
+            dist/firefox

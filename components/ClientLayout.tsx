@@ -2,18 +2,12 @@
 
 import { ThemeProvider } from '@/components/theme-provider'
 import { WalletProvider } from '@/src/shared/contexts/WalletContext'
-import { ExtensionStorage } from '@/src/core/storage'
-import { useEffect, useRef, useState } from 'react'
+import { useHydrated } from '@/lib/use-hydrated'
 
-// Single shared storage instance for the web / extension context
-const extensionStorage = new ExtensionStorage()
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  // Wallet storage and the platform probe exist only in the browser.
+  const mounted = useHydrated()
 
   if (!mounted) {
     return (
@@ -31,7 +25,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
       defaultTheme="dark"
       disableTransitionOnChange
     >
-      <WalletProvider storage={extensionStorage}>
+      <WalletProvider>
         <div className="w-full h-full overflow-y-auto">
           {children}
         </div>

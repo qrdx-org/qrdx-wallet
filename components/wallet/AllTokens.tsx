@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef, useCallback } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import {
   ArrowLeft,
   Search,
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { useTokenList, type Token } from './TokenList'
+import { useTokenList } from './TokenList'
 
 interface AllTokensProps {
   pinnedSymbols: string[]
@@ -100,7 +100,7 @@ export function AllTokens({
     }
 
     return tokens
-  }, [search, sortBy, favoritedSymbols])
+  }, [allTokens, search, sortBy, favoritedSymbols])
 
   const pinnedCount = pinnedSymbols.length
 

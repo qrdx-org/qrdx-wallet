@@ -1,113 +1,142 @@
 'use client'
 
-import { ArrowLeft, TrendingUp, BarChart3, Layers, Zap } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+/**
+ * Perpetuals overview (read-only).
+ *
+ * The node's perps clearinghouse is live but waiting on its bridged stablecoin
+ * (qrdx-node docs/KNOWN_ISSUES.md), so the wallet shows real markets and the
+ * account's perp position read from `perp_getMarkets` / `perp_getAccount`
+ * rather than trading from here. Order entry belongs in a full trading UI,
+ * which connects to the wallet through the extension provider
+ * (`qrdx_sendExchangeTransaction`). The previous screen listed invented pairs.
+ */
+
+import { useEffect, useState } from 'react'
+import { ArrowLeft, BarChart3, Loader2 } from 'lucide-react'
+import { useWallet } from '@/src/shared/contexts/WalletContext'
+import { isQrdxChain } from '@/src/core/chains'
+import { getEvmProvider } from '@/src/core/ethereum'
+import { ErrorBanner, Notice } from './flow/FlowKit'
 
 interface TradeModalProps {
   onClose: () => void
 }
 
-const PAIRS = [
-  { base: 'QRDX', quote: 'USDC', price: '$10.00', change: '+5.2%', positive: true },
-  { base: 'qETH', quote: 'QRDX', price: '329.38', change: '+2.1%', positive: true },
-  { base: 'qBTC', quote: 'QRDX', price: '8,246.90', change: '-0.8%', positive: false },
-  { base: 'qUSDC', quote: 'QRDX', price: '0.10', change: '+0.0%', positive: true },
-]
+interface PerpMarket {
+  market_id: string
+  oracle_price?: string
+  mark_price?: string
+  open_interest?: string
+  funding_rate?: string
+}
 
 export function TradeModal({ onClose }: TradeModalProps) {
+  const { activeChain, currentWallet } = useWallet()
+  const qrdx = isQrdxChain(activeChain)
+  const [markets, setMarkets] = useState<PerpMarket[] | null>(null)
+  const [account, setAccount] = useState<Record<string, unknown> | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!qrdx) return
+    const p = getEvmProvider(activeChain.id)
+    p.rpc<PerpMarket[]>('perp_getMarkets').then(setMarkets, (e) =>
+      setError(e instanceof Error ? e.message : 'Could not load markets')
+    )
+    if (currentWallet)
+      p.rpc<Record<string, unknown>>('perp_getAccount', [currentWallet.pqAddress]).then(
+        setAccount,
+        () => setAccount(null)
+      )
+  }, [qrdx, activeChain.id, currentWallet])
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-rose-500/5">
-      {/* Header */}
-      <div className="glass-strong sticky top-0 z-20">
-        <div className="px-4 py-3">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-lg hover:bg-accent/50"
-              onClick={onClose}
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div className="flex-1">
-              <h1 className="text-base font-semibold">Trade</h1>
-              <p className="text-[10px] text-muted-foreground">QRDX Protocol DEX</p>
-            </div>
-            <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-rose-500/10 border border-rose-500/20">
-              <TrendingUp className="h-3 w-3 text-rose-400" />
-              <span className="text-[9px] font-semibold text-rose-400">DEX</span>
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex flex-col">
+      <div className="glass-strong sticky top-0 z-20 pt-safe">
+        <div className="px-4 py-3 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Back"
+            className="h-8 w-8 rounded-lg hover:bg-accent/50 flex items-center justify-center"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div>
+            <h1 className="text-base font-semibold">Perpetuals</h1>
+            <p className="text-[10px] text-muted-foreground">Markets on the QRDX clearinghouse</p>
           </div>
         </div>
       </div>
-
-      <div className="px-4 py-3">
-        {/* Coming Soon */}
-        <div className="flex flex-col items-center py-8 animate-fade-in">
-          <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-rose-500/20 to-pink-500/20 flex items-center justify-center shadow-lg mb-4 opacity-60">
-            <TrendingUp className="h-8 w-8 text-rose-400/50" />
+      <div className="flex-1 px-4 py-3 space-y-3">
+        {!qrdx ? (
+          <div className="text-center py-12">
+            <BarChart3 className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm font-semibold">Perpetuals run on QRDX networks</p>
           </div>
-          <span className="text-[10px] bg-rose-500/15 text-rose-400 px-2.5 py-1 rounded-full font-semibold mb-3">
-            Coming Soon
-          </span>
-          <h2 className="text-base font-bold text-muted-foreground">QRDX Protocol Trading</h2>
-          <p className="text-[11px] text-muted-foreground/60 text-center mt-2 max-w-[260px] leading-relaxed">
-            Concentrated liquidity DEX built on Uniswap v3/v4 architecture with quantum-resistant order execution.
-          </p>
-        </div>
-
-        {/* Feature preview */}
-        <div className="space-y-2 mb-4">
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium px-1">
-            Features
-          </div>
-          {[
-            { icon: BarChart3, label: 'Concentrated Liquidity', desc: 'Custom price ranges for capital efficiency' },
-            { icon: Layers, label: 'Multiple Fee Tiers', desc: '0.01%, 0.05%, 0.30%, 1.00%' },
-            { icon: Zap, label: 'Quantum-Resistant Orders', desc: 'Dilithium-signed trades on QRDX Chain' },
-          ].map((feature) => (
-            <div key={feature.label} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-background/50 border border-border/30">
-              <div className="h-8 w-8 rounded-lg bg-rose-500/10 flex items-center justify-center shrink-0">
-                <feature.icon className="h-4 w-4 text-rose-400/60" />
-              </div>
-              <div>
-                <div className="text-[11px] font-semibold">{feature.label}</div>
-                <div className="text-[10px] text-muted-foreground/60">{feature.desc}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Mock pairs list */}
-        <div className="space-y-1 opacity-30 pointer-events-none select-none">
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium px-1 py-1">
-            Trading Pairs
-          </div>
-          {PAIRS.map((pair) => (
-            <div
-              key={`${pair.base}/${pair.quote}`}
-              className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-background/40 border border-border/30"
-            >
-              <div>
-                <span className="text-sm font-semibold">{pair.base}</span>
-                <span className="text-sm text-muted-foreground">/{pair.quote}</span>
-              </div>
-              <div className="text-right">
-                <div className="text-sm font-medium">{pair.price}</div>
-                <div className={`text-[10px] font-medium ${pair.positive ? 'text-green-400' : 'text-red-400'}`}>
-                  {pair.change}
+        ) : (
+          <>
+            <Notice>
+              Read-only preview. Trade from a QRDX trading app connected to this wallet; every order
+              is approved here and signed with your quantum-safe key.
+            </Notice>
+            <ErrorBanner error={error} />
+            {markets === null && !error && (
+              <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+            )}
+            {markets?.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center">
+                No markets are open on {activeChain.name}.
+              </p>
+            )}
+            {markets?.map((m) => (
+              <div key={m.market_id} className="rounded-xl glass p-3 text-[12px]">
+                <div className="font-semibold mb-1">{m.market_id}</div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-muted-foreground">
+                  {m.mark_price && (
+                    <span>
+                      Mark{' '}
+                      <span className="text-foreground">
+                        {Number(m.mark_price).toLocaleString()}
+                      </span>
+                    </span>
+                  )}
+                  {m.oracle_price && (
+                    <span>
+                      Oracle{' '}
+                      <span className="text-foreground">
+                        {Number(m.oracle_price).toLocaleString()}
+                      </span>
+                    </span>
+                  )}
+                  {m.open_interest && (
+                    <span>
+                      Open interest <span className="text-foreground">{m.open_interest}</span>
+                    </span>
+                  )}
+                  {m.funding_rate && (
+                    <span>
+                      Funding <span className="text-foreground">{m.funding_rate}</span>
+                    </span>
+                  )}
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="px-1 py-4 text-center">
-          <p className="text-[10px] text-muted-foreground/50">
-            QRDX Protocol DEX will launch with QRDX Chain mainnet.
-          </p>
-        </div>
+            ))}
+            {account && (
+              <div className="rounded-xl glass p-3 text-[12px]">
+                <div className="font-semibold mb-1">Your perp account</div>
+                {['collateral', 'equity', 'withdrawable']
+                  .filter((k) => account[k] !== undefined)
+                  .map((k) => (
+                    <div key={k} className="flex justify-between">
+                      <span className="text-muted-foreground capitalize">{k}</span>
+                      <span>{String(account[k])}</span>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   )

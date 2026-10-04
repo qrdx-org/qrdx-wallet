@@ -19,6 +19,7 @@ import { rlpEncode, bigIntToBytes, type RlpInput } from './rlp'
 import { keccak256 } from 'ethereum-cryptography/keccak.js'
 import { ecdsaSign, hexToBytes, bytesToHex } from './crypto'
 import type { EthTransactionRequest } from './ethereum'
+import { toAccountIdBytes } from './account-id'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -53,10 +54,15 @@ function hexToRlpBytes(hex: string | undefined): Uint8Array {
   return hexToBytes(stripped)
 }
 
-/** Convert an address to 20 bytes */
+/**
+ * The 20 bytes a transaction's `to` field carries.
+ *
+ * Any QRDX address form resolves to its canonical account id — a `0xPQ`
+ * address used to be left-padded/truncated here, which encoded a recipient
+ * nobody controls. Anything that is not a valid address throws.
+ */
 function addressToBytes(addr: string): Uint8Array {
-  const clean = addr.startsWith('0x') ? addr.slice(2) : addr
-  return hexToBytes(clean.padStart(40, '0'))
+  return toAccountIdBytes(addr)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -158,7 +164,6 @@ export function signEip1559Transaction(
 
   // Type 2 prefix: 0x02 || RLP(fields)
   const unsignedRlp = rlpEncode(unsignedFields)
-  const typePrefix = new Uint8Array([0x02])
   const unsignedPayload = new Uint8Array(1 + unsignedRlp.length)
   unsignedPayload[0] = 0x02
   unsignedPayload.set(unsignedRlp, 1)

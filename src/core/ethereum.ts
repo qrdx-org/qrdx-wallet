@@ -19,6 +19,7 @@
 
 import {
   type ChainConfig,
+  type ChainToken,
   getChain,
   CHAINS,
   supportsWeb3,
@@ -125,8 +126,6 @@ const ERC20_BALANCE_OF = '0x70a08231'
 const ERC20_TRANSFER = '0xa9059cbb'
 /** decimals() → uint8 */
 const ERC20_DECIMALS = '0x313ce567'
-/** symbol() → string */
-const ERC20_SYMBOL = '0x95d89b41'
 
 function encodeAddress(addr: string): string {
   return addr.toLowerCase().replace('0x', '').padStart(64, '0')
@@ -256,11 +255,15 @@ export class EvmProvider {
     return `${weiToEth(wei, decimals)} ${symbol}`
   }
 
-  /** Get the transaction count (nonce) for an address */
+  /**
+   * Next nonce for an address, counting transactions still in the mempool.
+   * `latest` would hand a second send the same nonce as an unconfirmed first
+   * one, and the node would reject or replace it.
+   */
   async getTransactionCount(address: string): Promise<bigint> {
     const hex = await this.rpc<string>('eth_getTransactionCount', [
       address,
-      'latest',
+      'pending',
     ])
     return fromHex(hex)
   }
@@ -293,7 +296,7 @@ export class EvmProvider {
    * Get all balances for the chain's known tokens.
    * Returns native + all configured ERC-20 balances.
    */
-  async getAllBalances(walletAddress: string): Promise<TokenBalance[]> {
+  async getAllBalances(walletAddress: string, extraTokens: ChainToken[] = []): Promise<TokenBalance[]> {
     const results: TokenBalance[] = []
 
     // Native balance
@@ -309,7 +312,13 @@ export class EvmProvider {
     })
 
     // ERC-20 balances (fire all in parallel)
-    const erc20Tokens = this.chain.tokens.filter(t => t.address !== '')
+    const seen = new Set<string>()
+    const erc20Tokens = [...this.chain.tokens, ...extraTokens].filter(t => {
+      const key = t.address.toLowerCase()
+      if (t.address === '' || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
     const promises = erc20Tokens.map(async token => {
       try {
         const raw = await this.getTokenBalance(token.address, walletAddress)

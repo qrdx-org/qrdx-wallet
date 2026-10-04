@@ -2,22 +2,17 @@
 
 import { ThemeProvider } from '@/components/theme-provider'
 import { WalletProvider } from '@/src/shared/contexts/WalletContext'
-import { ExtensionStorage } from '@/src/core/storage'
 import { PWAProvider } from '@/src/pwa/PWAProvider'
-import { useEffect, useState } from 'react'
+import { useHydrated } from '@/lib/use-hydrated'
 
-const extensionStorage = new ExtensionStorage()
 
 export default function WalletLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  // Wallet storage and the platform probe exist only in the browser.
+  const mounted = useHydrated()
 
   if (!mounted) {
     return (
@@ -39,7 +34,7 @@ export default function WalletLayout({
         defaultTheme="dark"
         disableTransitionOnChange
       >
-        <WalletProvider storage={extensionStorage}>
+        <WalletProvider>
           <div className="mx-auto w-full max-w-md min-h-screen bg-background">
             {children}
           </div>

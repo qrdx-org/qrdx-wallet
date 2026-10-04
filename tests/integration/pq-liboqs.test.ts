@@ -23,7 +23,8 @@ import {
 } from '../../src/core/pq'
 import { hexToBytes } from '../../src/core/crypto'
 
-const VENV_PY = resolve(process.cwd(), 'ref/qrdx-chain/.venv/bin/python')
+import { NODE_PYTHON } from '../node-ref'
+const VENV_PY = NODE_PYTHON ?? resolve(process.cwd(), 'ref/qrdx-chain/.venv/bin/python')
 const BRIDGE = resolve(process.cwd(), 'tests/integration/pq_liboqs_bridge.py')
 
 const available = (() => {

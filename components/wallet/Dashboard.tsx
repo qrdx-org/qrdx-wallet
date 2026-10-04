@@ -29,7 +29,12 @@ export function Dashboard() {
   const [balanceVisible, setBalanceVisible] = useState(true)
   const [activeTab, setActiveTab] = useState<'tokens' | 'nfts' | 'activity'>('tokens')
   const [showSettings, setShowSettings] = useState(false)
-  const [activeModal, setActiveModal] = useState<QuickActionType | null>(null)
+  // Installed-app shortcuts (manifest.json) open /wallet?action=send|receive.
+  const [activeModal, setActiveModal] = useState<QuickActionType | null>(() => {
+    if (typeof location === 'undefined') return null
+    const action = new URLSearchParams(location.search).get('action')
+    return action === 'send' || action === 'receive' ? action : null
+  })
   const [addressMode, setAddressMode] = useState<'eth' | 'pq'>('eth')
   const [showAllTokens, setShowAllTokens] = useState(false)
   const [pinnedSymbols, setPinnedSymbols] = useState<string[]>([nativeSym])
@@ -99,7 +104,7 @@ export function Dashboard() {
     return <BuyModal onClose={() => setActiveModal(null)} />
   }
   if (activeModal === 'shield') {
-    return <ShieldModal onClose={() => setActiveModal(null)} />
+    return <ShieldModal onClose={() => setActiveModal(null)} onSend={() => setActiveModal('send')} />
   }
   if (activeModal === 'trade') {
     return <TradeModal onClose={() => setActiveModal(null)} />

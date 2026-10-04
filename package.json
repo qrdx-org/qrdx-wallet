@@ -8,24 +8,29 @@
     "dev:mobile": "expo start",
     "build": "next build",
     "build:web": "BUILD_TARGET=web next build",
-    "build:mobile": "expo build:android && expo build:ios",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:watch": "vitest",
-    "chain:up": "./scripts/local-chain.sh up",
-    "chain:down": "./scripts/local-chain.sh down",
-    "chain:status": "./scripts/local-chain.sh status",
-    "chain:watch": "./scripts/local-chain.sh watch",
-    "chain:logs": "./scripts/local-chain.sh logs",
+    "chain:up": "bash scripts/local-chain.sh up",
+    "chain:down": "bash scripts/local-chain.sh down",
+    "chain:status": "bash scripts/local-chain.sh status",
+    "chain:watch": "bash scripts/local-chain.sh watch",
+    "chain:logs": "bash scripts/local-chain.sh logs",
     "clean": "rm -rf .next .expo dist",
     "clean:modules": "rm -rf node_modules",
     "extension:build": "bun scripts/build-extension.js",
     "extension:package:chrome": "cd dist && zip -r chrome-extension.zip chrome/",
-    "extension:package:firefox": "cd dist && zip -r firefox-extension.zip firefox/"
+    "extension:package:firefox": "cd dist && zip -r firefox-extension.zip firefox/",
+    "format": "prettier --write .",
+    "test:e2e": "node tests/e2e/onboarding.mjs && node tests/e2e/extension-provider.mjs",
+    "test:e2e:web": "node tests/e2e/onboarding.mjs",
+    "test:e2e:extension": "node tests/e2e/extension-provider.mjs",
+    "conformance:generate": "python3 tests/conformance/generate_vectors.py ../qrdx-node > tests/conformance/vectors.json",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test:unit && pnpm extension:build && pnpm test:e2e"
   },
   "keywords": [
     "wallet",
@@ -106,7 +111,9 @@
       "esbuild"
     ],
     "onlyBuiltDependencies": [
-      "esbuild"
+      "esbuild",
+      "sharp",
+      "unrs-resolver"
     ]
   }
 }

@@ -47,67 +47,87 @@ export interface Network {
   }
 }
 
-// Storage Types
+// ─── Wallet (vault v2) public view ──────────────────────────────────────────
+//
+// Everything below is safe to hold in UI state: no secret ever appears in these
+// shapes. Secrets live only inside the encrypted vault (see ./vault.ts and
+// ./wallet-manager.ts).
+
+import type { DerivedAccountPublic, KeyringType } from './keyring'
+
+/** How an account came to exist — drives backup warnings and labels. */
+export type AccountSource =
+  | 'created'          // derived from a phrase this wallet generated
+  | 'imported-phrase'  // derived from a phrase the user typed in
+  | 'imported-key'     // raw secp256k1 private key
+  | 'imported-keystore'
 
 /**
- * A stored account has a paired ETH + PQ (post-quantum) address.
- * On QRDX chain every account is represented by both an EVM-compatible
- * address and a quantum-resistant address derived from Dilithium/SPHINCS+ keys.
+ * One account: a classic (secp256k1, `0x`) credential and a post-quantum
+ * (ML-DSA-65, `0xPQ`) credential. On QRDX these are two separate ledger
+ * accounts; `pqAccountId` is the second one's 20-byte ledger key.
  */
-export interface StoredWallet {
+export interface WalletAccount extends DerivedAccountPublic {
   id: string
   name: string
-  /** AES-256-GCM encrypted hex private key (ETH + PQ seed combined) */
-  encryptedPrivateKey: string
-
-  // ── ETH (secp256k1) ────────────────────────────────────────────────────
-  /** Compressed secp256k1 public key (33 bytes as hex) */
-  ethPublicKey: string
-  /** EIP-55 checksummed 0x address derived from uncompressed pubkey */
-  ethAddress: string
-
-  // ── PQ (ML-DSA-65 / Dilithium3) ────────────────────────────────────────
-  /**
-   * Full PQ public key (1952 bytes as hex).
-   * MUST be stored — Dilithium key generation is non-deterministic,
-   * so the pubkey cannot be rederived from the private key alone.
-   */
-  pqPublicKey: string
-  /** 0xPQ-prefixed checksummed address */
-  pqAddress: string
-  /** First 8 bytes of SHA-256(pqPublicKey) as hex — for quick ID */
-  pqFingerprint: string
-
-  // ── Backwards compat ───────────────────────────────────────────────────
-  /** @deprecated Use ethPublicKey instead */
-  publicKey: string
-  /** @deprecated Use ethAddress instead — resolves to ethAddress */
-  address: string
-
-  /** AES-256-GCM encrypted BIP-39 mnemonic phrase (if created from mnemonic) */
-  encryptedMnemonic?: string
-  /** HD derivation index (default 0) */
+  keyringId: string
+  keyringType: KeyringType
+  /** HD index within its keyring (hd keyrings only). */
   hdIndex?: number
+  source: AccountSource
+  createdAt: number
+  hidden?: boolean
+  /** @deprecated use ethAddress */
+  address: string
+  /** @deprecated use ethPublicKey */
+  publicKey: string
+}
 
+/** @deprecated Accounts are {@link WalletAccount}; kept so older imports compile. */
+export type StoredWallet = WalletAccount
+
+export interface KeyringSummary {
+  id: string
+  type: KeyringType
+  label: string
+  accountCount: number
+  createdAt: number
+  /** For phrases this wallet generated: whether the user verified their backup. */
+  backedUp: boolean
+}
+
+export interface PasskeySummary {
+  credentialId: string
+  label: string
+  rpId: string
   createdAt: number
 }
 
 export interface WalletState {
-  version: string
+  /** Vault format version. */
+  version: number
   initialized: boolean
   locked: boolean
   currentWalletId?: string
-  wallets: StoredWallet[]
-  currentNetwork: Network
+  wallets: WalletAccount[]
+  keyrings: KeyringSummary[]
+  passkeys: PasskeySummary[]
   settings: WalletSettings
 }
 
 export interface WalletSettings {
   theme: 'light' | 'dark' | 'auto'
-  currency: 'USD' | 'EUR' | 'GBP'
+  currency: 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CAD' | 'AUD' | 'CHF'
   language: string
   autoLock: boolean
+  /** Inactivity before auto-lock, in milliseconds. */
   autoLockTimeout: number
+  /**
+   * Lock as soon as the app is hidden (backgrounded) for longer than this many
+   * milliseconds. 0 = immediately on hide; undefined = only the inactivity
+   * timer applies. Defaults on for the iPhone PWA.
+   */
+  lockOnHideAfter?: number
   developerMode?: boolean
   /**
    * Registry slug of the selected chain (see `core/chains.ts`), e.g.

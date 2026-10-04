@@ -9,9 +9,7 @@ import {
   Shield,
   TrendingUp,
   Landmark,
-  Grid2x2,
-  X,
-} from 'lucide-react'
+  X } from 'lucide-react'
 
 export type QuickActionType = 'send' | 'receive' | 'swap' | 'buy' | 'shield' | 'trade' | 'stake'
 

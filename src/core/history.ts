@@ -11,7 +11,7 @@
  *  they appear on chain.
  */
 
-import { type ChainConfig, CHAINS } from './chains'
+import { CHAINS } from './chains'
 import { type EthTransactionReceipt, weiToEth, fromHex } from './ethereum'
 
 // ─── Types ──────────────────────────────────────────────────────────────────

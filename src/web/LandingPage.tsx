@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useHydrated } from '@/lib/use-hydrated'
 import {
   Shield,
   Download,
@@ -12,31 +13,25 @@ import {
   Lock,
   Layers,
   ArrowRight,
-  Monitor,
   Share,
   PlusSquare,
-  MoreVertical,
-  Menu,
-} from 'lucide-react'
+  MoreVertical } from 'lucide-react'
 
 // ── Detect platform ──────────────────────────────────────────────────────
 function usePlatform() {
-  const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop')
-  const [browser, setBrowser] = useState<'chrome' | 'firefox' | 'safari' | 'edge' | 'other'>('other')
-
-  useEffect(() => {
-    const ua = navigator.userAgent.toLowerCase()
-    if (/iphone|ipad|ipod/.test(ua)) setPlatform('ios')
-    else if (/android/.test(ua)) setPlatform('android')
-    else setPlatform('desktop')
-
-    if (/edg/.test(ua)) setBrowser('edge')
-    else if (/chrome/.test(ua)) setBrowser('chrome')
-    else if (/firefox/.test(ua)) setBrowser('firefox')
-    else if (/safari/.test(ua)) setBrowser('safari')
-    else setBrowser('other')
-  }, [])
-
+  // Read the user agent only after hydration; the static export renders "desktop".
+  const hydrated = useHydrated()
+  const ua = hydrated ? navigator.userAgent.toLowerCase() : ''
+  const platform: 'ios' | 'android' | 'desktop' = /iphone|ipad|ipod/.test(ua) ? 'ios' : /android/.test(ua) ? 'android' : 'desktop'
+  const browser: 'chrome' | 'firefox' | 'safari' | 'edge' | 'other' = /edg/.test(ua)
+    ? 'edge'
+    : /chrome/.test(ua)
+      ? 'chrome'
+      : /firefox/.test(ua)
+        ? 'firefox'
+        : /safari/.test(ua)
+          ? 'safari'
+          : 'other'
   return { platform, browser }
 }
 
@@ -79,7 +74,7 @@ function PWAInstructions({ platform, browser }: { platform: string; browser: str
           </li>
           <li className="flex items-start gap-3">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">3</span>
-            <span>Confirm by tapping <strong>Install</strong> — you're all set!</span>
+            <span>Confirm by tapping <strong>Install</strong> — you&apos;re all set!</span>
           </li>
         </ol>
       </div>

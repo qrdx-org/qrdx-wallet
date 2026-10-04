@@ -1,3 +1,8 @@
+> **Superseded.** This plan predates the node's unified account ledger and the
+> wallet's vault v2 / provider work. The current, code-referenced status is
+> [PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md); the dApp API is
+> [DAPP_INTEGRATION.md](DAPP_INTEGRATION.md). Kept for history.
+
 # QRDX Wallet Compatibility and Feature Parity Plan
 
 ## Purpose

@@ -1,12 +1,21 @@
 'use client'
 
-import { Setup } from './wallet/Setup'
+import { useState } from 'react'
+import { Onboarding } from './wallet/onboarding/Onboarding'
 import { Unlock } from './wallet/Unlock'
 import { Dashboard } from './wallet/Dashboard'
+import { ApprovalScreen } from './wallet/approval/ApprovalScreen'
+import { approvalIdFromLocation } from '@/src/extension/provider/approval-protocol'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 
 export function WalletHome() {
   const { initialized, locked, loading } = useWallet()
+  // Onboarding stays mounted after the vault is created so its final steps
+  // (biometrics, install, done) can run. It flags itself just before creating
+  // the vault (onCommit) and hands over via onDone.
+  const [onboarding, setOnboarding] = useState(false)
+  // Extension approval windows open the same page with #approval=<id>.
+  const [approvalId] = useState(() => approvalIdFromLocation())
 
   if (loading) {
     return (
@@ -22,13 +31,12 @@ export function WalletHome() {
     )
   }
 
-  if (!initialized) {
-    return <Setup />
+  if (approvalId && initialized) {
+    // Unlock first when needed; the approval screen also resolves "unlock" requests.
+    return locked ? <Unlock /> : <ApprovalScreen id={approvalId} />
   }
-
-  if (locked) {
-    return <Unlock />
-  }
-
+  if (onboarding || !initialized)
+    return <Onboarding onCommit={() => setOnboarding(true)} onDone={() => setOnboarding(false)} />
+  if (locked) return <Unlock />
   return <Dashboard />
 }

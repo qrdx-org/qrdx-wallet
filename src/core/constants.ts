@@ -4,13 +4,7 @@
  * old API surface so existing code doesn't break.
  */
 import type { Network } from './types'
-import {
-  CHAINS,
-  DEFAULT_CHAIN,
-  CHAIN_LIST,
-  MAINNET_CHAINS,
-  TESTNET_CHAINS,
-} from './chains'
+import { CHAINS } from './chains'
 
 // Re-export the full chain registry under the names other code expects
 export {

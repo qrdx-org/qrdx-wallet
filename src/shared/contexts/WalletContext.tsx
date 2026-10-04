@@ -1,30 +1,66 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react'
-import type { WalletState, StoredWallet } from '../../core/types'
-import { WalletManager } from '../../core/wallet-manager'
-import { WalletStorage, type IStorage } from '../../core/storage'
-import { type ChainConfig, DEFAULT_CHAIN, CHAIN_LIST, getChain, supportsWeb3 } from '../../core/chains'
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+  ReactNode,
+} from 'react'
+import type { WalletState, WalletAccount, WalletSettings } from '../../core/types'
+import type { IStorage } from '../../core/storage'
+import { createDefaultStorage } from '../../core/storage'
+import type { UnlockResult } from '../../core/wallet-manager'
+import {
+  type ChainConfig,
+  DEFAULT_CHAIN,
+  CHAIN_LIST,
+  getChain,
+  supportsWeb3,
+  isQrdxChain,
+} from '../../core/chains'
 import {
   probeChainIdentity,
-  clearChainIdentityCache,
   trustChainId,
   setTrustedChainIds,
   ChainIdentityError,
 } from '../../core/chain-identity'
-import { getEvmProvider, type TokenBalance, type EthTransactionRequest, type EthTransactionReceipt, type GasEstimate } from '../../core/ethereum'
-import { fetchPricesBySymbol, computePortfolioValue, fetchPriceHistory, type TokenPrice, type PriceHistoryPoint } from '../../core/prices'
+import { type TokenBalance, type GasEstimate } from '../../core/ethereum'
+import {
+  fetchPricesBySymbol,
+  computePortfolioValue,
+  fetchPriceHistory,
+  type TokenPrice,
+  type PriceHistoryPoint,
+} from '../../core/prices'
 import { fetchAllTransactionHistory, type TransactionHistoryItem } from '../../core/history'
-import { type SignedTransaction } from '../../core/transaction'
-import { generateMnemonic as generateMnemonicCrypto } from '../../core/crypto'
+import { newMnemonic } from '../../core/keyring'
 import {
-  AddressBook,
-  type AddressBookEntry,
-  type AddressBookInput,
-} from '../../core/address-book'
+  fetchBalances as fetchCredentialBalances,
+  quoteSend as quoteSendCore,
+  send as sendCore,
+  submitExchangeOp as submitExchangeOpCore,
+  type Credential,
+  type SendQuote,
+  type SendResult,
+} from '../../core/tx-service'
+import type { ExchangeOpName, JsonValue } from '../../core/exchange-tx'
+import type { KeystoreV3 } from '../../core/keystore'
+import { WatchedTokens } from '../../core/watched-tokens'
+import { exchange } from '../../core/exchange-client'
+import { ActivityLog, fetchQrdxHistory } from '../../core/activity'
+import { AddressBook, type AddressBookEntry, type AddressBookInput } from '../../core/address-book'
+import { SitePermissions, type SitePermission, type SiteCapability } from '../../core/permissions'
+import { createBackend, createLocalBackend, type WalletBackend } from '../backend'
+import { detectPlatform, type PlatformInfo } from '../platform'
 import {
-  SitePermissions,
-  type SitePermission,
-  type SiteCapability,
-} from '../../core/permissions'
+  createPasskey,
+  deviceLabel,
+  passkeySupport,
+  unlockSecret,
+  type PasskeySupport,
+} from '../passkey'
 
 /**
  * Connectivity and identity of the active chain's RPC endpoint.
@@ -38,62 +74,93 @@ export type NetworkStatus =
   | { state: 'idle' }
   | { state: 'checking' }
   | { state: 'connected'; chainId: number; rpcUrl: string }
-  | {
-      state: 'mismatch'
-      liveChainId: number
-      configuredChainId: number
-      rpcUrl: string
-    }
+  | { state: 'mismatch'; liveChainId: number; configuredChainId: number; rpcUrl: string }
   | { state: 'unreachable'; message: string }
+
+export interface SendInput {
+  credential: Credential
+  to: string
+  amount: string
+  token?: { address: string; decimals: number; symbol?: string }
+}
 
 // ─── Public context type ────────────────────────────────────────────────────
 export interface WalletContextType {
   state: WalletState | null
-  currentWallet: StoredWallet | null
+  currentWallet: WalletAccount | null
   loading: boolean
   error: string | null
   initialized: boolean
   locked: boolean
-  unlock: (password: string) => Promise<boolean>
+  /** Which target this is running as, and what it can do. */
+  platform: PlatformInfo
+  /** Direct access to the wallet backend (in-page manager or extension proxy). */
+  backend: WalletBackend
+  /** Re-read wallet state after calling `backend` directly. */
+  refreshState: () => Promise<void>
+
+  // ── Session ────────────────────────────────────────────────────────────
+  unlock: (password: string) => Promise<UnlockResult>
+  unlockWithBiometrics: () => Promise<UnlockResult>
   lock: () => Promise<void>
-  initialize: (password: string) => Promise<void>
-  createWallet: (name: string, password: string) => Promise<void>
-  /** Create a wallet from a BIP-39 mnemonic phrase (returns the mnemonic) */
-  createWalletFromMnemonic: (name: string, mnemonic: string, password: string) => Promise<void>
-  importWallet: (name: string, privateKey: string, password: string) => Promise<void>
-  /** Import from a JSON keystore file */
-  importFromKeystoreJSON: (keystore: any, keystorePassword: string, walletPassword: string, name?: string) => Promise<void>
-  // ── Account management ─────────────────────────────────────────────────
-  /** All stored wallets */
-  allWallets: StoredWallet[]
-  /** Switch to a different wallet by ID */
-  switchWallet: (walletId: string) => Promise<void>
-  /** Remove a wallet by ID (requires password confirmation) */
-  removeWallet: (walletId: string, password: string) => Promise<void>
-  /** Decrypt and return the private key for the current wallet (requires password) */
-  exportPrivateKey: (password: string) => Promise<{ ethPrivateKey: string; pqSeed: string }>
-  /** Export the BIP-39 mnemonic (if wallet was created with one) */
-  exportMnemonic: (password: string) => Promise<string | null>
-  /** Export the current wallet as a JSON keystore */
-  exportKeystoreJSON: (password: string) => Promise<any>
-  /** Change the wallet password (re-encrypts all wallet keys) */
+  /** Passkey PRF support on this device, and whether one is enrolled for it. */
+  biometrics: { support: PasskeySupport; enrolled: boolean }
+  enableBiometrics: (password: string) => Promise<void>
+  disableBiometrics: (credentialId: string) => Promise<void>
+
+  // ── Creating / importing ───────────────────────────────────────────────
+  generateMnemonic: (words?: 12 | 24) => string
+  createWallet: (input: {
+    password: string
+    mnemonic: string
+    accountName?: string
+    imported?: boolean
+    backedUp?: boolean
+  }) => Promise<void>
+  createWalletFromPrivateKey: (input: {
+    password: string
+    privateKey: string
+    accountName?: string
+  }) => Promise<void>
+  createWalletFromKeystore: (input: {
+    password: string
+    keystore: unknown
+    keystorePassword: string
+    accountName?: string
+  }) => Promise<void>
+
+  // ── Accounts ───────────────────────────────────────────────────────────
+  allWallets: WalletAccount[]
+  addAccount: (name?: string) => Promise<WalletAccount>
+  importMnemonic: (mnemonic: string, name?: string) => Promise<WalletAccount>
+  importPrivateKey: (privateKey: string, name?: string) => Promise<WalletAccount>
+  importKeystore: (
+    keystore: unknown,
+    keystorePassword: string,
+    name?: string
+  ) => Promise<WalletAccount>
+  switchWallet: (accountId: string) => Promise<void>
+  renameAccount: (accountId: string, name: string) => Promise<void>
+  removeWallet: (accountId: string, password: string) => Promise<void>
+  exportPrivateKey: (
+    password: string,
+    accountId?: string
+  ) => Promise<{ ethPrivateKey: string; pqSeed: string }>
+  exportMnemonic: (password: string, keyringId?: string) => Promise<string>
+  exportKeystoreJSON: (
+    password: string,
+    keystorePassword: string,
+    accountId?: string
+  ) => Promise<KeystoreV3>
   changePassword: (oldPassword: string, newPassword: string) => Promise<void>
-  /** Erase all wallet data and reset to initial state */
   resetWallet: () => Promise<void>
-  /** Update wallet settings (auto-lock, currency, language) */
-  updateSettings: (settings: Partial<import('../../core/types').WalletSettings>) => Promise<void>
-  /** Generate a fresh mnemonic phrase (does not persist anything) */
-  generateMnemonic: () => string
-  // ── Chain-aware EVM operations ─────────────────────────────────────────
-  /** Currently selected chain */
+  updateSettings: (settings: Partial<WalletSettings>) => Promise<void>
+
+  // ── Network ────────────────────────────────────────────────────────────
   activeChain: ChainConfig
-  /** Switch the active chain (persisted across restarts) */
   setActiveChain: (chainId: string) => void
-  /** All chains available */
   chains: ChainConfig[]
-  /** Live connectivity / chain-id status of the active chain */
   networkStatus: NetworkStatus
-  /** Re-probe the active chain's endpoint */
   refreshNetworkStatus: () => Promise<void>
   /**
    * Accept the chain ID the active network's node actually reports, even though
@@ -102,143 +169,119 @@ export interface WalletContextType {
    * identity did not verify.
    */
   trustActiveChainId: () => Promise<void>
-  /** Whether testnets are shown in network pickers */
   showTestnets: boolean
-  /** Fetch native + ERC-20 balances for current wallet on active chain */
+
+  // ── Balances ───────────────────────────────────────────────────────────
   fetchBalances: () => Promise<TokenBalance[]>
-  /** Balances cache for the active chain */
+  /** Classic (0x) account balances on the active chain. */
   balances: TokenBalance[]
-  /** Whether balances are currently loading */
+  /** Post-quantum (0xPQ) account balances on the active chain (QRDX only). */
+  pqBalances: TokenBalance[]
   balancesLoading: boolean
-  /**
-   * Native balance held at this account's post-quantum (`0xPQ`) address, in wei.
-   *
-   * A separate figure from `balances`: the PQ address is a distinct on-chain
-   * identity with its own holdings, not a different rendering of the EVM
-   * account. `null` means it has not been read yet.
-   */
+  /** Native balance of the PQ account in wei; null until read or off-QRDX. */
   pqBalance: bigint | null
-  /**
-   * Native balance across both of the account's identities, in wei.
-   *
-   * The wallet issues the EVM and post-quantum addresses as a pair, so this is
-   * the figure that answers "how much do I have"; the per-identity numbers
-   * remain available for the breakdown and for deciding which one can fund a
-   * given transfer.
-   */
+  /** Native balance across both credentials, in wei. */
   combinedNativeBalance: bigint
-  /** Send native QRDX from the post-quantum address (UTXO layer, ML-DSA signed) */
-  sendPqTransaction: (
-    to: string,
-    amount: string,
-    fee?: string,
-  ) => Promise<{ txHash: string; from: string; fee: string }>
-  // ── Signing & Transactions ─────────────────────────────────────────────
-  /** Sign a message with the ETH key (EIP-191 personal_sign) */
-  signMessage: (message: string) => Promise<string>
-  /** Sign a message with the PQ key */
-  signMessagePQ: (message: string) => Promise<string>
-  /** Build an unsigned native send transaction */
-  buildSend: (to: string, amount: string) => Promise<EthTransactionRequest>
-  /** Build an unsigned ERC-20 token transfer */
-  buildTokenSend: (tokenAddress: string, to: string, amount: string, decimals: number) => Promise<EthTransactionRequest>
-  /** Estimate gas for a native send */
+
+  // ── Sending & signing ──────────────────────────────────────────────────
+  quoteSend: (input: SendInput) => Promise<SendQuote>
+  send: (input: SendInput, quote?: SendQuote) => Promise<SendResult>
+  /** Classic native-send gas estimate (kept for the swap preview). */
   estimateGas: (to: string, amount: string) => Promise<GasEstimate>
-  /** Sign and broadcast a native-currency transfer (real on-chain send) */
-  sendTransaction: (to: string, amount: string) => Promise<{ hash: string; signed: SignedTransaction }>
-  /** Sign and broadcast an ERC-20 token transfer */
-  sendTokenTransaction: (tokenAddress: string, to: string, amount: string, decimals: number) => Promise<{ hash: string; signed: SignedTransaction }>
-  // ── Prices ─────────────────────────────────────────────────────────────
-  /** Current token prices (keyed by symbol) */
+  signMessage: (message: string) => Promise<string>
+  signMessagePQ: (message: string) => Promise<string>
+  submitExchangeOp: (
+    op: ExchangeOpName,
+    params?: Record<string, JsonValue>
+  ) => Promise<{ txHash: string }>
+
+  // ── Prices / history ───────────────────────────────────────────────────
   prices: Map<string, TokenPrice>
-  /** Total portfolio value in USD */
   portfolioValue: number
-  /** 24h portfolio change percentage */
   portfolioChange24h: number
-  /** Price history for chart */
   priceHistory: PriceHistoryPoint[]
-  /** Refresh prices */
   refreshPrices: () => Promise<void>
-  // ── Transaction history ────────────────────────────────────────────────
-  /** Transaction history for active chain */
   transactions: TransactionHistoryItem[]
-  /** Whether transactions are loading */
   transactionsLoading: boolean
-  /** Refresh transaction history */
   refreshTransactions: () => Promise<void>
+
   // ── Address book ───────────────────────────────────────────────────────
-  /** Saved recipients, favourites first */
   addressBook: AddressBookEntry[]
-  /** Add a contact. Rejects invalid or duplicate addresses. */
   addContact: (input: AddressBookInput) => Promise<void>
-  /** Update a contact's fields */
   updateContact: (id: string, changes: Partial<AddressBookInput>) => Promise<void>
-  /** Delete a contact */
   removeContact: (id: string) => Promise<void>
-  /** Toggle a contact's favourite flag */
   toggleContactFavorite: (id: string) => Promise<void>
+
   // ── Connected sites ────────────────────────────────────────────────────
-  /** dApp origins holding permissions, most recently used first */
   connectedSites: SitePermission[]
-  /** Remove specific capabilities from a site */
   revokeSiteCapability: (origin: string, capability: SiteCapability) => Promise<void>
-  /** Disconnect a site entirely */
   disconnectSite: (origin: string) => Promise<void>
-  /** Disconnect every site */
   disconnectAllSites: () => Promise<void>
-  /** Re-read connected sites from storage */
   refreshConnectedSites: () => Promise<void>
-  /** Access the underlying WalletManager for advanced operations */
-  manager: WalletManager
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined)
 
 export function useWallet() {
   const context = useContext(WalletContext)
-  if (!context) {
-    throw new Error('useWallet must be used within WalletProvider')
-  }
+  if (!context) throw new Error('useWallet must be used within WalletProvider')
   return context
 }
 
-// ─── Provider props ─────────────────────────────────────────────────────────
 interface WalletProviderProps {
   children: ReactNode
   /**
-   * Platform-specific storage backend.
-   * Extension/web: pass `new ExtensionStorage()`
-   * Mobile: pass `new MobileStorage(secureStore)`
+   * Storage for non-secret stores (address book, site permissions) and — when
+   * no backend is given — the vault. Defaults to chrome.storage in the
+   * extension and localStorage elsewhere.
    */
-  storage: IStorage
+  storage?: IStorage
+  /** Override the backend (tests, previews). */
+  backend?: WalletBackend
 }
 
-export function WalletProvider({ children, storage }: WalletProviderProps) {
-  // Create WalletManager once and keep it stable across renders
-  const managerRef = useRef<WalletManager | null>(null)
-  if (!managerRef.current) {
-    managerRef.current = new WalletManager(new WalletStorage(storage))
-  }
-  const manager = managerRef.current
+const ACTIVITY_THROTTLE_MS = 15_000
 
-  // Both stores are thin wrappers over the same platform storage; keep one
-  // instance each so callers never race on separate caches.
+export function WalletProvider({
+  children,
+  storage: storageProp,
+  backend: backendProp,
+}: WalletProviderProps) {
+  const storageRef = useRef<IStorage | null>(null)
+  if (!storageRef.current) storageRef.current = storageProp ?? createDefaultStorage()
+  const storage = storageRef.current
+
+  const backendRef = useRef<WalletBackend | null>(null)
+  if (!backendRef.current)
+    backendRef.current =
+      backendProp ?? (storageProp ? createLocalBackend(storageProp) : createBackend())
+  const backend = backendRef.current
+
+  const platform = useMemo(() => detectPlatform(), [])
+
   const addressBookRef = useRef<AddressBook | null>(null)
   if (!addressBookRef.current) addressBookRef.current = new AddressBook(storage)
   const addressBookStore = addressBookRef.current
+
+  const watchedRef = useRef<WatchedTokens | null>(null)
+  if (!watchedRef.current) watchedRef.current = new WatchedTokens(storage)
+  const watchedTokens = watchedRef.current
+
+  const activityRef = useRef<ActivityLog | null>(null)
+  if (!activityRef.current) activityRef.current = new ActivityLog(storage)
+  const activity = activityRef.current
 
   const sitePermissionsRef = useRef<SitePermissions | null>(null)
   if (!sitePermissionsRef.current) sitePermissionsRef.current = new SitePermissions(storage)
   const sitePermissions = sitePermissionsRef.current
 
   const [state, setState] = useState<WalletState | null>(null)
-  const [currentWallet, setCurrentWallet] = useState<StoredWallet | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeChain, setActiveChainState] = useState<ChainConfig>(DEFAULT_CHAIN)
   const [balances, setBalances] = useState<TokenBalance[]>([])
+  const [pqBalances, setPqBalances] = useState<TokenBalance[]>([])
   const [balancesLoading, setBalancesLoading] = useState(false)
-  const [pqBalance, setPqBalance] = useState<bigint | null>(null)
   const [prices, setPrices] = useState<Map<string, TokenPrice>>(new Map())
   const [portfolioValue, setPortfolioValue] = useState(0)
   const [portfolioChange24h, setPortfolioChange24h] = useState(0)
@@ -246,26 +289,26 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
   const [transactions, setTransactions] = useState<TransactionHistoryItem[]>([])
   const [transactionsLoading, setTransactionsLoading] = useState(false)
   const [networkStatus, setNetworkStatus] = useState<NetworkStatus>({ state: 'idle' })
-  /** Monotonic probe counter; only the newest probe may publish a result. */
   const probeSeqRef = useRef(0)
   const [addressBook, setAddressBook] = useState<AddressBookEntry[]>([])
   const [connectedSites, setConnectedSites] = useState<SitePermission[]>([])
+  const [passkeyAvailability, setPasskeyAvailability] = useState<PasskeySupport>('unknown')
 
-  // Derived convenience flags
   const initialized = state?.initialized ?? false
   const locked = state?.locked ?? true
+  const allWallets = state?.wallets ?? []
+  const currentWallet = useMemo(
+    () =>
+      state && !state.locked
+        ? (state.wallets.find((w) => w.id === state.currentWalletId) ?? state.wallets[0] ?? null)
+        : null,
+    [state]
+  )
 
-  // ── Refresh helpers ─────────────────────────────────────────────────────
-  const refresh = async () => {
-    const s = await manager.getState()
-    setState(s)
-    if (s && !s.locked) {
-      const ws = new WalletStorage(storage)
-      setCurrentWallet(await ws.getCurrentWallet())
-    } else {
-      setCurrentWallet(null)
-    }
-  }
+  // ── State sync ──────────────────────────────────────────────────────────
+  const refresh = useCallback(async () => {
+    setState(await backend.getState())
+  }, [backend])
 
   useEffect(() => {
     ;(async () => {
@@ -277,239 +320,209 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
         setLoading(false)
       }
     })()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    // Auto-lock and changes made elsewhere (another popup, the provider) arrive as events.
+    return backend.subscribe(() => {
+      refresh().catch(() => undefined)
+    })
+  }, [backend, refresh])
 
-  // ── Actions ─────────────────────────────────────────────────────────────
-  const initialize = async (password: string) => {
-    try {
-      setError(null)
-      await manager.initialize(password)
-      await refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to initialize')
-      throw err
+  useEffect(() => {
+    passkeySupport()
+      .then(setPasskeyAvailability)
+      .catch(() => setPasskeyAvailability('unsupported'))
+  }, [])
+
+  /** Run a backend action, surface its error, refresh state. */
+  const run = useCallback(
+    async <T,>(fn: () => Promise<T>, fallback: string): Promise<T> => {
+      try {
+        setError(null)
+        const out = await fn()
+        await refresh()
+        return out
+      } catch (err) {
+        setError(err instanceof Error ? err.message : fallback)
+        throw err
+      }
+    },
+    [refresh]
+  )
+
+  // ── Activity → auto-lock deadline; lock when hidden (PWA) ───────────────
+  const lastTouchRef = useRef(0)
+  useEffect(() => {
+    if (locked || typeof window === 'undefined') return
+    const onActivity = () => {
+      const now = Date.now()
+      if (now - lastTouchRef.current < ACTIVITY_THROTTLE_MS) return
+      lastTouchRef.current = now
+      backend.touch().catch(() => undefined)
     }
-  }
+    const events = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const
+    events.forEach((e) => window.addEventListener(e, onActivity, { passive: true }))
+    return () => events.forEach((e) => window.removeEventListener(e, onActivity))
+  }, [locked, backend])
 
-  const unlock = async (password: string): Promise<boolean> => {
-    try {
-      setError(null)
-      const ok = await manager.unlock(password)
-      if (ok) await refresh()
-      return ok
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to unlock')
-      return false
+  const lockOnHideAfter = state?.settings.lockOnHideAfter
+  useEffect(() => {
+    if (
+      locked ||
+      lockOnHideAfter === undefined ||
+      platform.target === 'extension' ||
+      typeof document === 'undefined'
+    )
+      return
+    let hiddenAt = 0
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenAt = Date.now()
+        if (lockOnHideAfter === 0) backend.lock().then(refresh)
+      } else if (hiddenAt && Date.now() - hiddenAt >= lockOnHideAfter) {
+        backend.lock().then(refresh)
+      }
     }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [locked, lockOnHideAfter, platform.target, backend, refresh])
+
+  // ── Session ─────────────────────────────────────────────────────────────
+  const unlock = async (password: string): Promise<UnlockResult> => {
+    setError(null)
+    const result = await backend.unlock(password)
+    await refresh()
+    return result
   }
 
-  const lock = async () => {
-    try {
-      setError(null)
-      await manager.lock()
-      await refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to lock')
-    }
+  const unlockWithBiometrics = async (): Promise<UnlockResult> => {
+    setError(null)
+    const challenges = await backend.passkeyChallenges()
+    const { credentialId, prfOutput } = await unlockSecret(challenges)
+    const result = await backend.unlockWithPasskey(credentialId, prfOutput)
+    await refresh()
+    return result
   }
 
-  const createWallet = async (name: string, password: string) => {
-    try {
-      setError(null)
-      await manager.createWallet(name, password)
-      await refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create wallet')
-      throw err
-    }
-  }
+  const lock = () => run(() => backend.lock(), 'Failed to lock')
 
-  const importWallet = async (name: string, privateKey: string, password: string) => {
-    try {
-      setError(null)
-      await manager.importWallet(name, privateKey, password)
-      await refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to import wallet')
-      throw err
-    }
-  }
+  const biometricsEnrolled = useMemo(() => {
+    if (typeof location === 'undefined') return false
+    return (state?.passkeys ?? []).some((p) => p.rpId === location.hostname)
+  }, [state?.passkeys])
 
-  const createWalletFromMnemonic = async (name: string, mnemonic: string, password: string) => {
-    try {
-      setError(null)
-      await manager.createWalletFromMnemonic(name, mnemonic, password)
-      await refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create wallet')
-      throw err
-    }
-  }
+  const enableBiometrics = (password: string) =>
+    run(async () => {
+      if (!(await backend.verifyPassword(password))) throw new Error('Incorrect password')
+      const label = deviceLabel()
+      const pk = await createPasskey(`QRDX Wallet · ${label}`)
+      await backend.enrollPasskey(password, { ...pk, label })
+    }, 'Could not enable biometric unlock')
 
-  const importFromKeystoreJSON = async (keystore: any, keystorePassword: string, walletPassword: string, name?: string) => {
-    try {
-      setError(null)
-      await manager.importFromKeystoreJSON(keystore, keystorePassword, walletPassword, name)
-      await refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to import keystore')
-      throw err
-    }
-  }
+  const disableBiometrics = (credentialId: string) =>
+    run(() => backend.removePasskey(credentialId), 'Could not remove biometric unlock')
 
-  // ── Account management ──────────────────────────────────────────────────
-  const allWallets = state?.wallets ?? []
+  // ── Creating / importing ────────────────────────────────────────────────
+  const createWallet: WalletContextType['createWallet'] = (input) =>
+    run(async () => void (await backend.createVaultFromMnemonic(input)), 'Failed to create wallet')
+  const createWalletFromPrivateKey: WalletContextType['createWalletFromPrivateKey'] = (input) =>
+    run(async () => void (await backend.createVaultFromPrivateKey(input)), 'Failed to import key')
+  const createWalletFromKeystore: WalletContextType['createWalletFromKeystore'] = (input) =>
+    run(
+      async () => void (await backend.createVaultFromKeystore(input)),
+      'Failed to import keystore'
+    )
 
-  const switchWallet = async (walletId: string) => {
-    try {
-      setError(null)
-      await manager.switchWallet(walletId)
-      await refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to switch wallet')
-      throw err
-    }
-  }
-
-  const removeWallet = async (walletId: string, password: string) => {
-    try {
-      setError(null)
-      await manager.removeWallet(walletId, password)
-      await refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove wallet')
-      throw err
-    }
-  }
-
-  const exportPrivateKey = async (password: string) => {
-    return manager.exportPrivateKey(password)
-  }
-
-  const exportMnemonic = async (password: string) => {
-    return manager.exportMnemonic(password)
-  }
-
-  const exportKeystoreJSONFn = async (password: string) => {
-    return manager.exportAsKeystoreJSON(password)
-  }
-
-  const generateMnemonicFn = () => {
-    return generateMnemonicCrypto(128)
-  }
-
-  const changePassword = async (oldPassword: string, newPassword: string) => {
-    try {
-      setError(null)
-      await manager.changePassword(oldPassword, newPassword)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to change password')
-      throw err
-    }
-  }
+  // ── Accounts ────────────────────────────────────────────────────────────
+  const addAccount = (name?: string) =>
+    run(() => backend.addHdAccount({ name }), 'Failed to add account')
+  const importMnemonic = (mnemonic: string, name?: string) =>
+    run(() => backend.importMnemonic({ mnemonic, name }), 'Failed to import phrase')
+  const importPrivateKey = (privateKey: string, name?: string) =>
+    run(() => backend.importPrivateKey({ privateKey, name }), 'Failed to import key')
+  const importKeystore = (keystore: unknown, keystorePassword: string, name?: string) =>
+    run(
+      () => backend.importKeystore({ keystore, keystorePassword, name }),
+      'Failed to import keystore'
+    )
+  const switchWallet = (id: string) =>
+    run(() => backend.selectAccount(id), 'Failed to switch account')
+  const renameAccount = (id: string, name: string) =>
+    run(() => backend.renameAccount(id, name), 'Failed to rename account')
+  const removeWallet = (id: string, password: string) =>
+    run(() => backend.removeAccount(id, password), 'Failed to remove account')
+  const exportPrivateKey = (password: string, accountId?: string) =>
+    backend.exportPrivateKey(password, accountId)
+  const exportMnemonic = (password: string, keyringId?: string) =>
+    backend.exportMnemonic(password, keyringId)
+  const exportKeystoreJSON = (password: string, keystorePassword: string, accountId?: string) =>
+    backend.exportKeystore(password, keystorePassword, accountId)
+  const changePassword = (oldPassword: string, newPassword: string) =>
+    run(() => backend.changePassword(oldPassword, newPassword), 'Failed to change password')
 
   const resetWallet = async () => {
-    try {
-      setError(null)
-      await manager.resetWallet()
-      setState(null)
-      setCurrentWallet(null)
-      setBalances([])
-      setTransactions([])
-      setPrices(new Map())
-      setPortfolioValue(0)
-      setPortfolioChange24h(0)
-      setPriceHistory([])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reset wallet')
-      throw err
-    }
+    await run(() => backend.reset(), 'Failed to reset wallet')
+    setBalances([])
+    setPqBalances([])
+    setTransactions([])
+    setPrices(new Map())
+    setPortfolioValue(0)
+    setPortfolioChange24h(0)
+    setPriceHistory([])
   }
 
-  const updateSettings = async (settings: Partial<import('../../core/types').WalletSettings>) => {
-    try {
-      setError(null)
-      await manager.updateSettings(settings)
-      await refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update settings')
-      throw err
-    }
-  }
+  const updateSettings = (settings: Partial<WalletSettings>) =>
+    run(() => backend.updateSettings(settings), 'Failed to update settings')
 
-  // ── Chain / EVM ─────────────────────────────────────────────────────────
-
+  // ── Chain ───────────────────────────────────────────────────────────────
   const setActiveChain = (chainId: string) => {
     const chain = getChain(chainId)
     if (!chain) return
-
     setActiveChainState(chain)
-    // Balances, prices and history are all chain-scoped; showing the previous
+    // Balances, prices and history are chain-scoped; showing the previous
     // chain's figures under a new network's name would be actively misleading.
     setBalances([])
-    setPqBalance(null)
+    setPqBalances([])
     setTransactions([])
     setPriceHistory([])
     setPortfolioValue(0)
     setPortfolioChange24h(0)
     setNetworkStatus({ state: 'idle' })
-
-    // Persist, but only once a wallet exists to hold settings.
-    if (state?.initialized) {
-      manager.updateSettings({ activeChainId: chainId }).catch(err => {
-        console.warn('Could not persist network selection:', err)
-      })
+    if (state?.initialized && !state.locked) {
+      backend
+        .updateSettings({ activeChainId: chainId })
+        .catch((err) => console.warn('Could not persist network selection:', err))
     }
   }
 
-  /**
-   * Restore the persisted network selection and any trusted chain IDs once
-   * wallet state loads. Runs on `state?.settings` rather than on mount because
-   * settings are not readable until the wallet has been initialised.
-   */
   const restoredChainRef = useRef(false)
   useEffect(() => {
     const settings = state?.settings
     if (!settings || restoredChainRef.current) return
     restoredChainRef.current = true
-
-    if (settings.trustedChainIds) {
-      setTrustedChainIds(settings.trustedChainIds)
-    }
+    if (settings.trustedChainIds) setTrustedChainIds(settings.trustedChainIds)
     const saved = settings.activeChainId ? getChain(settings.activeChainId) : undefined
     if (saved) setActiveChainState(saved)
-  }, [state?.settings]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state?.settings])
 
   const refreshNetworkStatus = useCallback(async () => {
-    // Probes race: the wallet mounts on the default chain, then restores the
-    // persisted one, so two probes can be in flight at once. An unreachable
-    // endpoint fails only after a DNS or connect timeout, so the *older* probe
-    // frequently resolves last and would overwrite a good result — leaving a
-    // connected chain showing another chain's failure. Stamp each probe and
-    // discard any result that is no longer the current one.
+    // Probes race (mount on the default chain, then restore the saved one); only
+    // the newest probe may publish so a slow failure cannot overwrite a success.
     const seq = ++probeSeqRef.current
     const probedChain = activeChain
     const isStale = () => seq !== probeSeqRef.current
-
     setNetworkStatus({ state: 'checking' })
     try {
       const identity = await probeChainIdentity(probedChain, true)
       if (isStale()) return
-
-      if (identity.matches || identity.trusted) {
-        setNetworkStatus({
-          state: 'connected',
-          chainId: identity.liveChainId,
-          rpcUrl: identity.rpcUrl,
-        })
-      } else {
-        setNetworkStatus({
-          state: 'mismatch',
-          liveChainId: identity.liveChainId,
-          configuredChainId: identity.configuredChainId,
-          rpcUrl: identity.rpcUrl,
-        })
-      }
+      setNetworkStatus(
+        identity.matches || identity.trusted
+          ? { state: 'connected', chainId: identity.liveChainId, rpcUrl: identity.rpcUrl }
+          : {
+              state: 'mismatch',
+              liveChainId: identity.liveChainId,
+              configuredChainId: identity.configuredChainId,
+              rpcUrl: identity.rpcUrl,
+            }
+      )
     } catch (err) {
       if (isStale()) return
       setNetworkStatus({
@@ -522,22 +535,19 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     }
   }, [activeChain])
 
-  // Probe whenever the selected chain changes.
   useEffect(() => {
     refreshNetworkStatus()
   }, [activeChain.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const trustActiveChainId = async () => {
     if (networkStatus.state !== 'mismatch') return
-
     trustChainId(activeChain.id, networkStatus.liveChainId)
-
     const merged = {
       ...(state?.settings.trustedChainIds ?? {}),
       [activeChain.id]: networkStatus.liveChainId,
     }
     try {
-      await manager.updateSettings({ trustedChainIds: merged })
+      await backend.updateSettings({ trustedChainIds: merged })
       await refresh()
     } catch (err) {
       console.warn('Could not persist trusted chain id:', err)
@@ -545,27 +555,36 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     await refreshNetworkStatus()
   }
 
+  // ── Balances ────────────────────────────────────────────────────────────
   const fetchBalances = async (): Promise<TokenBalance[]> => {
-    if (!currentWallet) return []
-    if (!supportsWeb3(activeChain)) return []
-
+    if (!currentWallet || !supportsWeb3(activeChain)) return []
     setBalancesLoading(true)
     try {
-      const provider = getEvmProvider(activeChain.id)
-
-      // The PQ address holds native QRDX on the UTXO layer; eth_getBalance
-      // resolves it and converts to wei. Fetched alongside the EVM balances so
-      // the two identities are never shown with one another's figures.
-      const [result, pq] = await Promise.all([
-        provider.getAllBalances(currentWallet.ethAddress),
-        currentWallet.pqAddress
-          ? provider.getBalance(currentWallet.pqAddress).catch(() => null)
-          : Promise.resolve(null),
+      const watched = await watchedTokens.list(activeChain.id).catch(() => [])
+      // QRDX native tokens are ERC-20s inside the EVM; discover them from the node.
+      const native = isQrdxChain(activeChain)
+        ? await exchange
+            .tokens(activeChain)
+            .then((list) =>
+              list.map((t) => ({
+                address: t.token_address,
+                symbol: t.symbol,
+                name: t.name,
+                decimals: t.decimals,
+              }))
+            )
+            .catch(() => [])
+        : []
+      const extra = [...native, ...watched]
+      const [classic, pq] = await Promise.all([
+        fetchCredentialBalances(activeChain, currentWallet, 'classic', extra),
+        isQrdxChain(activeChain)
+          ? fetchCredentialBalances(activeChain, currentWallet, 'pq', extra).catch(() => [])
+          : Promise.resolve([]),
       ])
-
-      setBalances(result)
-      setPqBalance(pq)
-      return result
+      setBalances(classic)
+      setPqBalances(pq)
+      return classic
     } catch (err) {
       console.warn('Failed to fetch balances:', err)
       return []
@@ -574,140 +593,131 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     }
   }
 
-  // Auto-fetch balances when wallet or chain changes
   useEffect(() => {
-    if (currentWallet && !locked && supportsWeb3(activeChain)) {
-      fetchBalances()
-    }
+    if (currentWallet && !locked && supportsWeb3(activeChain)) fetchBalances()
   }, [currentWallet?.id, activeChain.id, locked]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Signing & Transactions ──────────────────────────────────────────────
+  const pqBalance = useMemo(
+    () =>
+      pqBalances.find((b) => b.address === '')?.rawBalance ??
+      (isQrdxChain(activeChain) && pqBalances.length ? 0n : null),
+    [pqBalances, activeChain]
+  )
+  const combinedNativeBalance =
+    (balances.find((b) => b.address === '')?.rawBalance ?? 0n) + (pqBalance ?? 0n)
 
-  const signMessage = async (message: string): Promise<string> => {
-    return manager.signMessage(message)
+  // ── Sending ─────────────────────────────────────────────────────────────
+  const requireAccount = () => {
+    if (!currentWallet) throw new Error('Unlock the wallet first')
+    return currentWallet
   }
 
-  const signMessagePQ = async (message: string): Promise<string> => {
-    return manager.signMessagePQ(message)
-  }
+  const quoteSend = (input: SendInput) =>
+    quoteSendCore({ chain: activeChain, account: requireAccount(), ...input })
 
-  const buildSend = async (to: string, amount: string): Promise<EthTransactionRequest> => {
-    return manager.buildSend(activeChain.id, to, amount)
-  }
-
-  const buildTokenSend = async (
-    tokenAddress: string,
-    to: string,
-    amount: string,
-    decimals: number
-  ): Promise<EthTransactionRequest> => {
-    return manager.buildTokenSend(activeChain.id, tokenAddress, to, amount, decimals)
-  }
-
-  const estimateGas = async (to: string, amount: string) => {
-    return manager.estimateSendGas(activeChain.id, to, amount)
-  }
-
-  // ── Real send (sign + broadcast) ────────────────────────────────────────
-
-  const sendTransaction = async (to: string, amount: string) => {
+  const send = async (input: SendInput, quote?: SendQuote) => {
     try {
       setError(null)
-      const result = await manager.signAndSendTransaction(activeChain.id, to, amount)
-      // Refresh balances and tx history after send
+      const result = await sendCore(
+        backend,
+        { chain: activeChain, account: requireAccount(), ...input },
+        quote
+      )
+      await activity
+        .add({
+          hash: result.hash,
+          chain: activeChain.id,
+          kind: 'send',
+          track: 'evm',
+          credential: input.credential,
+          from: result.from,
+          to: input.to,
+          value: `${input.amount} ${input.token?.symbol ?? activeChain.nativeCurrency.symbol}`,
+        })
+        .catch(() => undefined)
       fetchBalances()
       refreshTransactions()
       return result
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Transaction failed'
-      setError(msg)
+      setError(err instanceof Error ? err.message : 'Transaction failed')
       throw err
     }
   }
 
-  const sendTokenTransaction = async (tokenAddress: string, to: string, amount: string, decimals: number) => {
-    try {
-      setError(null)
-      const result = await manager.signAndSendTokenTransaction(activeChain.id, tokenAddress, to, amount, decimals)
-      fetchBalances()
-      refreshTransactions()
-      return result
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Token transfer failed'
-      setError(msg)
-      throw err
+  const estimateGas = async (to: string, amount: string): Promise<GasEstimate> => {
+    const q = await quoteSend({ credential: 'classic', to, amount })
+    return {
+      gasLimit: BigInt(q.gasLimit),
+      gasPrice: BigInt(q.gasPrice),
+      estimatedCostWei: BigInt(q.fee),
     }
   }
 
-  /**
-   * Native holdings across both identities.
-   *
-   * Both figures are wei-denominated: `eth_getBalance` scales the node's
-   * microQRDX UTXO amounts up to wei, so the PQ balance arrives in the same
-   * units as the EVM one and they can be added directly.
-   */
-  const evmNativeWei = (() => {
-    const native = balances.find(b => b.address === '')
-    if (!native) return 0n
-    return native.rawBalance
-  })()
+  const signMessage = (message: string) =>
+    backend.signPersonalMessage(message, { accountId: currentWallet?.id })
+  const signMessagePQ = async (message: string) =>
+    (await backend.signPqMessage(message, currentWallet?.id)).signature
 
-  const combinedNativeBalance = evmNativeWei + (pqBalance ?? 0n)
-
-  const sendPqTransaction = async (to: string, amount: string, fee = '0') => {
-    try {
-      setError(null)
-      const result = await manager.sendNativePqTransaction(activeChain.id, to, amount, fee)
-      // The PQ balance lives outside `balances`, so refresh both.
-      fetchBalances()
-      refreshTransactions()
-      return result
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Post-quantum transfer failed'
-      setError(message)
-      throw err
-    }
+  const submitExchangeOp = async (op: ExchangeOpName, params?: Record<string, JsonValue>) => {
+    const account = requireAccount()
+    const result = await submitExchangeOpCore(backend, { chain: activeChain, account, op, params })
+    await activity
+      .add({
+        hash: result.txHash,
+        chain: activeChain.id,
+        kind: op === 'SWAP' ? 'swap' : op.startsWith('STAKE_') ? 'stake' : 'exchange',
+        track: 'exchange',
+        credential: 'pq',
+        from: account.pqAddress,
+        to: '',
+        value:
+          op === 'SWAP' && params
+            ? `${params.amount_in} ${params.token_in === 'QRDX' ? 'QRDX' : 'token'}`
+            : op === 'STAKE_DEPOSIT' && params
+              ? `${params.stake_amount} QRDX`
+              : '',
+        label: op.replace(/_/g, ' ').toLowerCase(),
+      })
+      .catch(() => undefined)
+    return result
   }
 
-  // ── Price oracle ────────────────────────────────────────────────────────
-
+  // ── Prices ──────────────────────────────────────────────────────────────
   const refreshPrices = useCallback(async () => {
-    if (balances.length === 0) return
-
-    const symbols = balances.map(b => b.symbol)
-    const priceMap = await fetchPricesBySymbol(symbols)
+    const all = [...balances, ...pqBalances]
+    if (all.length === 0) return
+    const priceMap = await fetchPricesBySymbol([...new Set(all.map((b) => b.symbol))])
     setPrices(priceMap)
-
-    // Compute portfolio value
-    const { totalUsd, change24hPercent } = computePortfolioValue(balances, priceMap)
+    const { totalUsd, change24hPercent } = computePortfolioValue(all, priceMap)
     setPortfolioValue(totalUsd)
     setPortfolioChange24h(change24hPercent)
+    const nativeId = priceMap.get(activeChain.nativeCurrency?.symbol ?? 'ETH')?.id
+    if (nativeId) setPriceHistory(await fetchPriceHistory(nativeId, 1))
+  }, [balances, pqBalances, activeChain])
 
-    // Fetch price history for the native token (for chart)
-    const nativeSymbol = activeChain.nativeCurrency?.symbol ?? 'ETH'
-    const nativeId = priceMap.get(nativeSymbol)?.id
-    if (nativeId) {
-      const history = await fetchPriceHistory(nativeId, 1)
-      setPriceHistory(history)
-    }
-  }, [balances, activeChain]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Auto-fetch prices when balances update
   useEffect(() => {
-    if (balances.length > 0 && !locked) {
-      refreshPrices()
-    }
-  }, [balances, locked]) // eslint-disable-line react-hooks/exhaustive-deps
+    if ((balances.length > 0 || pqBalances.length > 0) && !locked) refreshPrices()
+  }, [balances, pqBalances, locked]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Transaction history ─────────────────────────────────────────────────
-
+  // ── History ─────────────────────────────────────────────────────────────
   const refreshTransactions = useCallback(async () => {
     if (!currentWallet) return
-
     setTransactionsLoading(true)
     try {
-      const txs = await fetchAllTransactionHistory(currentWallet.ethAddress, activeChain.id)
-      setTransactions(txs)
+      if (isQrdxChain(activeChain)) {
+        const tokens = [
+          ...(await watchedTokens.list(activeChain.id).catch(() => [])),
+          ...(await exchange
+            .tokens(activeChain)
+            .then((l) =>
+              l.map((t) => ({ address: t.token_address, symbol: t.symbol, decimals: t.decimals }))
+            )
+            .catch(() => [])),
+        ]
+        setTransactions(await fetchQrdxHistory(activity, activeChain, [currentWallet], tokens))
+      } else {
+        setTransactions(await fetchAllTransactionHistory(currentWallet.ethAddress, activeChain.id))
+      }
     } catch (err) {
       console.warn('Failed to fetch transactions:', err)
     } finally {
@@ -715,35 +725,25 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     }
   }, [currentWallet?.ethAddress, activeChain.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-fetch transactions when wallet or chain changes
   useEffect(() => {
-    if (currentWallet && !locked) {
-      refreshTransactions()
-    }
+    if (currentWallet && !locked) refreshTransactions()
   }, [currentWallet?.id, activeChain.id, locked]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Address book ────────────────────────────────────────────────────────
+  // ── Address book & sites (not secret; readable while locked) ────────────
+  const refreshAddressBook = useCallback(
+    async () => setAddressBook(await addressBookStore.list()),
+    [addressBookStore]
+  )
+  const refreshConnectedSites = useCallback(
+    async () => setConnectedSites(await sitePermissions.list()),
+    [sitePermissions]
+  )
 
-  const refreshAddressBook = useCallback(async () => {
-    setAddressBook(await addressBookStore.list())
-  }, [addressBookStore])
-
-  const refreshConnectedSites = useCallback(async () => {
-    setConnectedSites(await sitePermissions.list())
-  }, [sitePermissions])
-
-  // Both stores live outside the encrypted wallet blob, so they can be read as
-  // soon as the provider mounts rather than waiting for an unlock.
   useEffect(() => {
-    refreshAddressBook().catch(err => console.warn('Address book load failed:', err))
-    refreshConnectedSites().catch(err => console.warn('Connected sites load failed:', err))
+    refreshAddressBook().catch((err) => console.warn('Address book load failed:', err))
+    refreshConnectedSites().catch((err) => console.warn('Connected sites load failed:', err))
   }, [refreshAddressBook, refreshConnectedSites])
 
-  /**
-   * Address-book mutations surface their failure reason through `error` and
-   * rethrow, so a form can show the specific problem ("already in your address
-   * book") while the caller still knows the write did not happen.
-   */
   const runAddressBookOp = async (op: () => Promise<unknown>) => {
     try {
       setError(null)
@@ -755,35 +755,6 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     }
   }
 
-  const addContact = (input: AddressBookInput) =>
-    runAddressBookOp(() => addressBookStore.add(input))
-
-  const updateContact = (id: string, changes: Partial<AddressBookInput>) =>
-    runAddressBookOp(() => addressBookStore.update(id, changes))
-
-  const removeContact = (id: string) =>
-    runAddressBookOp(() => addressBookStore.remove(id))
-
-  const toggleContactFavorite = (id: string) =>
-    runAddressBookOp(() => addressBookStore.toggleFavorite(id))
-
-  // ── Connected sites ─────────────────────────────────────────────────────
-
-  const revokeSiteCapability = async (origin: string, capability: SiteCapability) => {
-    await sitePermissions.revoke(origin, [capability])
-    await refreshConnectedSites()
-  }
-
-  const disconnectSite = async (origin: string) => {
-    await sitePermissions.revokeAll(origin)
-    await refreshConnectedSites()
-  }
-
-  const disconnectAllSites = async () => {
-    await sitePermissions.revokeEverything()
-    await refreshConnectedSites()
-  }
-
   const value: WalletContextType = {
     state,
     currentWallet,
@@ -791,23 +762,33 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     error,
     initialized,
     locked,
+    platform,
+    backend,
+    refreshState: refresh,
     unlock,
+    unlockWithBiometrics,
     lock,
-    initialize,
+    biometrics: { support: passkeyAvailability, enrolled: biometricsEnrolled },
+    enableBiometrics,
+    disableBiometrics,
+    generateMnemonic: (words = 12) => newMnemonic(words),
     createWallet,
-    createWalletFromMnemonic,
-    importWallet,
-    importFromKeystoreJSON,
+    createWalletFromPrivateKey,
+    createWalletFromKeystore,
     allWallets,
+    addAccount,
+    importMnemonic,
+    importPrivateKey,
+    importKeystore,
     switchWallet,
+    renameAccount,
     removeWallet,
     exportPrivateKey,
     exportMnemonic,
-    exportKeystoreJSON: exportKeystoreJSONFn,
+    exportKeystoreJSON,
     changePassword,
     resetWallet,
     updateSettings,
-    generateMnemonic: generateMnemonicFn,
     activeChain,
     setActiveChain,
     chains: CHAIN_LIST,
@@ -817,17 +798,16 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     showTestnets: state?.settings.showTestnets ?? false,
     fetchBalances,
     balances,
+    pqBalances,
     balancesLoading,
     pqBalance,
     combinedNativeBalance,
-    sendPqTransaction,
+    quoteSend,
+    send,
+    estimateGas,
     signMessage,
     signMessagePQ,
-    buildSend,
-    buildTokenSend,
-    estimateGas,
-    sendTransaction,
-    sendTokenTransaction,
+    submitExchangeOp,
     prices,
     portfolioValue,
     portfolioChange24h,
@@ -837,16 +817,24 @@ export function WalletProvider({ children, storage }: WalletProviderProps) {
     transactionsLoading,
     refreshTransactions,
     addressBook,
-    addContact,
-    updateContact,
-    removeContact,
-    toggleContactFavorite,
+    addContact: (input) => runAddressBookOp(() => addressBookStore.add(input)),
+    updateContact: (id, changes) => runAddressBookOp(() => addressBookStore.update(id, changes)),
+    removeContact: (id) => runAddressBookOp(() => addressBookStore.remove(id)),
+    toggleContactFavorite: (id) => runAddressBookOp(() => addressBookStore.toggleFavorite(id)),
     connectedSites,
-    revokeSiteCapability,
-    disconnectSite,
-    disconnectAllSites,
+    revokeSiteCapability: async (origin, capability) => {
+      await sitePermissions.revoke(origin, [capability])
+      await refreshConnectedSites()
+    },
+    disconnectSite: async (origin) => {
+      await sitePermissions.revokeAll(origin)
+      await refreshConnectedSites()
+    },
+    disconnectAllSites: async () => {
+      await sitePermissions.revokeEverything()
+      await refreshConnectedSites()
+    },
     refreshConnectedSites,
-    manager,
   }
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>

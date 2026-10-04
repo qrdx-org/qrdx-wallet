@@ -1,63 +1,68 @@
 /**
- * QRDX Wallet — Content script.
+ * QRDX Wallet — content script (isolated world).
  *
- * Injected into every page the user visits (configured via manifest
- * content_scripts). Its job is to expose the `window.qrdx` provider
- * object so dApps can interact with the wallet.
+ * A relay, nothing more: page ⇄ (window.postMessage) ⇄ here ⇄ (runtime port) ⇄ background.
+ * It never sees keys and never decides anything. The background identifies
+ * the site from this port's sender, which the browser sets — so a page cannot
+ * claim to be another origin by editing its messages.
  *
- * This file is compiled by the build script alongside the other
- * extension entry points in src/extension/.
+ * On Chrome the in-page provider is declared as a MAIN-world content script in
+ * the manifest. Firefox (MV2) has no MAIN world, so this script injects it
+ * with a <script> tag pointing at the extension's own inpage.js.
  */
 
-// Ensure TypeScript treats this as an external module so `declare global` works.
 export {}
 
-console.log('[QRDX] Content script loaded')
+declare const __INJECT_INPAGE__: boolean
 
-// ─── Provider object ────────────────────────────────────────────────────────
+const SOURCE_IN = 'qrdx-inpage'
+const SOURCE_OUT = 'qrdx-content'
 
-interface QRDXProvider {
-  isQRDX: true
-  version: string
-  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>
-}
-
-const qrdxProvider: QRDXProvider = {
-  isQRDX: true,
-  version: '1.0.0',
-
-  request: async (args) => {
-    return new Promise((resolve, reject) => {
-      if (typeof chrome === 'undefined' || !chrome.runtime) {
-        reject(new Error('QRDX extension not available'))
-        return
-      }
-
-      chrome.runtime.sendMessage(
-        { type: 'PROVIDER_REQUEST', payload: args },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message))
-          } else if (response?.success) {
-            resolve(response.data)
-          } else {
-            reject(new Error(response?.error ?? 'Unknown error'))
-          }
-        },
-      )
-    })
-  },
-}
-
-// ─── Inject into page ───────────────────────────────────────────────────────
-
-declare global {
-  interface Window {
-    qrdx?: QRDXProvider
+if (__INJECT_INPAGE__) {
+  try {
+    const s = document.createElement('script')
+    s.src = chrome.runtime.getURL('inpage/inpage.js')
+    s.async = false
+    ;(document.head || document.documentElement).appendChild(s)
+    s.onload = () => s.remove()
+  } catch (e) {
+    console.warn('[QRDX] provider injection failed', e)
   }
 }
 
-if (typeof window !== 'undefined') {
-  window.qrdx = qrdxProvider
-  window.dispatchEvent(new Event('qrdx#initialized'))
+let port: chrome.runtime.Port | null = null
+
+function connect(): chrome.runtime.Port {
+  if (port) return port
+  port = chrome.runtime.connect({ name: 'qrdx-provider' })
+  port.onMessage.addListener((msg) =>
+    window.postMessage({ source: SOURCE_OUT, ...msg }, window.location.origin)
+  )
+  port.onDisconnect.addListener(() => {
+    port = null // service worker restarted; reconnect on the next request
+  })
+  return port
 }
+
+window.addEventListener('message', (event) => {
+  if (event.source !== window || event.origin !== window.location.origin) return
+  const data = event.data as { source?: string; id?: number; method?: string; params?: unknown }
+  if (data?.source !== SOURCE_IN || typeof data.id !== 'number' || typeof data.method !== 'string')
+    return
+  try {
+    connect().postMessage({ id: data.id, method: data.method, params: data.params })
+  } catch {
+    port = null
+    window.postMessage(
+      {
+        source: SOURCE_OUT,
+        id: data.id,
+        error: { code: 4900, message: 'QRDX Wallet is unavailable — reload the page' },
+      },
+      window.location.origin
+    )
+  }
+})
+
+// Open the port eagerly so chain/account events reach pages that never call request().
+connect()

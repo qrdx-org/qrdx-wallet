@@ -1,0 +1,188 @@
+{
+  "generatedFrom": "qrdx-node (qrdx/crypto/account_id.py, qrdx/transactions/pq_tx.py, qrdx/exchange/transactions.py, qrdx/wallet_v2/pq_wallet.py)",
+  "pqStandInKey": {
+    "publicKeyRule": "(i*7+3) % 256 for i in range(1952)",
+    "signatureRule": "(i*13+5) % 256 for i in range(3309)"
+  },
+  "accountIds": [
+    {
+      "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1",
+      "accountId": "0x742d35cc6634c0532925a3b844bc9e7595f0beb1"
+    },
+    {
+      "address": "0x0000000000000000000000000000000000000001",
+      "accountId": "0x0000000000000000000000000000000000000001"
+    },
+    {
+      "address": "0xPQabababababababababababababababababababababababababababababababab",
+      "accountId": "0x65c78a25e3e90427c853a91afa96265ea14a6d8d"
+    },
+    {
+      "address": "0xPQ0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "accountId": "0x1b8e981f71944c87b6cf4e329f9229d0fd4003a0"
+    },
+    {
+      "address": "0xpqFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+      "accountId": "0x46c1af7befd1a716bde22ff06e8d959bce0efcca"
+    },
+    {
+      "address": "0xPQMS11111111111111111111111111111111111111",
+      "accountId": "0x26eac1efe2d8ec1091e7c1e72abea3ae20b53a4f"
+    }
+  ],
+  "pqTransactions": [
+    {
+      "chainId": 9999,
+      "nonce": 0,
+      "gasPrice": "1000000000",
+      "gasLimit": 200000,
+      "to": "0x742d35cc6634c0532925a3b844bc9e7595f0beb1",
+      "value": "1000000000000000000",
+      "data": "0x",
+      "onBehalfOf": null,
+      "signingHash": "0x4a1e95d4992181f716bed3076504a5aa4247a7c0f27d8bf7b922ef38e51b5701",
+      "rawPrefix": "0x51f914c082270f80843b9aca0083030d4094742d35cc6634c0532925a3b844bc9e7595f0beb1880de0b6b3a76400008080b907a0030a11181f262d343b424950",
+      "rawLength": 5316,
+      "rawKeccak": "0x1d4de7d8ac5e5ff8e5619295fc4921206aa82d44b7fcc7a7edee20fc6cd59b16",
+      "txHash": "0x1d4de7d8ac5e5ff8e5619295fc4921206aa82d44b7fcc7a7edee20fc6cd59b16",
+      "intrinsicGas": 145176
+    },
+    {
+      "chainId": 9999,
+      "nonce": 7,
+      "gasPrice": "1",
+      "gasLimit": 145000,
+      "to": "0x65c78a25e3e90427c853a91afa96265ea14a6d8d",
+      "value": "123456789",
+      "data": "0x",
+      "onBehalfOf": null,
+      "signingHash": "0xfe56ef656589b9c2350c1ecca3546e1495bf8cb002160843d2e5a95e3be10c16",
+      "rawPrefix": "0x51f914b882270f0701830236689465c78a25e3e90427c853a91afa96265ea14a6d8d84075bcd158080b907a0030a11181f262d343b424950575e656c737a8188",
+      "rawLength": 5308,
+      "rawKeccak": "0x5818093cec1d150c8bf3d3fa7a2b4b41e21f8532dd574d630ad7f292ca919df8",
+      "txHash": "0x5818093cec1d150c8bf3d3fa7a2b4b41e21f8532dd574d630ad7f292ca919df8",
+      "intrinsicGas": 145176
+    },
+    {
+      "chainId": 88888,
+      "nonce": 300,
+      "gasPrice": "2500000000",
+      "gasLimit": 500000,
+      "to": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "value": "0",
+      "data": "0xa9059cbb000000000000000000000000742d35cc6634c0532925a3b844bc9e7595f0beb10000000000000000000000000000000000000000000000000de0b6b3a7640000",
+      "onBehalfOf": null,
+      "signingHash": "0x400b737022bd325339901eef5483f1057ebf794e17d9a7d9e12ff83e2818f03d",
+      "rawPrefix": "0x51f9150083015b3882012c849502f9008307a12094a0b86991c6218b36c1d19d4a2e9eb0ce3606eb4880b844a9059cbb000000000000000000000000742d35cc",
+      "rawLength": 5380,
+      "rawKeccak": "0xf0726bf9f965f7b3a101bb28407abe5b0d46867a793dfb92bd4c79065d7940de",
+      "txHash": "0xf0726bf9f965f7b3a101bb28407abe5b0d46867a793dfb92bd4c79065d7940de",
+      "intrinsicGas": 145808
+    },
+    {
+      "chainId": 1,
+      "nonce": 1,
+      "gasPrice": "1",
+      "gasLimit": 300000,
+      "to": null,
+      "value": "0",
+      "data": "0x6000",
+      "onBehalfOf": null,
+      "signingHash": "0xb9ffbe20c207d03506ad56b827552543c674eaf69c49ce5884e2afdcd89afa5d",
+      "rawPrefix": "0x51f914a0010101830493e0808082600080b907a0030a11181f262d343b424950575e656c737a81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b222930",
+      "rawLength": 5284,
+      "rawKeccak": "0x3c95c83825d08a92bdb940877d1d353ae2d9a5eca1b3c18b3af998bff8db2b0c",
+      "txHash": "0x3c95c83825d08a92bdb940877d1d353ae2d9a5eca1b3c18b3af998bff8db2b0c",
+      "intrinsicGas": 177196
+    },
+    {
+      "chainId": 9999,
+      "nonce": 2,
+      "gasPrice": "1000000000",
+      "gasLimit": 200000,
+      "to": "0x742d35cc6634c0532925a3b844bc9e7595f0beb1",
+      "value": "5",
+      "data": "0x",
+      "onBehalfOf": "0x0000000000000000000000000000000000000003",
+      "signingHash": "0x8821426ee680f809d35f3a84f2b3c7ff688db842b5f66bcd2a2e4aa6eba27b1a",
+      "rawPrefix": "0x51f914cc82270f02843b9aca0083030d4094742d35cc6634c0532925a3b844bc9e7595f0beb10580940000000000000000000000000000000000000003b907a0",
+      "rawLength": 5328,
+      "rawKeccak": "0x63fb8eaf905738a989b1be1d92238b6d4e1520fec030d7ad08dd4a9754364b40",
+      "txHash": "0x63fb8eaf905738a989b1be1d92238b6d4e1520fec030d7ad08dd4a9754364b40",
+      "intrinsicGas": 145176
+    }
+  ],
+  "exchangeTransactions": [
+    {
+      "opType": 4,
+      "sender": "0xPQabababababababababababababababababababababababababababababababab",
+      "nonce": 0,
+      "params": {
+        "token_in": "QRDX",
+        "token_out": "0x1111111111111111111111111111111111111111",
+        "amount_in": "1.5",
+        "min_amount_out": "0.9"
+      },
+      "gasLimit": 1000000,
+      "gasPrice": "1000000000",
+      "signingBytes": "0x04307850516162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616200000000000000007b22616d6f756e745f696e223a2022312e35222c20226d696e5f616d6f756e745f6f7574223a2022302e39222c2022746f6b656e5f696e223a202251524458222c2022746f6b656e5f6f7574223a2022307831313131313131313131313131313131313131313131313131313131313131313131313131313131227d00000000000f424031303030303030303030",
+      "txHash": "17296db8720ddd09ae60b0b1186f3529b860aace5ade9ff6725d4e11446ba91c"
+    },
+    {
+      "opType": 15,
+      "sender": "0xPQcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+      "nonce": 12,
+      "params": {
+        "validator_public_key": "ffffffffffffffff",
+        "stake_amount": "10000"
+      },
+      "gasLimit": 500000,
+      "gasPrice": "2000000000",
+      "signingBytes": "0x0f3078505163646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364000000000000000c7b227374616b655f616d6f756e74223a20223130303030222c202276616c696461746f725f7075626c69635f6b6579223a202266666666666666666666666666666666227d000000000007a12032303030303030303030",
+      "txHash": "7d721ada43c9e8878b299e41349be9171994c2aeb190b6c8f3ff4158d1ebcca4"
+    },
+    {
+      "opType": 14,
+      "sender": "0xPQabababababababababababababababababababababababababababababababab",
+      "nonce": 3,
+      "params": {
+        "token_address": "0x2222222222222222222222222222222222222222",
+        "to": "0xPQcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+        "amount": "42",
+        "memo": "héllo ✓"
+      },
+      "gasLimit": 100000,
+      "gasPrice": "1000000000",
+      "signingBytes": "0x0e307850516162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616200000000000000037b22616d6f756e74223a20223432222c20226d656d6f223a2022685c75303065396c6c6f205c7532373133222c2022746f223a20223078505163646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364636463646364222c2022746f6b656e5f61646472657373223a2022307832323232323232323232323232323232323232323232323232323232323232323232323232323232227d00000000000186a031303030303030303030",
+      "txHash": "c0e2e9ec13e8dba35219808832ee2428caf75ec01fd52c8f3687f7a804dfd0c0"
+    },
+    {
+      "opType": 16,
+      "sender": "0xPQabababababababababababababababababababababababababababababababab",
+      "nonce": 4,
+      "params": {},
+      "gasLimit": 100000,
+      "gasPrice": "1000000000",
+      "signingBytes": "0x10307850516162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616261626162616200000000000000047b7d00000000000186a031303030303030303030",
+      "txHash": "64e3cd316dfccee11c4c8047e123b69289fe5f7b48271ce7f5f49b5fdc5a60cc"
+    }
+  ],
+  "pqMessages": [
+    {
+      "message": "hello",
+      "prefixed": "0x1951524458205051205369676e6564204d6573736167653a0a3568656c6c6f"
+    },
+    {
+      "message": "",
+      "prefixed": "0x1951524458205051205369676e6564204d6573736167653a0a30"
+    },
+    {
+      "message": "héllo wörld ✓",
+      "prefixed": "0x1951524458205051205369676e6564204d6573736167653a0a313768c3a96c6c6f2077c3b6726c6420e29c93"
+    },
+    {
+      "message": "多字节",
+      "prefixed": "0x1951524458205051205369676e6564204d6573736167653a0a39e5a49ae5ad97e88a82"
+    }
+  ]
+}

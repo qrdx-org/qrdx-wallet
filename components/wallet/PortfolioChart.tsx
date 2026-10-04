@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { createChart, ColorType, AreaSeries, CrosshairMode } from 'lightweight-charts'
-import type { IChartApi, ISeriesApi } from 'lightweight-charts'
+import type { IChartApi } from 'lightweight-charts'
 import type { PriceHistoryPoint } from '@/src/core/prices'
 
 interface PortfolioChartProps {

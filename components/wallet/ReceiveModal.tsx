@@ -5,7 +5,6 @@ import { ArrowLeft, Copy, Check, Share2 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { formatAddress } from '@/lib/utils'
 
 interface ReceiveModalProps {
   ethAddress: string

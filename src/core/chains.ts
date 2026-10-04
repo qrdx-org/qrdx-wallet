@@ -191,36 +191,17 @@ const AAVE_ETHEREUM: ChainToken = {
 const QRDX_NATIVE: ChainToken = {
   address: '',
   symbol: 'QRDX',
-  name: 'QRDX Ledger',
+  name: 'QRDX',
   decimals: 18,
-  coingeckoId: 'qrdx',
+  // No public price feed lists QRDX yet; the UI shows "price unavailable"
+  // rather than a made-up figure.
 }
 
-// ─── Bridged PQ tokens on QRDX chain ───────────────────────────────────────
-
-const qETH: ChainToken = {
-  address: '0x0000000000000000000000000000000000000101',
-  symbol: 'qETH',
-  name: 'Quantum-Shielded Ether',
-  decimals: 18,
-  pqBridged: true,
-}
-
-const qBTC: ChainToken = {
-  address: '0x0000000000000000000000000000000000000102',
-  symbol: 'qBTC',
-  name: 'Quantum-Shielded Bitcoin',
-  decimals: 8,
-  pqBridged: true,
-}
-
-const qUSDC: ChainToken = {
-  address: '0x0000000000000000000000000000000000000103',
-  symbol: 'qUSDC',
-  name: 'Quantum-Shielded USDC',
-  decimals: 6,
-  pqBridged: true,
-}
+// QRDX native tokens are not listed here. Their addresses are derived at
+// deploy time (blake2b(sender:nonce:symbol), qrdx-node docs/NATIVE_TOKENS.md),
+// so the wallet discovers them from the node (`exchange_getTokens`) instead of
+// hard-coding addresses. Shielded assets (qETH, qBTC, qUSDC) will appear the
+// same way once the bridge mints them.
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  CHAIN REGISTRY
@@ -245,7 +226,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     // QRDX targets a 180s block interval (qrdx/constants.py: BLOCK_TIME = 180).
     blockTimeSec: 180,
     color: 'from-purple-500 to-violet-600',
-    tokens: [QRDX_NATIVE, qETH, qBTC, qUSDC],
+    tokens: [QRDX_NATIVE],
     pqBridgeTarget: undefined,
   },
 
@@ -254,9 +235,9 @@ export const CHAINS: Record<string, ChainConfig> = {
     name: 'QRDX Testnet',
     shortName: 'QRDX Test',
     chainId: 31337,
-    rpcUrl: 'https://rpc.test.qrdx.org',
-    nodeApiUrl: 'https://node.test.qrdx.org',
-    explorerUrl: 'https://testnet.explorer.qrdx.org',
+    rpcUrl: 'https://test.qrdx.org/rpc',
+    nodeApiUrl: 'https://test.qrdx.org',
+    explorerUrl: 'https://explorer.qrdx.org',
     nativeCurrency: { name: 'QRDX', symbol: 'QRDX', decimals: 18 },
     transport: 'web3+pq',
     feeModel: 'legacy',
@@ -264,7 +245,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isTestnet: true,
     blockTimeSec: 180,
     color: 'from-purple-400 to-violet-500',
-    tokens: [QRDX_NATIVE, qETH, qUSDC],
+    tokens: [QRDX_NATIVE],
   },
 
   /**

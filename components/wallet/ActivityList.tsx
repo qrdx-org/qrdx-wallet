@@ -31,7 +31,7 @@ function formatValue(value: string): string {
 }
 
 export function ActivityList() {
-  const { transactions, transactionsLoading, refreshTransactions, currentWallet } = useWallet()
+  const { transactions, transactionsLoading, refreshTransactions } = useWallet()
 
   const getIcon = (type: TransactionHistoryItem['type']) => {
     switch (type) {

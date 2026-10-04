@@ -32,8 +32,6 @@ export function NetworkSelector() {
     setActiveChain,
     chains,
     networkStatus,
-    refreshNetworkStatus,
-    trustActiveChainId,
     showTestnets,
     updateSettings,
   } = useWallet()

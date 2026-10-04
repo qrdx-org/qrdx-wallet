@@ -16,8 +16,11 @@ import {
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { useWallet } from '@/src/shared/contexts/WalletContext'
+import { useWallet, type SendInput } from '@/src/shared/contexts/WalletContext'
 import { validateAddress, addressesEqual, shortenAddress } from '@/src/core/address'
+import { sameAccount } from '@/src/core/account-id'
+import { resolveRecipient, type Credential, type SendQuote } from '@/src/core/tx-service'
+import { weiToEth } from '@/src/core/ethereum'
 import { isQrdxChain } from '@/src/core/chains'
 
 interface SendModalProps {
@@ -37,6 +40,8 @@ interface TokenOption {
   /** Contract address for ERC-20, empty for native token */
   contractAddress?: string
   decimals: number
+  /** Raw base-unit balance, for exact MAX. */
+  raw?: bigint
 }
 
 // Gradient colors for known tokens
@@ -53,29 +58,23 @@ const TOKEN_COLORS: Record<string, string> = {
   AVAX: 'from-red-500 to-red-600',
 }
 
-/**
- * Fee applied to native post-quantum transfers, in QRDX.
- *
- * The native layer requires inputs to equal outputs plus fee exactly, so this
- * is an explicit constant rather than something estimated from the node.
- */
-const PQ_FEE_QRDX = '0.01'
-
 type Step = 'select-token' | 'send-form'
 type TxStatus = 'idle' | 'estimating' | 'sending' | 'success' | 'error'
 
+/**
+ * Send flow. The source is one of the account's two credentials:
+ *
+ *   classic (0x)       — secp256k1, legacy/EIP-1559 transaction
+ *   quantum-safe (PQ)  — ML-DSA-65, type-0x51 transaction (QRDX only)
+ *
+ * On QRDX either credential can pay any recipient form; the recipient is
+ * resolved to its 20-byte ledger account before encoding, and that resolution
+ * is shown so the user can see exactly where funds go. The fee shown is the
+ * quote the transaction is then built with.
+ */
 export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
-  const {
-    balances,
-    activeChain,
-    estimateGas,
-    sendTransaction,
-    sendTokenTransaction,
-    addressBook,
-    networkStatus,
-    sendPqTransaction,
-    pqBalance,
-  } = useWallet()
+  const { balances, pqBalances, activeChain, quoteSend, send, addressBook, networkStatus } = useWallet()
+  const qrdx = isQrdxChain(activeChain)
 
   const [step, setStep] = useState<Step>('select-token')
   const [search, setSearch] = useState('')
@@ -85,61 +84,56 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
   const [txStatus, setTxStatus] = useState<TxStatus>('idle')
   const [txError, setTxError] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
-  const [addressType, setAddressType] = useState<'eth' | 'pq'>('eth')
-  const [gasEstimate, setGasEstimate] = useState<string | null>(null)
+  const [addressType, setAddressTypeState] = useState<Credential>('classic')
+  const [quote, setQuote] = useState<SendQuote | null>(null)
 
-  const fromAddress = addressType === 'eth' ? ethAddress : pqAddress
+  const fromAddress = addressType === 'classic' ? ethAddress : pqAddress
+  const sourceBalances = addressType === 'pq' ? pqBalances : balances
+  const nativeSymbol = activeChain.nativeCurrency?.symbol ?? 'ETH'
+  const nativeDecimals = activeChain.nativeCurrency?.decimals ?? 18
 
-  // Helper to format wei to readable ETH
-  const formatWeiToEth = (wei: bigint): string => {
-    const divisor = 10n ** 18n
-    const whole = wei / divisor
-    const remainder = wei % divisor
-    const fracStr = remainder.toString().padStart(18, '0').slice(0, 6)
-    return `${whole}.${fracStr}`
+  const setAddressType = (t: Credential) => {
+    setAddressTypeState(t)
+    setQuote(null)
+    // Token balances differ per credential; re-pick the same token from the new source.
+    setSelectedToken(null)
+    setStep('select-token')
   }
 
-  // Build token list from real balances
   const tokenOptions: TokenOption[] = useMemo(() => {
-    if (balances.length === 0) {
-      // If no balances loaded yet, show native token with 0 balance
-      const nativeSym = activeChain.nativeCurrency?.symbol ?? 'ETH'
+    if (sourceBalances.length === 0) {
       return [{
-        symbol: nativeSym,
+        symbol: nativeSymbol,
         name: activeChain.nativeCurrency?.name ?? 'Ether',
         balance: '0.0000',
         balanceNum: 0,
-        value: '$0.00',
-        color: TOKEN_COLORS[nativeSym] ?? 'from-gray-500 to-gray-600',
-        icon: nativeSym.slice(0, 2),
-        decimals: activeChain.nativeCurrency?.decimals ?? 18,
+        value: '',
+        color: TOKEN_COLORS[nativeSymbol] ?? 'from-gray-500 to-gray-600',
+        icon: nativeSymbol.slice(0, 2),
+        decimals: nativeDecimals,
       }]
     }
-
-    return balances.map((b) => {
+    return sourceBalances.map(b => {
       const bal = parseFloat(b.formattedBalance)
       return {
         symbol: b.symbol,
         name: b.name ?? b.symbol,
         balance: bal.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }),
         balanceNum: bal,
-        value: '', // Price oracle not yet connected
+        value: '',
         color: TOKEN_COLORS[b.symbol] ?? 'from-gray-500 to-gray-600',
         icon: b.symbol.slice(0, 2),
-        contractAddress: b.address, // TokenBalance uses 'address' for contract
+        contractAddress: b.address,
         decimals: b.decimals ?? 18,
+        raw: b.rawBalance,
       }
     })
-  }, [balances, activeChain])
+  }, [sourceBalances, activeChain, nativeSymbol, nativeDecimals])
 
   const filteredTokens = useMemo(() => {
     if (!search.trim()) return tokenOptions
     const q = search.toLowerCase()
-    return tokenOptions.filter(
-      (t) =>
-        t.symbol.toLowerCase().includes(q) ||
-        t.name.toLowerCase().includes(q)
-    )
+    return tokenOptions.filter(t => t.symbol.toLowerCase().includes(q) || t.name.toLowerCase().includes(q))
   }, [search, tokenOptions])
 
   const handleSelectToken = (token: TokenOption) => {
@@ -160,52 +154,32 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
   }
 
   // ── Recipient validation ────────────────────────────────────────────────
-  //
-  // Sending to a wrong address is irreversible, so this gates the Send button
-  // rather than only informing gas estimation. Three distinct rejections
-  // matter here:
-  //
-  //  • Malformed / bad checksum — caught by validateAddress. A mixed-case
-  //    address whose EIP-55 checksum fails is a transcription error, which is
-  //    exactly what the checksum exists to detect.
-  //  • A post-quantum (0xPQ) recipient — the EVM `to` field is 20 bytes and a
-  //    PQ address is 32, so such a transaction cannot be encoded at all. It
-  //    must be refused with an explanation, not silently truncated.
-  //  • Your own address — almost always a mistake, and costs a fee for nothing.
+  // Sending to a wrong address is irreversible, so this gates the Send button.
   const recipientCheck = useMemo(() => {
     const raw = recipient.trim()
     if (raw === '') return { state: 'empty' as const }
-
     const result = validateAddress(raw)
-    if (!result.valid) {
+    let resolved: { accountId: string; resolved: boolean }
+    try {
+      resolved = resolveRecipient(activeChain, raw)
+    } catch (e) {
+      return { state: 'invalid' as const, message: e instanceof Error ? e.message : 'Invalid address' }
+    }
+    if (result.valid === false && result.kind !== null) {
       return { state: 'invalid' as const, message: result.error ?? 'Invalid address' }
     }
-
-    // Which recipient forms are valid depends on the sending identity. The
-    // native (PQ) layer addresses outputs by string and accepts either form;
-    // the EVM layer has a 20-byte recipient field that a 32-byte PQ address
-    // cannot fit.
-    if (addressType === 'eth' && result.kind === 'pq') {
-      return {
-        state: 'invalid' as const,
-        message:
-          'Post-quantum (0xPQ) addresses cannot receive EVM transactions — ' +
-          'they are 32 bytes and the transaction recipient field holds 20. ' +
-          'Switch to PQ to send from your post-quantum balance.',
-      }
-    }
-
-    if (addressesEqual(result.normalized!, fromAddress)) {
+    if (sameAccount(raw, fromAddress)) {
       return { state: 'invalid' as const, message: 'That is this account\u2019s own address' }
     }
-
-    const contact = addressBook.find(c => addressesEqual(c.address, result.normalized!))
+    const display = result.normalized ?? raw
+    const contact = addressBook.find(c => addressesEqual(c.address, display))
     return {
       state: 'valid' as const,
-      address: result.normalized!,
+      address: display,
       contactName: contact?.name,
+      accountId: resolved.resolved ? resolved.accountId : null,
     }
-  }, [recipient, fromAddress, addressBook, addressType])
+  }, [recipient, fromAddress, addressBook, activeChain])
 
   const recipientIsValid = recipientCheck.state === 'valid'
 
@@ -213,137 +187,61 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
   const amountCheck = useMemo(() => {
     const raw = amount.replace(/,/g, '').trim()
     if (raw === '') return { state: 'empty' as const }
-
     const value = Number(raw)
-    if (!Number.isFinite(value) || value <= 0) {
+    if (!/^\d*\.?\d*$/.test(raw) || !Number.isFinite(value) || value <= 0) {
       return { state: 'invalid' as const, message: 'Enter an amount greater than zero' }
     }
-    // PQ transfers spend the native UTXO balance, which is a different pot
-    // from the EVM token balance shown on the token card.
-    if (addressType === 'pq') {
-      const availableQrdx = Number(pqBalance ?? 0n) / 1e18
-      if (value > availableQrdx) {
-        return {
-          state: 'invalid' as const,
-          message: `Exceeds your post-quantum balance of ${availableQrdx.toFixed(4)} ${activeChain.nativeCurrency?.symbol ?? 'QRDX'}`,
-        }
-      }
-      return { state: 'valid' as const, value }
-    }
-
     if (selectedToken && value > selectedToken.balanceNum) {
-      return {
-        state: 'invalid' as const,
-        message: `Exceeds your balance of ${selectedToken.balance} ${selectedToken.symbol}`,
-      }
+      return { state: 'invalid' as const, message: `Exceeds your balance of ${selectedToken.balance} ${selectedToken.symbol}` }
     }
     return { state: 'valid' as const, value }
-  }, [amount, selectedToken, addressType, pqBalance, activeChain])
+  }, [amount, selectedToken])
 
-  // The wallet refuses to sign unless the node's chain id verified, so surface
-  // that here instead of letting the user fill in a form that cannot be sent.
-  const networkBlocked =
-    networkStatus.state === 'mismatch' || networkStatus.state === 'unreachable'
-
-  // Post-quantum transfers only exist on QRDX's native layer.
-  const pqSendUnavailable = addressType === 'pq' && !isQrdxChain(activeChain)
-
-  /**
-   * Spendable balance for the identity currently selected.
-   *
-   * The token card describes the EVM account. In PQ mode the funds come from
-   * the native UTXO balance instead, so showing the token figure there would
-   * state an amount the transfer cannot actually draw on.
-   */
-  const spendableLabel =
-    addressType === 'pq'
-      ? `${(Number(pqBalance ?? 0n) / 1e18).toLocaleString('en-US', {
-          minimumFractionDigits: 4,
-          maximumFractionDigits: 4,
-        })}`
-      : null
+  // The wallet refuses to sign unless the node's chain id verified.
+  const networkBlocked = networkStatus.state === 'mismatch' || networkStatus.state === 'unreachable'
+  const pqSendUnavailable = addressType === 'pq' && !qrdx
+  const spendableLabel: string | null = null
 
   const canSend =
-    !pqSendUnavailable &&
-    recipientIsValid &&
-    amountCheck.state === 'valid' &&
-    !networkBlocked &&
-    txStatus !== 'sending' &&
-    txStatus !== 'estimating'
+    !pqSendUnavailable && recipientIsValid && amountCheck.state === 'valid' && !networkBlocked && quote !== null &&
+    txStatus !== 'sending' && txStatus !== 'estimating'
 
-  // Estimate gas whenever recipient and amount change
+  const sendInput = (): SendInput | null => {
+    if (!selectedToken || recipientCheck.state !== 'valid') return null
+    return {
+      credential: addressType,
+      to: recipientCheck.address,
+      amount: amount.replace(/,/g, '').trim(),
+      token: selectedToken.contractAddress ? { address: selectedToken.contractAddress, decimals: selectedToken.decimals, symbol: selectedToken.symbol } : undefined,
+    }
+  }
+
+  // Quote whenever the inputs settle.
   useEffect(() => {
-    if (!recipient || !amount || !selectedToken) {
-      setGasEstimate(null)
-      return
-    }
-
-    const amountNum = parseFloat(amount.replace(/,/g, ''))
-    if (isNaN(amountNum) || amountNum <= 0) {
-      setGasEstimate(null)
-      return
-    }
-
-    if (!recipientIsValid) {
-      setGasEstimate(null)
-      return
-    }
-
+    setQuote(null)
+    const input = sendInput()
+    if (!input || amountCheck.state !== 'valid' || pqSendUnavailable) return
     let cancelled = false
     setTxStatus('estimating')
+    const t = setTimeout(() => {
+      quoteSend(input)
+        .then(q => !cancelled && (setQuote(q), setTxError(null)))
+        .catch(e => !cancelled && setTxError(e instanceof Error ? e.message : 'Could not estimate the fee'))
+        .finally(() => !cancelled && setTxStatus('idle'))
+    }, 350)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [recipient, amount, selectedToken?.symbol, addressType, recipientIsValid, amountCheck.state]) // eslint-disable-line react-hooks/exhaustive-deps
 
-    estimateGas(recipient, amount.replace(/,/g, ''))
-      .then((est) => {
-        if (!cancelled) {
-          setGasEstimate(formatWeiToEth(est.estimatedCostWei))
-          setTxStatus('idle')
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setGasEstimate(null)
-          setTxStatus('idle')
-        }
-      })
-
-    return () => { cancelled = true }
-  }, [recipient, amount, selectedToken?.symbol, recipientIsValid]) // eslint-disable-line react-hooks/exhaustive-deps
+  const gasEstimate = quote ? Number(quote.feeFormatted).toLocaleString('en-US', { maximumFractionDigits: 6 }) : null
 
   const handleSend = async () => {
-    // Re-check rather than trusting the button's disabled state: this is the
-    // last point before an irreversible transfer.
-    if (!canSend || !selectedToken || recipientCheck.state !== 'valid') return
+    const input = sendInput()
+    if (!canSend || !input || !quote) return
     setTxError(null)
     setTxHash(null)
     setTxStatus('sending')
-
     try {
-      const cleanAmount = amount.replace(/,/g, '')
-
-      // Post-quantum funds move via a native UTXO transaction signed with
-      // ML-DSA-65 — a different path from the EVM transaction below, not a
-      // variant of it.
-      if (addressType === 'pq') {
-        const pq = await sendPqTransaction(recipientCheck.address, cleanAmount, PQ_FEE_QRDX)
-        setTxHash(pq.txHash)
-        setTxStatus('success')
-        return
-      }
-
-      let result: { hash: string }
-      if (selectedToken.contractAddress) {
-        // ERC-20 token transfer: sign + broadcast
-        result = await sendTokenTransaction(
-          selectedToken.contractAddress,
-          recipientCheck.address,
-          cleanAmount,
-          selectedToken.decimals
-        )
-      } else {
-        // Native currency transfer: sign + broadcast
-        result = await sendTransaction(recipientCheck.address, cleanAmount)
-      }
-
+      const result = await send(input, quote)
       setTxHash(result.hash)
       setTxStatus('success')
     } catch (err) {
@@ -353,16 +251,15 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
   }
 
   const handleMax = () => {
-    if (addressType === 'pq') {
-      // Leave room for the fee: the native layer requires inputs to equal
-      // outputs plus fee exactly, so spending the whole balance cannot settle.
-      const spendable = Number(pqBalance ?? 0n) / 1e18 - Number(PQ_FEE_QRDX)
-      setAmount(spendable > 0 ? String(Number(spendable.toFixed(6))) : '0')
+    if (!selectedToken) return
+    if (!selectedToken.contractAddress && selectedToken.raw !== undefined) {
+      // Native coin: leave room for the fee (the PQ envelope alone is ~145k gas).
+      const fee = quote ? BigInt(quote.fee) : 0n
+      const spendable = selectedToken.raw > fee ? selectedToken.raw - fee : 0n
+      setAmount(weiToEth(spendable, selectedToken.decimals).replace(/\.?0+$/, '') || '0')
       return
     }
-    if (selectedToken) {
-      setAmount(selectedToken.balance.replace(/,/g, ''))
-    }
+    setAmount(selectedToken.balance.replace(/,/g, ''))
   }
 
   /* ─── Step 1: Token Selection ─── */
@@ -510,16 +407,16 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setAddressType('eth')}
+                onClick={() => setAddressType('classic')}
                 className={`text-[9px] font-semibold uppercase px-2 py-0.5 rounded-md transition-all ${
-                  addressType === 'eth'
+                  addressType === 'classic'
                     ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30'
                     : 'bg-muted/50 text-muted-foreground/50 hover:text-muted-foreground/70'
                 }`}
               >
-                ETH
+                Classic
               </button>
-              <button
+              {qrdx && <button
                 onClick={() => setAddressType('pq')}
                 className={`text-[9px] font-semibold uppercase px-2 py-0.5 rounded-md transition-all ${
                   addressType === 'pq'
@@ -527,8 +424,8 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
                     : 'bg-muted/50 text-muted-foreground/50 hover:text-muted-foreground/70'
                 }`}
               >
-                PQ
-              </button>
+                Quantum-safe
+              </button>}
               <span className="text-[11px] text-muted-foreground font-mono truncate ml-1">
                 {fromAddress.slice(0, 10)}...{fromAddress.slice(-6)}
               </span>
@@ -545,7 +442,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
             </div>
             <input
               type="text"
-              placeholder="0x… recipient address"
+              placeholder={qrdx ? '0x… or 0xPQ… address' : '0x… recipient address'}
               value={recipient}
               spellCheck={false}
               onChange={(e) => setRecipient(e.target.value)}
@@ -572,6 +469,9 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
                   {recipientCheck.contactName
                     ? `Sending to ${recipientCheck.contactName}`
                     : 'Valid address'}
+                  {recipientCheck.accountId && (
+                    <span className="block text-muted-foreground font-mono">ledger account {shortenAddress(recipientCheck.accountId, 6)}</span>
+                  )}
                 </span>
               </p>
             )}
@@ -585,7 +485,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {addressBook
-                    .filter((c) => c.addressType === 'eth')
+                    .filter((c) => qrdx || c.addressType === 'eth')
                     .slice(0, 6)
                     .map((c) => (
                       <button
@@ -698,7 +598,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
             <span className="text-[10px] text-primary/90 leading-relaxed">
               {pqSendUnavailable
                 ? `${activeChain.name} has no post-quantum layer. Switch to a QRDX network to spend this balance.`
-                : `Signed with ML-DSA-65 and submitted as a native QRDX transaction. Network fee ${PQ_FEE_QRDX} ${activeChain.nativeCurrency?.symbol ?? 'QRDX'}.`}
+                : 'Signed with your ML-DSA-65 key as a type-0x51 post-quantum transaction. The fee is higher than a classic send because the ~5 KB signature is priced on-chain.'}
             </span>
           </div>
         )}

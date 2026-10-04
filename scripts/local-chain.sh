@@ -25,7 +25,15 @@ set -uo pipefail
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-readonly CHAIN_DIR="${REPO_ROOT}/ref/qrdx-chain"
+# The node checkout: $QRDX_NODE_DIR, else ../qrdx-node (mono-repo layout), else ref/qrdx-chain.
+if [[ -n "${QRDX_NODE_DIR:-}" ]]; then
+  _chain_dir="${QRDX_NODE_DIR}"
+elif [[ -f "${REPO_ROOT}/../qrdx-node/qrdx/constants.py" ]]; then
+  _chain_dir="$(cd "${REPO_ROOT}/../qrdx-node" && pwd)"
+else
+  _chain_dir="${REPO_ROOT}/ref/qrdx-chain"
+fi
+readonly CHAIN_DIR="${_chain_dir}"
 readonly VENV="${CHAIN_DIR}/.venv"
 readonly VENV_PY="${VENV}/bin/python"
 readonly NODE_LOG="${CHAIN_DIR}/testnet/logs/node0/node.log"
@@ -115,17 +123,17 @@ cmd_doctor() {
   info "Checking prerequisites"
 
   if [ -d "${CHAIN_DIR}" ]; then
-    ok "chain source present at ref/qrdx-chain"
+    ok "chain source present at ${CHAIN_DIR}"
   else
-    fail "ref/qrdx-chain is missing — the chain reference checkout is required"
+    fail "${CHAIN_DIR} is missing — set QRDX_NODE_DIR or check out qrdx-node next to this repo"
     return 1
   fi
 
   if [ -x "${VENV_PY}" ]; then
     ok "virtualenv present ($(${VENV_PY} --version 2>&1))"
   else
-    fail "no virtualenv at ref/qrdx-chain/.venv"
-    dim "     python3 -m venv ref/qrdx-chain/.venv && ref/qrdx-chain/.venv/bin/pip install -r ref/qrdx-chain/requirements-v3.txt"
+    fail "no virtualenv at ${CHAIN_DIR}/.venv"
+    dim "     python3 -m venv ${CHAIN_DIR}/.venv && ${CHAIN_DIR}/.venv/bin/pip install -r ${CHAIN_DIR}/requirements-v3.txt"
     problems=$((problems + 1))
   fi
 
@@ -154,8 +162,8 @@ cmd_doctor() {
       ok "QRDX py-evm fork resolves"
     else
       fail "eth.vm.forks.qrdx not found — the vendored py-evm fork is missing or shadowed"
-      dim "     git -C ref/qrdx-chain submodule update --init py-evm"
-      dim "     ${VENV}/bin/pip uninstall -y py-evm && ${VENV}/bin/pip install --no-deps -e ref/qrdx-chain/py-evm"
+      dim "     git -C ${CHAIN_DIR} submodule update --init py-evm"
+      dim "     ${VENV}/bin/pip uninstall -y py-evm && ${VENV}/bin/pip install --no-deps -e ${CHAIN_DIR}/py-evm"
       problems=$((problems + 1))
     fi
   fi

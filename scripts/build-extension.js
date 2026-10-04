@@ -15,13 +15,23 @@ const rootDir = path.join(__dirname, '..');
 const distDir = path.join(rootDir, 'dist');
 
 // Extension manifest templates
+const pkg = require('../package.json');
+
+/**
+ * Host access is needed for one reason: the background service worker talks to
+ * JSON-RPC nodes (QRDX, Ethereum, custom networks) when signing for dApps.
+ * Content scripts run on every page so any dApp can find the provider.
+ */
+const HOST_PERMISSIONS = ['https://*/*', 'http://localhost/*', 'http://127.0.0.1/*'];
+
 const chromeManifest = {
   manifest_version: 3,
   name: 'QRDX Wallet',
-  version: '1.0.0',
-  description: 'Quantum Resistant Multi-Platform Wallet',
-  permissions: ['storage', 'activeTab'],
-  host_permissions: [],
+  version: pkg.version,
+  description: 'Quantum-resistant wallet for QRDX and EVM networks',
+  minimum_chrome_version: '111',
+  permissions: ['storage'],
+  host_permissions: HOST_PERMISSIONS,
   action: {
     default_popup: 'popup/index.html',
     default_icon: {
@@ -36,9 +46,17 @@ const chromeManifest = {
   },
   content_scripts: [
     {
-      matches: ['<all_urls>'],
+      // The provider itself, in the page's own JS world (Chrome 111+).
+      matches: ['http://*/*', 'https://*/*'],
+      js: ['inpage/inpage.js'],
+      run_at: 'document_start',
+      world: 'MAIN',
+    },
+    {
+      // The relay to the background, in the isolated world.
+      matches: ['http://*/*', 'https://*/*'],
       js: ['content/content.js'],
-      run_at: 'document_idle',
+      run_at: 'document_start',
     },
   ],
   content_security_policy: {
@@ -49,20 +67,15 @@ const chromeManifest = {
     48: 'icons/icon48.png',
     128: 'icons/icon128.png',
   },
-  web_accessible_resources: [
-    {
-      resources: ['popup/*'],
-      matches: ['<all_urls>'],
-    },
-  ],
 };
 
 const firefoxManifest = {
   manifest_version: 2,
   name: 'QRDX Wallet',
-  version: '1.0.0',
-  description: 'Quantum Resistant Multi-Platform Wallet',
-  permissions: ['storage', 'activeTab'],
+  version: pkg.version,
+  description: 'Quantum-resistant wallet for QRDX and EVM networks',
+  permissions: ['storage', ...HOST_PERMISSIONS],
+  browser_specific_settings: { gecko: { id: 'wallet@qrdx.org', strict_min_version: '115.0' } },
   browser_action: {
     default_popup: 'popup/index.html',
     default_icon: {
@@ -76,9 +89,9 @@ const firefoxManifest = {
   },
   content_scripts: [
     {
-      matches: ['<all_urls>'],
+      matches: ['http://*/*', 'https://*/*'],
       js: ['content/content.js'],
-      run_at: 'document_idle',
+      run_at: 'document_start',
     },
   ],
   content_security_policy: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline';",
@@ -87,7 +100,8 @@ const firefoxManifest = {
     48: 'icons/icon48.png',
     128: 'icons/icon128.png',
   },
-  web_accessible_resources: ['popup/*'],
+  // Firefox has no MAIN-world content scripts; content.js injects this file.
+  web_accessible_resources: ['inpage/inpage.js'],
 };
 
 function log(message) {
@@ -251,11 +265,6 @@ function copyNextOutput(targetDir) {
   // Only copy extension-relevant files from the Next.js output.
   // The full web build (landing page, PWA manifest, service worker, error pages,
   // debug .txt files, etc.) should NOT be included in the extension bundle.
-  const allowList = [
-    '_next',       // JS/CSS chunks required by the wallet UI
-    'wallet.html', // The wallet page used as the extension popup
-    'wallet',      // Wallet route assets
-  ];
 
   // Files/dirs in out/ that are web-only and must be excluded
   const denyList = new Set([
@@ -330,9 +339,23 @@ function createExtensionScripts(targetDir, browser) {
     platform: 'browser',
     target: 'es2020',
     format: 'iife',
-    external: [],
+    define: { __INJECT_INPAGE__: browser === 'firefox' ? 'true' : 'false' },
     logLevel: 'info',
   });
+
+  const inpageOutDir = path.join(targetDir, 'inpage');
+  fs.mkdirSync(inpageOutDir, { recursive: true });
+
+  esbuild.buildSync({
+    entryPoints: [path.join(srcDir, 'inpage.ts')],
+    bundle: true,
+    outfile: path.join(inpageOutDir, 'inpage.js'),
+    platform: 'browser',
+    target: 'es2020',
+    format: 'iife',
+    logLevel: 'info',
+  });
+  log('  ✔ inpage.js (IIFE)');
 
   log('  ✔ content.js (IIFE)');
 }
@@ -359,7 +382,7 @@ function createIcons(targetDir) {
         { stdio: 'pipe' }
       );
       log(`Created icon${size}.png`);
-    } catch (error) {
+    } catch {
       // Fallback: just copy the original if ImageMagick is not available
       log(`ImageMagick not available, copying original logo for icon${size}.png`);
       fs.copyFileSync(logoPath, iconPath);

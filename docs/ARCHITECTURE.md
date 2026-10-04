@@ -1,303 +1,118 @@
-# QRDX Wallet Architecture
+# Architecture
 
-## Overview
-
-QRDX Wallet is a multi-platform cryptocurrency wallet that runs as both a browser extension and a mobile application. The architecture is designed around a shared core with platform-specific implementations.
-
-## Architecture Diagram
+One wallet core, one UI, three targets (web, iPhone PWA, browser extension —
+see [PLATFORMS.md](PLATFORMS.md)). This document maps the code.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        QRDX Wallet                               │
-└─────────────────────────────────────────────────────────────────┘
+                    ┌──────────────────────── UI (React, components/) ────────────────────────┐
+                    │ Onboarding · Unlock · Dashboard · Send · Swap · Stake · Settings ·        │
+                    │ Approval window (extension)                                               │
+                    └───────────────┬───────────────────────────────────────────────────────────┘
+                                    │ useWallet()  — src/shared/contexts/WalletContext.tsx
+                    ┌───────────────▼───────────────┐
+                    │ WalletBackend (src/shared/backend.ts)                                      │
+                    │   web / PWA:  in-page WalletManager                                        │
+                    │   extension:  proxy ──chrome.runtime──▶ background WalletManager           │
+                    └───────────────┬───────────────┘
+ ┌──────────────────────────────────▼──────────────────────────────────────────────────────────┐
+ │ src/core  (platform-agnostic, no DOM)                                                         │
+ │                                                                                               │
+ │  wallet-manager.ts ── vault.ts (envelope encryption) ── keyring.ts (phrase/key → accounts)   │
+ │        │                                                                                      │
+ │        ├─ signing: transaction.ts (legacy/1559) · pq-tx.ts (0x51) · exchange-tx.ts · eip712  │
+ │        └─ keystore.ts (V3 import/export)                                                      │
+ │                                                                                               │
+ │  tx-service.ts ── ethereum.ts (JSON-RPC) · account-id.ts · chain-identity.ts · chains.ts      │
+ │  exchange-client.ts · activity.ts · history.ts · prices.ts · watched-tokens.ts                │
+ │  permissions.ts · address-book.ts · storage.ts                                                │
+ └───────────────────────────────────────────────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────────────────────────────────┐
-│                      Platform Layer                              │
-├─────────────────────────────┬───────────────────────────────────┤
-│   Browser Extension         │      Mobile App (Expo)            │
-│                             │                                   │
-│  ┌─────────────────────┐   │   ┌─────────────────────┐        │
-│  │ Popup UI (React)    │   │   │ Screens (RN)        │        │
-│  │ - Setup             │   │   │ - HomeScreen        │        │
-│  │ - Unlock            │   │   │ - SetupScreen       │        │
-│  │ - Home              │   │   │ - SendScreen        │        │
-│  │ - Send/Receive      │   │   │ - ReceiveScreen     │        │
-│  └─────────────────────┘   │   └─────────────────────┘        │
-│           │                 │            │                      │
-│  ┌─────────────────────┐   │   ┌─────────────────────┐        │
-│  │ Background Script   │   │   │ React Navigation    │        │
-│  │ - Message Handler   │   │   └─────────────────────┘        │
-│  │ - State Manager     │   │                                   │
-│  └─────────────────────┘   │                                   │
-│           │                 │            │                      │
-│  ┌─────────────────────┐   │   ┌─────────────────────┐        │
-│  │ chrome.storage      │   │   │ SecureStore         │        │
-│  └─────────────────────┘   │   │ (Keychain/Keystore) │        │
-│                             │   └─────────────────────┘        │
-└─────────────────────────────┴───────────────────────────────────┘
-                              │
-                              │
-┌─────────────────────────────┴───────────────────────────────────┐
-│                      Shared Layer                                │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ Shared Components (React)                                │   │
-│  │ - WalletContext                                          │   │
-│  │ - Utility functions                                      │   │
-│  └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │
-┌─────────────────────────────┴───────────────────────────────────┐
-│                      Core Layer                                  │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐     │
-│  │ Crypto       │  │ Storage      │  │ Wallet Manager   │     │
-│  │              │  │              │  │                  │     │
-│  │ - Key Gen    │  │ - Interface  │  │ - Create Wallet  │     │
-│  │ - Sign       │  │ - Extension  │  │ - Import         │     │
-│  │ - Verify     │  │ - Mobile     │  │ - Sign Tx        │     │
-│  │ - Encrypt    │  │ - State Mgmt │  │ - Lock/Unlock    │     │
-│  └──────────────┘  └──────────────┘  └──────────────────┘     │
-│                                                                  │
-│  ┌──────────────┐  ┌──────────────┐                            │
-│  │ Types        │  │ Constants    │                            │
-│  │              │  │              │                            │
-│  │ - Wallet     │  │ - Networks   │                            │
-│  │ - Account    │  │ - Config     │                            │
-│  │ - Transaction│  │              │                            │
-│  └──────────────┘  └──────────────┘                            │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │
-┌─────────────────────────────┴───────────────────────────────────┐
-│                    External Services                             │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐     │
-│  │ QRDX RPC     │  │ Explorer API │  │ Price APIs       │     │
-│  │ - Mainnet    │  │              │  │                  │     │
-│  │ - Testnet    │  │              │  │                  │     │
-│  └──────────────┘  └──────────────┘  └──────────────────┘     │
-└─────────────────────────────────────────────────────────────────┘
+ Extension only:
+   web page ── inpage.ts (MAIN world: window.ethereum, window.qrdx, EIP-6963)
+       │ window.postMessage
+   content.ts (isolated world: relay)
+       │ runtime port (origin set by the browser)
+   background.ts ── provider/router.ts (policy) ── WalletManager
+                └─ approval windows (popup/index.html#approval=<id>)
 ```
 
-## Layer Details
+## Core (`src/core`)
 
-### Platform Layer
+| Module | Responsibility |
+|---|---|
+| `wallet-manager.ts` | The only place secrets are created, stored, unlocked and used. Vault lifecycle, accounts, unlock (password, passkey), throttling, auto-lock, session persistence, exports, signing, v1→v2 migration. Every method is JSON-serialisable so it works across the extension message boundary. |
+| `vault.ts` | Vault v2 crypto: a random 256-bit data key encrypts all secrets; the password (PBKDF2-SHA256, 600k) and each passkey (PRF→HKDF) wrap that key. AES-256-GCM, with each blob bound to its slot by additional data. |
+| `keyring.ts` | A keyring secret (recovery phrase, or imported key + PQ seed) → account `i`: secp256k1 at `m/44'/60'/0'/0/i`, ML-DSA-65 from the phrase under a versioned domain tag. |
+| `pq.ts` | ML-DSA-65 (FIPS 204) via `@noble/post-quantum`, seeded key generation, and the QRDX PQ message prefix. |
+| `account-id.ts` | Port of the node's `to_account_id`: every address form → its 20-byte ledger key. |
+| `pq-tx.ts` | Type-`0x51` post-quantum transactions (encode, signing hash, intrinsic gas, sign). |
+| `exchange-tx.ts` | Native exchange transactions: op codes, Python-compatible JSON, signing bytes, BLAKE2b hash. |
+| `transaction.ts` | Legacy EIP-155 and EIP-1559 secp256k1 transactions; recipients resolved through `account-id`. |
+| `eip712.ts` | Typed-data hashing (`eth_signTypedData_v4`). |
+| `keystore.ts` | Web3 Secret Storage v3 (pbkdf2/scrypt, AES-128-CTR, keccak MAC) with a QRDX block carrying the PQ seed; reads the legacy QRDX format. |
+| `tx-service.ts` | Build → sign → broadcast. Chooses the envelope by source credential, resolves recipients, quotes fees, submits exchange operations. |
+| `ethereum.ts` | JSON-RPC client with fallbacks, balances (native + ERC-20), gas. |
+| `chains.ts` / `chain-identity.ts` | Network registry; live chain-ID verification before signing. |
+| `exchange-client.ts` | Typed reads of `exchange_*` (tokens, balances, swap quotes, receipts). |
+| `activity.ts` | Durable log of transactions this wallet submitted, resolved from receipts. Plus incoming token transfers from logs. QRDX's history source. |
+| `permissions.ts` | Per-origin dApp capabilities. Absence means denial. |
+| `storage.ts` | `ChromeStorage`, `WebStorage`, `MemoryStorage`, and `chromeSessionStore()`. |
 
-**Browser Extension:**
-- **Popup UI**: React-based interface (375px width)
-- **Background Script**: Service worker handling messages and state
-- **Storage**: chrome.storage.local API
-- **Manifest**: V3 for Chrome/Edge, V2 for Firefox
+## Shared (`src/shared`)
 
-**Mobile App:**
-- **Screens**: React Native components
-- **Navigation**: React Navigation stack
-- **Storage**: Expo SecureStore (platform-specific encryption)
-- **Build**: Expo/EAS Build system
+- `backend.ts` picks where the `WalletManager` runs. It also holds the list
+  of methods the UI may call, and the sender check the background applies.
+- `platform.ts` detects the target and its default settings.
+- `passkey.ts` runs the WebAuthn ceremonies (create, PRF evaluate) and
+  capability detection.
+- `contexts/WalletContext.tsx` is React state for everything above: balances
+  per credential, network status, prices, history, activity-based auto-lock,
+  and lock-when-hidden.
 
-### Shared Layer
+## Extension (`src/extension`)
 
-- **Components**: Reusable React components
-- **Contexts**: React Context API for state management
-- **Utilities**: Common helper functions
-- **Theme**: Consistent styling (Tailwind for web, StyleSheet for mobile)
+| File | Runs in | Does |
+|---|---|---|
+| `inpage.ts` | page MAIN world | The EIP-1193 provider object; EIP-6963 announce; legacy `enable`/`send`/`sendAsync`. No secrets, no decisions. |
+| `content.ts` | isolated world | Relays page ⇄ background over a runtime port. On Firefox, injects `inpage.js`. |
+| `background.ts` | service worker | Hosts the `WalletManager`; answers popup calls from trusted senders; runs the approval-window queue; pushes `accountsChanged`/`chainChanged` to connected pages. |
+| `provider/router.ts` | service worker | The dApp policy: method allowlist, read-only passthrough, connection checks, approvals, signing, error codes. Unit-tested without a browser. |
+| `provider/approval-protocol.ts` | both | Messages between approval windows and the background. |
 
-### Core Layer
+## UI (`components/`)
 
-Platform-agnostic business logic:
+- `WalletHome.tsx` routes to onboarding, unlock, dashboard, or (in an
+  extension approval window) the approval screen.
+- `wallet/flow/FlowKit.tsx` holds the shared building blocks for every flow:
+  password fields, phrase grid and verifier, secret inputs, sheets.
+  They are module-level components, so inputs keep focus.
+- `wallet/onboarding/Onboarding.tsx` is create/import and the "secure this
+  device" step.
+- `wallet/settings/AccountsPage.tsx` and `SecurityPage.tsx` handle accounts,
+  imports, discovery, exports, locking, biometrics, password and reset.
+- `wallet/approval/ApprovalScreen.tsx` is the extension's request review.
 
-1. **Crypto Module**
-   - Quantum-resistant key generation
-   - Transaction signing and verification
-   - Data encryption/decryption
-   - PBKDF2 password hashing
+## Data on disk
 
-2. **Storage Module**
-   - Abstract storage interface
-   - Platform-specific implementations
-   - Encrypted wallet state management
+| Key | Contents | Secret? |
+|---|---|---|
+| `qrdx_wallet_state` | Vault v2: KDF params, wrapped data key, passkey wraps, sealed keyrings, public account data, settings | sealed parts only |
+| `qrdx_unlock_guard` | failed-attempt counter and next allowed time | no |
+| `qrdx_site_permissions` | connected sites and capabilities | no |
+| `qrdx_address_book`, `qrdx_watched_tokens`, `qrdx_activity` | user data | no |
+| `qrdx_session` (`chrome.storage.session`, extension only) | raw data key + expiry while unlocked | yes — memory only |
 
-3. **Wallet Manager**
-   - Wallet creation and import
-   - Transaction signing workflow
-   - Lock/unlock mechanisms
-   - Network management
+## Testing
 
-4. **Types**
-   - TypeScript interfaces
-   - Type safety across platforms
-
-5. **Constants**
-   - Network configurations
-   - App configuration
-   - Default settings
-
-## Data Flow
-
-### Wallet Creation Flow
-
-```
-User Action (Create Wallet)
-    │
-    ├─→ [Extension] Popup → Background Script
-    │       │
-    │       └─→ WalletManager.createWallet()
-    │
-    └─→ [Mobile] Screen → WalletContext
-            │
-            └─→ WalletManager.createWallet()
-                    │
-                    ├─→ QuantumCrypto.generateKeyPair()
-                    │
-                    ├─→ QuantumCrypto.encrypt(privateKey, password)
-                    │
-                    └─→ WalletStorage.addWallet()
-                            │
-                            ├─→ [Extension] chrome.storage.local.set()
-                            │
-                            └─→ [Mobile] SecureStore.setItemAsync()
-```
-
-### Transaction Signing Flow
-
-```
-User Action (Sign Transaction)
-    │
-    ├─→ Request password/biometric
-    │
-    ├─→ WalletManager.signTransaction()
-    │       │
-    │       ├─→ WalletStorage.getCurrentWallet()
-    │       │
-    │       ├─→ QuantumCrypto.decrypt(encryptedKey, password)
-    │       │
-    │       ├─→ QuantumCrypto.sign(transaction, privateKey)
-    │       │
-    │       └─→ Clear privateKey from memory
-    │
-    └─→ Broadcast signed transaction to network
-```
-
-## Security Architecture
-
-### Encryption Layers
-
-1. **Password Encryption**
-   - User password → PBKDF2 (100k iterations) → AES-256-GCM key
-   - Encrypts private keys at rest
-
-2. **Platform Encryption**
-   - **Extension**: Browser-level encryption of chrome.storage
-   - **Mobile**: OS-level encryption (Keychain/Keystore)
-
-3. **Transport Encryption**
-   - All network requests over HTTPS
-   - Certificate pinning (planned)
-
-### Key Management
-
-- Private keys stored encrypted
-- Never exposed to UI layer
-- Cleared from memory after use
-- Auto-lock on inactivity
-- Biometric unlock (mobile)
-
-## Scalability Considerations
-
-### Performance
-
-- Lazy loading of components
-- Efficient re-renders with React optimization
-- Background sync for balance updates
-- Caching of network requests
-
-### Extensibility
-
-- Plugin architecture (planned)
-- Support for multiple networks
-- Token standard support
-- DApp integration ready
-
-## Technology Stack
-
-### Common
-- TypeScript 5.8+
-- React 19
-- Zustand (state management, planned)
-
-### Browser Extension
-- esbuild (fast bundling)
-- Tailwind CSS 4 (matching QRDX design system)
-- webextension-polyfill
-- Chrome/Firefox APIs
-- Webpack 5
-- Tailwind CSS 4
-- webextension-polyfill
-- Chrome/Firefox APIs
-
-### Mobile
-- Expo 52
-- React Native
-- React Navigation
-- Expo SecureStore
-- Expo Crypto
-
-### Development
-- pnpm (package manager)
-- ESLint (linting)
-- Prettier (formatting)
-- Git (version control)
-
-## Build Process
-
-### Extension Build
-
-```
-Source (TypeScript + React)
-    │
-    └─→ esbuild (fast!)
-            │
-            ├─→ TypeScript compilation
-            ├─→ React JSX transformation (automatic runtime)
-            ├─→ Code bundling
-            └─→ Tailwind CSS processing
-                    │
-                    └─→ dist/chrome/ or dist/firefox/
-```
-
-### Mobile Build
-
-```
-Source (TypeScript + React Native)
-    │
-    └─→ Expo/Metro
-            │
-            ├─→ TypeScript compilation
-            ├─→ React Native transformation
-            ├─→ Asset bundling
-            └─→ Platform-specific compilation
-                    │
-                    ├─→ iOS (Xcode)
-                    └─→ Android (Gradle)
-```
-
-## Deployment
-
-### Browser Extension
-- Chrome Web Store
-- Firefox Add-ons
-- Edge Add-ons
-
-### Mobile
-- Apple App Store
-- Google Play Store
-- Direct APK/IPA (development)
-
-## Monitoring & Analytics (Planned)
-
-- Error tracking (Sentry)
-- Usage analytics (privacy-focused)
-- Performance monitoring
-- Security incident tracking
+- `tests/unit` covers the core, the vault, migration, keystores and EIP-712
+  against their spec vectors, and the provider router policy.
+- `tests/unit/conformance.test.ts` checks byte-for-byte agreement with the node:
+  account IDs, `0x51` transactions, exchange signing bytes and PQ message
+  prefixes. Its vectors are generated by the node's own Python modules
+  (`tests/conformance/generate_vectors.py`).
+- `tests/e2e/onboarding.mjs` drives the real static export: create, verify,
+  lock-on-reload, unlock, throttling, and import.
+- `tests/e2e/extension-provider.mjs` loads the built extension in Chromium. It
+  checks injection, EIP-6963, a request round-trip, permission errors, and
+  onboarding in the popup, then connect, sign and reject from a page through
+  real approval windows.

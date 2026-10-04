@@ -3,8 +3,6 @@
  * Both the extension/web UI and the mobile app import from @core/*.
  */
 export {
-  // Legacy class (deprecated)
-  QuantumCrypto,
   // ETH / secp256k1
   generateEthKeyPair,
   ethKeyPairFromPrivateKey,
@@ -37,13 +35,44 @@ export {
   type PqKeyPair,
 } from './crypto'
 
-export { WalletManager } from './wallet-manager'
+export {
+  WalletManager,
+  WalletError,
+  DEFAULT_SETTINGS,
+  MAX_ACCOUNTS,
+  type SessionStore,
+  type WalletManagerOptions,
+  type UnlockResult,
+  type PasskeyEnrollment,
+  type WalletEvent,
+} from './wallet-manager'
 export {
   type IStorage,
+  ChromeStorage,
+  WebStorage,
+  MemoryStorage,
   ExtensionStorage,
   MobileStorage,
   WalletStorage,
+  createDefaultStorage,
+  chromeSessionStore,
 } from './storage'
+export { encryptKeystore, decryptKeystore, KeystoreError, type KeystoreV3 } from './keystore'
+export { newMnemonic, normalizeMnemonic, normalizePrivateKey, type KeyringType } from './keyring'
+
+// ── QRDX protocol ───────────────────────────────────────────────────────────
+export { toAccountId, toAccountIdBytes, sameAccount, addressForm, isProtocolHolder, type AddressForm } from './account-id'
+export { signPqTransaction, pqIntrinsicGas, pqTxSigningHash, PQ_TX_TYPE, type PqTxFields, type SignedPqTx } from './pq-tx'
+export {
+  ExchangeOp,
+  buildExchangeTx,
+  signExchangeTx,
+  exchangeSigningBytes,
+  exchangeTxHash,
+  type UnsignedExchangeTx,
+  type SignedExchangeTx,
+} from './exchange-tx'
+export { typedDataDigest, parseTypedData, type TypedData } from './eip712'
 export { NETWORKS, DEFAULT_NETWORK, APP_CONFIG } from './constants'
 
 // ── Unified chain registry ──────────────────────────────────────────────────
@@ -146,6 +175,10 @@ export type {
   Token,
   Network,
   StoredWallet,
+  WalletAccount,
+  AccountSource,
+  KeyringSummary,
+  PasskeySummary,
   WalletState,
   WalletSettings,
   MessageType,

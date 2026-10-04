@@ -1,302 +1,75 @@
-# Development Guide
+# Development
 
-## Getting Started
+The commands are in the [README](../README.md#development). This page covers how
+to work on the code.
 
-### Setting Up Development Environment
+## Layout
 
-1. **Install Dependencies**
-   ```bash
-   cd qrdx-wallet
-   pnpm install
-   ```
-
-2. **Choose Your Platform**
-
-   **Browser Extension:**
-   ```bash
-   pnpm dev:extension
-   ```
-
-   **Mobile App:**
-   ```bash
-   pnpm dev:mobile
-   ```
-
-## Architecture Overview
-
-### Core Principles
-
-1. **Platform Agnostic Core**: All business logic lives in `src/core/` and works across all platforms
-2. **Platform-Specific UI**: Each platform has its own UI implementation
-3. **Shared Components**: Common React components in `src/shared/`
-4. **Type Safety**: Comprehensive TypeScript types throughout
-
-### Key Modules
-
-#### Core Module (`src/core/`)
-
-**crypto.ts**
-- Quantum-resistant key generation
-- Transaction signing
-- Data encryption/decryption
-- Signature verification
-
-**storage.ts**
-- Abstract storage interface
-- Platform-specific implementations
-- Wallet state management
-
-**wallet-manager.ts**
-- Wallet creation and import
-- Transaction signing
-- Balance queries
-- Network management
-
-**types.ts**
-- All TypeScript interfaces and types
-- Ensures type safety across the codebase
-
-#### Shared Module (`src/shared/`)
-
-**contexts/WalletContext.tsx**
-- React context for wallet state
-- Hooks for accessing wallet functionality
-- Platform-agnostic state management
-
-**lib/utils.ts**
-- Utility functions
-- Address formatting
-- Balance formatting
-- Date/time helpers
-
-### Platform-Specific Implementation
-
-#### Browser Extension (`src/extension/`)
-
-**Structure:**
 ```
-extension/
-├── background.ts        # Service worker for Chrome/Firefox
-├── popup.tsx           # Main popup entry point
-├── popup.html          # HTML template
-├── popup.css           # Tailwind CSS
-├── manifest.chrome.json # Chrome manifest v3
-├── manifest.firefox.json # Firefox manifest v2
-└── components/
-    ├── PopupApp.tsx    # Main app component
-    └── pages/
-        ├── Home.tsx
-        ├── Setup.tsx
-        └── Unlock.tsx
+app/                 Next.js routes: / (landing), /wallet (the wallet UI)
+components/          UI — WalletHome routes between onboarding, unlock, dashboard, approvals
+  wallet/flow/       shared flow building blocks (passwords, phrases, sheets)
+  wallet/onboarding/ create / import
+  wallet/settings/   Accounts and Security pages
+  wallet/approval/   extension approval window
+src/core/            wallet logic, crypto and protocol — no DOM, runs in Node for tests
+src/shared/          backend selection, platform detection, passkeys, React context
+src/extension/       background, content script, in-page provider, dApp router
+src/pwa/             service-worker lifecycle, install prompt, storage persistence
+public/              manifest.json, sw.js, icons
+scripts/             build-extension.js, local-chain.sh
+tests/unit/          vitest
+tests/conformance/   node-generated vectors + generator
+tests/e2e/           Playwright scripts against the static export and the built extension
 ```
 
-**Background Script:**
-- Handles persistent storage
-- Manages wallet state
-- Processes messages from popup and content scripts
-- Handles extension lifecycle events
+See [ARCHITECTURE.md](ARCHITECTURE.md) for how the pieces connect.
 
-**Popup:**
-- 375px width for consistent UX
-- React-based UI with Tailwind CSS
-- Communicates with background script via messages
+## Rules of the codebase
 
-#### Mobile App (`src/mobile/`)
+- **Wallet logic lives in `src/core` only.** Components call `useWallet()`;
+  they never import crypto or touch storage.
+- **Keys never leave `WalletManager`** except through its password-gated
+  export methods. New signing features are new `WalletManager` methods, added to
+  `BACKEND_METHODS` in `src/shared/backend.ts` so the extension can reach them.
+- **Everything crossing the extension boundary is JSON.** No `bigint`, `Uint8Array`
+  or class instances in `WalletManager` arguments or return values. Pass decimal
+  strings and hex.
+- **Protocol encodings must match the node byte for byte.** Change them only
+  with a regenerated conformance vector (`pnpm conformance:generate`) that
+  proves the new bytes.
+- **Gate features by platform capability** (`detectPlatform()`, `passkeySupport()`),
+  never by build flags. One bundle serves web, PWA and the extension popup.
+- **Don't define components inside other components.** It remounts their
+  inputs on every render.
+- **Be honest in the UI.** If the network does not support something yet,
+  say so rather than simulating it.
 
-**Structure:**
-```
-mobile/
-├── App.tsx              # Main app component
-├── screens/
-│   ├── HomeScreen.tsx
-│   ├── SetupScreen.tsx
-│   ├── UnlockScreen.tsx
-│   ├── SendScreen.tsx
-│   └── ReceiveScreen.tsx
-└── ...
-```
+## Common tasks
 
-**Navigation:**
-- React Navigation for screen routing
-- Native stack navigator
-- Platform-specific transitions
+**Add a dApp method:** extend `ProviderRouter.handle` in
+`src/extension/provider/router.ts`, add an approval kind if it needs the user,
+render it in `ApprovalScreen.tsx`, and add a case to
+`tests/unit/provider-router.test.ts`. Document it in [DAPP_INTEGRATION.md](DAPP_INTEGRATION.md).
 
-**Storage:**
-- Expo SecureStore for encrypted data
-- iOS Keychain integration
-- Android Keystore integration
+**Add an exchange operation in the UI:** call
+`useWallet().submitExchangeOp(op, params)`, then
+`waitForExchangeReceipt`. Operations and their required params are listed in
+`src/core/exchange-tx.ts`.
 
-## Development Workflow
+**Change the vault format:** bump `VAULT_VERSION`, add a migration in
+`WalletManager.unlock` (as `migrateV1` does), and add a migration test with a
+literal old-format fixture.
 
-### Browser Extension Development
-
-1. **Start Development Server:**
-   ```bash
-   pnpm dev:extension
-   ```
-
-2. **Load Extension:**
-   - Chrome: Load `dist/chrome/` as unpacked extension
-   - Firefox: Load temporary add-on from `dist/firefox/`
-
-3. **Make Changes:**
-   - Edit files in `src/extension/` or `src/core/`
-   - esbuild watches for changes and rebuilds automatically (fast!)
-   - Reload extension in browser to see changes
-
-4. **Build for Production:**
-   ```bash
-   pnpm build:extension
-   ```
-
-5. **Package:**
-   ```bash
-   pnpm package:chrome
-   pnpm package:firefox
-   ```
-
-### Mobile Development
-
-1. **Start Expo:**
-   ```bash
-   pnpm dev:mobile
-   ```
-
-2. **Run on Device/Emulator:**
-   - Scan QR code with Expo Go app
-   - Or press `a` for Android, `i` for iOS
-
-3. **Make Changes:**
-   - Edit files in `src/mobile/` or `src/core/`
-   - Changes reflect immediately with Fast Refresh
-
-4. **Build for Production:**
-   ```bash
-   pnpm build:mobile
-   ```
-
-## Code Style
-
-### TypeScript
-
-- Use strict mode
-- Prefer interfaces over types
-- Use explicit return types for functions
-- Avoid `any`, use `unknown` if needed
-
-### React
-
-- Functional components only
-- Use hooks for state and effects
-- Keep components small and focused
-- Extract complex logic to custom hooks
-
-### Styling
-
-**Web/Extension:**
-- Use Tailwind CSS utility classes
-- Follow the design system from other QRDX projects
-- Use CSS variables for theming
-
-**Mobile:**
-- Use React Native StyleSheet
-- Follow iOS/Android design guidelines
-- Keep styles close to components
-
-## Testing
-
-### Unit Tests
-```bash
-pnpm test
-```
-
-### Extension Testing
-- Test in both Chrome and Firefox
-- Test all user flows
-- Test storage persistence
-- Test background script communication
-
-### Mobile Testing
-- Test on both iOS and Android
-- Test on different screen sizes
-- Test secure storage
-- Test navigation flows
+**Add a network:** add it to `CHAINS` in `src/core/chains.ts`, with an explicit
+`feeModel`. QRDX chains are `legacy`.
 
 ## Debugging
 
-### Extension Debugging
-
-**Chrome:**
-1. Right-click extension icon → "Inspect popup"
-2. Background script: chrome://extensions → "Inspect views: service worker"
-
-**Firefox:**
-1. about:debugging → "Inspect"
-2. Use Browser Console for background script
-
-### Mobile Debugging
-
-**React Native Debugger:**
-```bash
-# Open developer menu on device
-# Select "Debug with Chrome"
-```
-
-**Expo DevTools:**
-```bash
-# Automatically opens in browser when running expo start
-```
-
-## Common Tasks
-
-### Adding a New Screen (Mobile)
-
-1. Create screen component in `src/mobile/screens/`
-2. Add route to navigator in `src/mobile/App.tsx`
-3. Add navigation types if needed
-
-### Adding a New Feature to Extension
-
-1. Add background script handler if needed
-2. Create UI component in `src/extension/components/`
-3. Add message types to `src/core/types.ts`
-4. Implement in both platforms
-
-### Adding Shared Functionality
-
-1. Add interface to `src/core/types.ts`
-2. Implement in `src/core/`
-3. Add platform-specific adapters if needed
-4. Update WalletContext if state management needed
-
-## Troubleshooting
-
-### Extension Issues
-
-**Extension won't load:**
-- Check manifest.json syntax
-- Verify all files are in dist folder
-- Check browser console for errors
-
-**Popup blank:**
-- Check popup.js is built correctly
-- Inspect popup for errors
-- Verify HTML template is correct
-
-### Mobile Issues
-
-**Metro bundler errors:**
-- Clear cache: `expo start -c`
-- Delete node_modules and reinstall
-
-**Native module errors:**
-- Rebuild app with `expo prebuild --clean`
-- Check Expo SDK compatibility
-
-## Resources
-
-- [Chrome Extension Documentation](https://developer.chrome.com/docs/extensions/)
-- [Firefox Extension Documentation](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions)
-- [Expo Documentation](https://docs.expo.dev/)
-- [React Native Documentation](https://reactnative.dev/)
-- [QRDX Documentation](https://docs.qrdx.org/)
+- **Web:** React DevTools; wallet state is in `localStorage['qrdx_wallet_state']`
+  (encrypted parts are opaque by design).
+- **Extension:** inspect the service worker from `chrome://extensions`. The
+  popup and approval windows are normal pages (right-click → Inspect).
+- **iPhone PWA:** Safari on a Mac → Develop → *your iPhone* → the web app.
+- **Settings → Developer** shows platform, backend, vault version, passkey
+  support and RPC status. You can copy it into bug reports; it contains no secrets.

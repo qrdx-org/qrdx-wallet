@@ -13,9 +13,10 @@ export const metadata: Metadata = {
   publisher: 'QRDX Foundation',
   manifest: '/manifest.json',
   icons: {
-    icon: '/logo.png',
-    apple: '/icons/icon-192.png',
+    icon: '/icons/icon-192.png',
+    apple: '/icons/apple-touch-icon.png',
   },
+  formatDetection: { telephone: false, address: false, email: false },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
@@ -23,12 +24,18 @@ export const metadata: Metadata = {
   },
 }
 
+// viewport-fit=cover lets the installed iPhone app draw under the notch and home
+// indicator; layouts pad with the safe-area insets (.pt-safe / .pb-safe).
+// Zoom stays enabled for accessibility — inputs use 16px text on touch devices
+// so iOS does not auto-zoom when they are focused.
 export const viewport: Viewport = {
-  themeColor: '#7c3aed',
+  themeColor: [
+    { media: '(prefers-color-scheme: dark)', color: '#030711' },
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+  ],
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({

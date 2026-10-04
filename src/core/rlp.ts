@@ -12,20 +12,13 @@
  *    • Encoding EIP-2718 typed transaction envelopes (EIP-1559, EIP-2930)
  */
 
-import { hexToBytes, bytesToHex } from './crypto'
+import { hexToBytes } from './crypto'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export type RlpInput = Uint8Array | string | bigint | number | RlpInput[] | null | undefined
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-/** Remove leading zero bytes from a Uint8Array */
-function stripLeadingZeros(data: Uint8Array): Uint8Array {
-  let i = 0
-  while (i < data.length - 1 && data[i] === 0) i++
-  return i > 0 ? data.slice(i) : data
-}
 
 /** Convert a bigint/number to a minimal big-endian byte array */
 export function bigIntToBytes(n: bigint | number): Uint8Array {

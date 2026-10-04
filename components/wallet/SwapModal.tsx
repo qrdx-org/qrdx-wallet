@@ -1,274 +1,359 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import {
-  ArrowLeft,
-  ArrowDownUp,
-  ChevronDown,
-  Loader2,
-  Info,
-} from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+/**
+ * Swap on QRDX's native exchange (AMM pools + spot order books, routed by the node).
+ *
+ * Swaps are exchange transactions signed by the account's quantum-safe (0xPQ)
+ * key and paid from that account's balances. The quote comes from the node's
+ * router; the transaction carries `min_amount_out` derived from it and a
+ * deadline, so it fails rather than fills at a worse price.
+ *
+ * Other networks have no built-in exchange; the screen says so instead of
+ * pretending.
+ */
+
+import { useEffect, useMemo, useState } from 'react'
+import { ArrowDownUp, ArrowLeft, Loader2, Repeat, Shield, CheckCircle2 } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
-import { formatUsd } from '@/src/core/prices'
+import { isQrdxChain } from '@/src/core/chains'
+import { weiToEth } from '@/src/core/ethereum'
+import {
+  exchange,
+  minimumOut,
+  waitForExchangeReceipt,
+  NATIVE_QRDX,
+  type ExchangeToken,
+  type SwapQuote,
+} from '@/src/core/exchange-client'
+import { shortenAddress } from '@/src/core/address'
+import { ErrorBanner, Notice, PrimaryButton } from './flow/FlowKit'
+import { Segmented } from './settings/shared'
 
 interface SwapModalProps {
   onClose: () => void
 }
 
-interface TokenOption {
+interface Asset {
+  id: string // "QRDX" or token address
   symbol: string
   name: string
-  balance: string
-  color: string
-  price: number
+  balance: string | null
 }
 
-const TOKEN_COLORS: Record<string, string> = {
-  QRDX: 'from-primary to-primary/60',
-  ETH: 'from-blue-500 to-blue-600',
-  USDC: 'from-blue-400 to-cyan-500',
-  USDT: 'from-green-400 to-emerald-500',
-  DAI: 'from-yellow-400 to-amber-500',
-  WBTC: 'from-orange-400 to-amber-500',
-  WETH: 'from-blue-500 to-blue-600',
-  LINK: 'from-blue-600 to-indigo-600',
-  UNI: 'from-pink-400 to-pink-600',
-  AAVE: 'from-sky-400 to-indigo-500',
-  BNB: 'from-yellow-500 to-yellow-600',
-  AVAX: 'from-red-500 to-red-600',
-  ARB: 'from-blue-500 to-sky-600',
-  OP: 'from-red-500 to-rose-600',
-  POL: 'from-purple-500 to-violet-600',
+function AssetSelect({
+  assets,
+  value,
+  onChange,
+  exclude,
+}: {
+  assets: Asset[]
+  value: string
+  onChange: (v: string) => void
+  exclude?: string
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label="Token"
+      className="bg-muted/60 rounded-lg px-2 py-1.5 text-sm font-semibold max-w-[45%]"
+    >
+      {assets
+        .filter((a) => a.id !== exclude)
+        .map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.symbol}
+            {a.id !== NATIVE_QRDX ? ` · ${shortenAddress(a.id, 3)}` : ''}
+          </option>
+        ))}
+    </select>
+  )
 }
+
+const SLIPPAGE = [
+  { value: '0.1', label: '0.1%' },
+  { value: '0.5', label: '0.5%' },
+  { value: '1', label: '1%' },
+  { value: '3', label: '3%' },
+] as const
 
 export function SwapModal({ onClose }: SwapModalProps) {
-  const { balances, prices, estimateGas, activeChain } = useWallet()
+  const { activeChain, currentWallet, pqBalance, submitExchangeOp, fetchBalances } = useWallet()
+  const qrdx = isQrdxChain(activeChain)
+  const [tokens, setTokens] = useState<ExchangeToken[]>([])
+  const [balances, setBalances] = useState<Record<string, string>>({})
+  const [fromId, setFromId] = useState(NATIVE_QRDX)
+  const [toId, setToId] = useState<string>('')
+  const [amount, setAmount] = useState('')
+  const [slippage, setSlippage] = useState<(typeof SLIPPAGE)[number]['value']>('0.5')
+  const [quote, setQuote] = useState<SwapQuote | null>(null)
+  const [quoting, setQuoting] = useState(false)
+  const [status, setStatus] = useState<'idle' | 'signing' | 'pending' | 'done'>('idle')
+  const [error, setError] = useState<string | null>(null)
+  const [txHash, setTxHash] = useState<string | null>(null)
 
-  // Build token options from real balances + prices
-  const TOKENS: TokenOption[] = useMemo(() => {
-    return balances.map((b) => {
-      const bal = parseFloat(b.formattedBalance) || 0
-      const price = prices.get(b.symbol.toUpperCase())
-      return {
-        symbol: b.symbol,
-        name: b.name ?? b.symbol,
-        balance: bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 }),
-        color: TOKEN_COLORS[b.symbol] ?? 'from-gray-500 to-gray-600',
-        price: price?.usd ?? 0,
-      }
-    }).filter(t => t.price > 0 || t.symbol === activeChain.nativeCurrency?.symbol) // only show tokens with known prices + native
-  }, [balances, prices, activeChain])
-  const [fromToken, setFromToken] = useState<TokenOption | null>(null)
-  const [toToken, setToToken] = useState<TokenOption | null>(null)
-  const [fromAmount, setFromAmount] = useState('')
-  const [showFromPicker, setShowFromPicker] = useState(false)
-  const [showToPicker, setShowToPicker] = useState(false)
-  const [swapping, setSwapping] = useState(false)
-  const [gasEstimateStr, setGasEstimateStr] = useState<string | null>(null)
+  const pq = currentWallet?.pqAddress ?? ''
 
-  // Auto-set initial tokens when TOKENS becomes available
-  const from = fromToken ?? TOKENS[0] ?? { symbol: '?', name: '', balance: '0', color: 'from-gray-500 to-gray-600', price: 0 }
-  const to = toToken ?? TOKENS[1] ?? TOKENS[0] ?? { symbol: '?', name: '', balance: '0', color: 'from-gray-500 to-gray-600', price: 0 }
+  useEffect(() => {
+    if (!qrdx || !pq) return
+    exchange
+      .tokens(activeChain)
+      .then(async (list) => {
+        setTokens(list)
+        if (!toId && list[0]) setToId(list[0].token_address)
+        const entries = await Promise.all(
+          list.map((t) =>
+            exchange
+              .tokenBalance(activeChain, t.token_address, pq)
+              .then((b) => [t.token_address, b] as const)
+              .catch(() => [t.token_address, '0'] as const)
+          )
+        )
+        setBalances(Object.fromEntries(entries))
+      })
+      .catch((e) =>
+        setError(
+          e instanceof Error
+            ? `Could not load the token list: ${e.message}`
+            : 'Could not load tokens'
+        )
+      )
+  }, [qrdx, pq, activeChain]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const toAmount = fromAmount && from.price > 0 && to.price > 0
-    ? ((parseFloat(fromAmount) * from.price) / to.price).toFixed(6)
-    : ''
-
-  const rate = from.price > 0 && to.price > 0
-    ? (from.price / to.price).toFixed(6)
-    : '—'
-
-  const handleSwapTokens = () => {
-    const tmp = from
-    setFromToken(to)
-    setToToken(tmp)
-    setFromAmount('')
-  }
-
-  const handleSwap = () => {
-    if (!fromAmount) return
-    setSwapping(true)
-    setTimeout(() => setSwapping(false), 2000)
-  }
-
-  const TokenPicker = ({
-    onSelect,
-    exclude,
-  }: {
-    onSelect: (t: TokenOption) => void
-    exclude: string
-  }) => (
-    <Card className="glass border-border/50 mb-2 animate-fade-in">
-      <CardContent className="p-1">
-        {TOKENS.filter((t) => t.symbol !== exclude).map((token) => (
-          <button
-            key={token.symbol}
-            onClick={() => onSelect(token)}
-            className="w-full flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-accent/30 transition-all text-left"
-          >
-            <div
-              className={`h-7 w-7 rounded-md bg-gradient-to-br ${token.color} flex items-center justify-center`}
-            >
-              <span className="text-white text-[9px] font-bold">{token.symbol.slice(0, 2)}</span>
-            </div>
-            <div className="flex-1">
-              <div className="text-sm font-medium">{token.symbol}</div>
-              <div className="text-[10px] text-muted-foreground">{token.name}</div>
-            </div>
-            <div className="text-[11px] text-muted-foreground">{token.balance}</div>
-          </button>
-        ))}
-      </CardContent>
-    </Card>
+  const assets: Asset[] = useMemo(
+    () => [
+      {
+        id: NATIVE_QRDX,
+        symbol: 'QRDX',
+        name: 'QRDX',
+        balance: pqBalance !== null ? weiToEth(pqBalance, 18) : null,
+      },
+      ...tokens.map((t) => ({
+        id: t.token_address,
+        symbol: t.symbol,
+        name: t.name,
+        balance: balances[t.token_address] ?? null,
+      })),
+    ],
+    [tokens, balances, pqBalance]
   )
+  const from = assets.find((a) => a.id === fromId)
+  const to = assets.find((a) => a.id === toId)
+  const amountOk = /^\d*\.?\d+$/.test(amount) && Number(amount) > 0
+  const exceeds = amountOk && from?.balance != null && Number(amount) > Number(from.balance)
+
+  useEffect(() => {
+    setQuote(null)
+    if (!qrdx || !amountOk || !toId || fromId === toId || !pq) return
+    let cancelled = false
+    setQuoting(true)
+    const t = setTimeout(() => {
+      exchange
+        .quoteSwap(activeChain, fromId, toId, amount, pq)
+        .then((q) => !cancelled && (setQuote(q), setError(null)))
+        .catch((e) => !cancelled && setError(e instanceof Error ? e.message : 'No quote'))
+        .finally(() => !cancelled && setQuoting(false))
+    }, 400)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [fromId, toId, amount, qrdx, pq, activeChain]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const flip = () => {
+    if (!toId) return
+    setFromId(toId)
+    setToId(fromId)
+    setAmount('')
+  }
+
+  const swap = async () => {
+    if (!quote) return
+    setError(null)
+    setStatus('signing')
+    try {
+      const { txHash } = await submitExchangeOp('SWAP', {
+        token_in: fromId,
+        token_out: toId,
+        amount_in: amount,
+        min_amount_out: minimumOut(quote.amount_out, Number(slippage)),
+        deadline: Math.floor(Date.now() / 1000) + 600,
+      })
+      setTxHash(txHash)
+      setStatus('pending')
+      const r = await waitForExchangeReceipt(activeChain, txHash)
+      if (!r.success) throw new Error(r.error || 'The swap failed on-chain')
+      setStatus('done')
+      fetchBalances()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Swap failed')
+      setStatus('idle')
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      {/* Header */}
-      <div className="glass-strong sticky top-0 z-20">
-        <div className="px-4 py-3">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-lg hover:bg-accent/50"
-              onClick={onClose}
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex flex-col">
+      <div className="glass-strong sticky top-0 z-20 pt-safe">
+        <div className="px-4 py-3 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Back"
+            className="h-8 w-8 rounded-lg hover:bg-accent/50 flex items-center justify-center"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div>
             <h1 className="text-base font-semibold">Swap</h1>
+            <p className="text-[10px] text-muted-foreground">QRDX native exchange</p>
           </div>
         </div>
       </div>
 
-      <div className="px-4 py-3 space-y-1">
-        {/* From */}
-        <Card className="glass border-border/50">
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">You pay</span>
-              <span className="text-[10px] text-muted-foreground">
-                Balance: {from.balance}
-              </span>
+      <div className="flex-1 px-4 py-3 space-y-3">
+        {!qrdx ? (
+          <div className="text-center py-12">
+            <Repeat className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm font-semibold">Swaps run on QRDX networks</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
+              {activeChain.name} has no built-in exchange. Switch to a QRDX network to swap with
+              your quantum-safe account.
+            </p>
+          </div>
+        ) : (
+          <>
+            <Notice icon={<Shield className="h-4 w-4 text-primary" />}>
+              Signed by your quantum-safe account{' '}
+              <span className="font-mono">{shortenAddress(pq, 4)}</span> and paid from its balance.
+            </Notice>
+
+            <div className="rounded-2xl glass p-3">
+              <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                <span>You pay</span>
+                <span>Balance {from?.balance ?? '…'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value.replace(',', '.'))}
+                  placeholder="0.0"
+                  className="flex-1 min-w-0 bg-transparent text-2xl font-bold focus:outline-none"
+                />
+                <AssetSelect
+                  assets={assets}
+                  value={fromId}
+                  onChange={(v) => {
+                    setFromId(v)
+                    if (v === toId) setToId('')
+                  }}
+                />
+              </div>
+              {from?.balance && (
+                <button
+                  type="button"
+                  onClick={() => setAmount(from.balance!)}
+                  className="text-[10px] text-primary font-semibold mt-1"
+                >
+                  MAX
+                </button>
+              )}
             </div>
-            <div className="flex items-center gap-2">
+
+            <div className="flex justify-center -my-1">
               <button
-                onClick={() => { setShowFromPicker(!showFromPicker); setShowToPicker(false) }}
-                className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-background/60 border border-border/50 hover:border-primary/30 transition-colors shrink-0"
+                type="button"
+                onClick={flip}
+                aria-label="Swap direction"
+                className="h-9 w-9 rounded-xl glass flex items-center justify-center"
               >
-                <div className={`h-6 w-6 rounded-md bg-gradient-to-br ${from.color} flex items-center justify-center`}>
-                  <span className="text-white text-[9px] font-bold">{from.symbol.slice(0, 2)}</span>
-                </div>
-                <span className="text-sm font-semibold">{from.symbol}</span>
-                <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                <ArrowDownUp className="h-4 w-4" />
               </button>
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="0.00"
-                value={fromAmount}
-                onChange={(e) => setFromAmount(e.target.value)}
-                className="flex-1 text-right bg-transparent text-xl font-semibold placeholder:text-muted-foreground/30 focus:outline-none min-w-0"
-              />
             </div>
-          </CardContent>
-        </Card>
 
-        {showFromPicker && (
-          <TokenPicker
-            exclude={to.symbol}
-            onSelect={(t) => { setFromToken(t); setShowFromPicker(false) }}
-          />
-        )}
-
-        {/* Swap direction button */}
-        <div className="flex justify-center -my-1 relative z-10">
-          <button
-            onClick={handleSwapTokens}
-            className="h-9 w-9 rounded-xl bg-background border-2 border-border/50 flex items-center justify-center hover:border-primary/50 hover:bg-primary/5 transition-all shadow-sm"
-          >
-            <ArrowDownUp className="h-4 w-4 text-muted-foreground" />
-          </button>
-        </div>
-
-        {/* To */}
-        <Card className="glass border-border/50">
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">You receive</span>
-              <span className="text-[10px] text-muted-foreground">
-                Balance: {to.balance}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => { setShowToPicker(!showToPicker); setShowFromPicker(false) }}
-                className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-background/60 border border-border/50 hover:border-primary/30 transition-colors shrink-0"
-              >
-                <div className={`h-6 w-6 rounded-md bg-gradient-to-br ${to.color} flex items-center justify-center`}>
-                  <span className="text-white text-[9px] font-bold">{to.symbol.slice(0, 2)}</span>
+            <div className="rounded-2xl glass p-3">
+              <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                <span>You receive (estimated)</span>
+                <span>Balance {to?.balance ?? '…'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 text-2xl font-bold text-muted-foreground truncate">
+                  {quoting ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    (quote?.amount_out ?? '0.0')
+                  )}
                 </div>
-                <span className="text-sm font-semibold">{to.symbol}</span>
-                <ChevronDown className="h-3 w-3 text-muted-foreground" />
-              </button>
-              <div className="flex-1 text-right text-xl font-semibold text-muted-foreground min-w-0 truncate">
-                {toAmount || '0.00'}
+                {assets.length > 1 ? (
+                  <AssetSelect assets={assets} value={toId} onChange={setToId} exclude={fromId} />
+                ) : (
+                  <span className="text-xs text-muted-foreground">No tokens yet</span>
+                )}
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {showToPicker && (
-          <TokenPicker
-            exclude={from.symbol}
-            onSelect={(t) => { setToToken(t); setShowToPicker(false) }}
-          />
+            <div className="rounded-xl glass p-3 space-y-2">
+              <div className="text-[11px] text-muted-foreground">Max slippage</div>
+              <Segmented value={slippage} options={[...SLIPPAGE]} onChange={setSlippage} />
+              {quote && (
+                <div className="text-[11px] space-y-1 pt-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Route</span>
+                    <span>
+                      {quote.source.toUpperCase()}
+                      {quote.pool_id ? ` · pool ${quote.pool_id.slice(0, 8)}` : ` · ${quote.pair}`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Price</span>
+                    <span>
+                      {Number(quote.execution_price).toPrecision(6)} {from?.symbol}/{to?.symbol}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Pool fee</span>
+                    <span>
+                      {quote.fee} {from?.symbol}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Minimum received</span>
+                    <span>
+                      {minimumOut(quote.amount_out, Number(slippage))} {to?.symbol}
+                    </span>
+                  </div>
+                  {Number(quote.unfilled_in) > 0 && (
+                    <p className="text-amber-500">
+                      Only {quote.amount_in} of {amount} can fill at current liquidity.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {exceeds && <ErrorBanner error={`Exceeds your quantum-safe ${from?.symbol} balance`} />}
+            <ErrorBanner error={error} />
+            {status === 'done' && (
+              <div className="flex items-center gap-2 text-xs text-green-500">
+                <CheckCircle2 className="h-4 w-4" /> Swap confirmed{' '}
+                {txHash && <span className="font-mono">{txHash.slice(0, 10)}…</span>}
+              </div>
+            )}
+          </>
         )}
-
-        {/* Rate & details */}
-        <Card className="glass border-border/50 !mt-3">
-          <CardContent className="p-3 space-y-2">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-muted-foreground">Rate</span>
-              <span className="font-medium">1 {from.symbol} = {rate} {to.symbol}</span>
-            </div>
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-muted-foreground">Slippage tolerance</span>
-              <span className="font-medium">0.5%</span>
-            </div>
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-muted-foreground">Network fee</span>
-              <span className="font-medium">~$4.20</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Swap button */}
-        <Button
-          onClick={handleSwap}
-          disabled={!fromAmount || swapping}
-          className="w-full h-12 font-semibold text-base bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 disabled:opacity-40 disabled:shadow-none !mt-3"
-        >
-          {swapping ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <>
-              <ArrowDownUp className="h-5 w-5 mr-2" />
-              Swap
-            </>
-          )}
-        </Button>
-
-        {/* Info */}
-        <div className="flex items-start gap-2 px-1 pt-1">
-          <Info className="h-3 w-3 text-muted-foreground/50 shrink-0 mt-0.5" />
-          <p className="text-[10px] text-muted-foreground/50">
-            Quotes are estimated and may change. Swaps are routed through QRDX DEX aggregator for the best available rate.
-          </p>
-        </div>
       </div>
+
+      {qrdx && (
+        <div className="sticky bottom-0 p-4 glass-strong pb-safe">
+          <PrimaryButton
+            loading={status === 'signing' || status === 'pending'}
+            disabled={!quote || exceeds || status !== 'idle'}
+            onClick={swap}
+          >
+            {status === 'pending' ? 'Waiting for the next block…' : 'Swap'}
+          </PrimaryButton>
+        </div>
+      )}
     </div>
   )
 }

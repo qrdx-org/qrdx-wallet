@@ -231,11 +231,27 @@ export async function pqSign(
  * over a transaction.
  */
 export async function pqSignWithPrefix(
-  message: string,
+  message: string | Uint8Array,
   seedHex: string,
 ): Promise<string> {
-  const prefixed = `\x19QRDX PQ Signed Message:\n${message.length}${message}`
-  return pqSign(new TextEncoder().encode(prefixed), seedHex)
+  return pqSign(pqPrefixedMessage(message), seedHex)
+}
+
+/**
+ * The bytes a prefixed PQ signature covers:
+ * `"\x19QRDX PQ Signed Message:\n" + byteLength + message`.
+ *
+ * The length is the UTF-8 **byte** length, as in the node's
+ * `PQWallet.sign_with_prefix`. Using the JS string length (UTF-16 code units)
+ * made every non-ASCII message sign different bytes than the node verifies.
+ */
+export function pqPrefixedMessage(message: string | Uint8Array): Uint8Array {
+  const body = typeof message === 'string' ? new TextEncoder().encode(message) : message
+  const prefix = new TextEncoder().encode(`\x19QRDX PQ Signed Message:\n${body.length}`)
+  const out = new Uint8Array(prefix.length + body.length)
+  out.set(prefix, 0)
+  out.set(body, prefix.length)
+  return out
 }
 
 /**
@@ -263,12 +279,11 @@ export function pqVerify(
 
 /** Verify a signature produced by {@link pqSignWithPrefix}. */
 export function pqVerifyWithPrefix(
-  message: string,
+  message: string | Uint8Array,
   signatureHex: string,
   publicKeyHex: string,
 ): boolean {
-  const prefixed = `\x19QRDX PQ Signed Message:\n${message.length}${message}`
-  return pqVerify(new TextEncoder().encode(prefixed), signatureHex, publicKeyHex)
+  return pqVerify(pqPrefixedMessage(message), signatureHex, publicKeyHex)
 }
 
 /**
