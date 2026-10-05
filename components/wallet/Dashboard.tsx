@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Lock, Settings as SettingsIcon, Copy, Check, Eye, EyeOff, Shield, Bell, MoreHorizontal, ChevronDown } from 'lucide-react'
+import { Lock, Settings as SettingsIcon, Copy, Check, Eye, EyeOff, Shield, MoreHorizontal, ChevronDown, ScanLine } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { QuickActions } from './QuickActions'
+import { ConnectSheet, ConnectedSites } from './connect/ConnectSheet'
+import { useRemoteConnect } from './connect/RemoteConnect'
 import type { QuickActionType } from './QuickActions'
 import { TokenList } from './TokenList'
 import { AllTokens } from './AllTokens'
@@ -29,6 +31,8 @@ export function Dashboard() {
   const [balanceVisible, setBalanceVisible] = useState(true)
   const [activeTab, setActiveTab] = useState<'tokens' | 'nfts' | 'activity'>('tokens')
   const [showSettings, setShowSettings] = useState(false)
+  const [showConnect, setShowConnect] = useState(false)
+  const rc = useRemoteConnect()
   // Installed-app shortcuts (manifest.json) open /wallet?action=send|receive.
   const [activeModal, setActiveModal] = useState<QuickActionType | null>(() => {
     if (typeof location === 'undefined') return null
@@ -91,6 +95,9 @@ export function Dashboard() {
   }
 
   // Show action modals
+  if (showConnect) {
+    return <ConnectSheet onClose={() => setShowConnect(false)} />
+  }
   if (activeModal === 'send') {
     return <SendModal ethAddress={ethAddress} pqAddress={pqAddress} onClose={() => setActiveModal(null)} />
   }
@@ -189,9 +196,18 @@ export function Dashboard() {
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/50">
-                <Bell className="h-4 w-4 text-muted-foreground" />
-              </Button>
+              {rc.available && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-lg hover:bg-accent/50"
+                  onClick={() => setShowConnect(true)}
+                  aria-label="Connect to a site"
+                  title="Connect to a site"
+                >
+                  <ScanLine className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              )}
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/50" onClick={() => setShowSettings(true)}>
                 <SettingsIcon className="h-4 w-4 text-muted-foreground" />
               </Button>
@@ -273,6 +289,26 @@ export function Dashboard() {
 
         {/* Quick Actions */}
         <QuickActions onAction={setActiveModal} />
+
+        {(rc.linkPairing || rc.sessions.length > 0) && (
+          <div className="space-y-2">
+            {rc.linkPairing && (
+              <div
+                className={`rounded-xl border p-3 text-xs ${rc.linkPairing.state === 'failed' ? 'border-red-500/30 bg-red-500/10' : 'border-primary/20 bg-primary/5'}`}
+                onClick={rc.dismissLinkPairing}
+                role="status"
+              >
+                {rc.linkPairing.message}
+              </div>
+            )}
+            {rc.sessions.length > 0 && (
+              <>
+                <p className="text-[11px] text-muted-foreground">Connected by QR code. Keep this app open while you trade.</p>
+                <ConnectedSites compact />
+              </>
+            )}
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="flex gap-1 p-1 bg-accent/30 rounded-xl">

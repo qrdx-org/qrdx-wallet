@@ -71,6 +71,8 @@ type AsyncMethods<T, K extends keyof T> = {
 export type WalletBackend = AsyncMethods<WalletManager, BackendMethod> & {
   subscribe(listener: (e: WalletEvent) => void): () => void
   readonly kind: 'local' | 'extension'
+  /** The in-page WalletManager (web / PWA only). */
+  readonly manager?: WalletManager
 }
 
 export const WALLET_CALL = 'QRDX_WALLET_CALL'
@@ -108,10 +110,13 @@ export function createLocalBackend(storage: IStorage = createDefaultStorage()): 
   const manager = new WalletManager(storage, {
     defaultSettings: platformDefaultSettings(detectPlatform().target),
   })
-  const backend = { kind: 'local' as const, subscribe: manager.subscribe.bind(manager) } as Record<
-    string,
-    unknown
-  >
+  // `manager` lets in-page features that need the wallet itself (QRDX Connect's dApp
+  // router) use the same instance; web and PWA already run it in the page.
+  const backend = {
+    kind: 'local' as const,
+    subscribe: manager.subscribe.bind(manager),
+    manager,
+  } as Record<string, unknown>
   for (const m of BACKEND_METHODS) {
     const fn = (manager as unknown as Record<string, (...a: unknown[]) => unknown>)[m]
     backend[m] = async (...args: unknown[]) => fn.apply(manager, args)

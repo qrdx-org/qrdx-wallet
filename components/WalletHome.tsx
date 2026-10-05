@@ -7,8 +7,18 @@ import { Dashboard } from './wallet/Dashboard'
 import { ApprovalScreen } from './wallet/approval/ApprovalScreen'
 import { approvalIdFromLocation } from '@/src/extension/provider/approval-protocol'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
+import { RemoteConnectProvider } from './wallet/connect/RemoteConnect'
 
+/** QRDX Connect wraps everything, so a ?connect= link survives onboarding and unlocking. */
 export function WalletHome() {
+  return (
+    <RemoteConnectProvider>
+      <WalletHomeInner />
+    </RemoteConnectProvider>
+  )
+}
+
+function WalletHomeInner() {
   const { initialized, locked, loading } = useWallet()
   // Onboarding stays mounted after the vault is created so its final steps
   // (biometrics, install, done) can run. It flags itself just before creating

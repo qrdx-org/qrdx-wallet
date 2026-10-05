@@ -37,6 +37,7 @@ import {
   type SignedExchangeTx,
   type UnsignedExchangeTx,
 } from './exchange-tx'
+import { ExchangeNonceTracker, isNonceConflict } from './exchange-nonce'
 import { recordPendingTransaction } from './history'
 import type { SignedTransaction } from './transaction'
 import type { WalletAccount } from './types'
@@ -281,6 +282,10 @@ async function nodeRpc<T>(chain: ChainConfig, method: string, params: unknown[])
   return getEvmProvider(chain.id).rpc<T>(method, params)
 }
 
+/** Nonces of exchange operations submitted from this wallet and not yet in a block. */
+export const exchangeNonces = new ExchangeNonceTracker()
+const MAX_NONCE_RETRIES = 8
+
 /** Sign and submit a native exchange operation from the account's PQ credential. */
 export async function submitExchangeOp(
   signer: Signer,
@@ -291,26 +296,40 @@ export async function submitExchangeOp(
     params?: Record<string, JsonValue>
     gasLimit?: number
   }
-): Promise<{ txHash: string }> {
+): Promise<{ txHash: string; nonce: number }> {
   const chain = chainOf(input.chain)
   if (!isQrdxChain(chain)) throw new TxError('Exchange operations exist only on QRDX networks')
-  const [nonce, gasPrice] = await Promise.all([
-    nodeRpc<number>(chain, 'exchange_getNonce', [input.account.pqAddress]),
+  const sender = input.account.pqAddress
+  const [committed, gasPrice] = await Promise.all([
+    nodeRpc<number>(chain, 'exchange_getNonce', [sender]),
     nodeRpc<number | string>(chain, 'exchange_gasPrice', []).catch(() => undefined),
   ])
-  const tx = buildExchangeTx({
-    op: input.op,
-    sender: input.account.pqAddress,
-    nonce: Number(nonce),
-    params: input.params,
-    gasLimit: input.gasLimit,
-    gasPrice: gasPrice !== undefined ? BigInt(gasPrice) : undefined,
-  })
-  const signed = await signer.signExchangeTransaction(tx, input.account.id)
-  const { tx_hash: _local, ...wire } = signed
-  const txHash = await nodeRpc<string>(chain, 'exchange_sendTransaction', [wire])
-  return { txHash }
+  // Re-sign the same (already approved) operation with the next free nonce when
+  // the node says a nonce is taken: an earlier operation is still waiting for a block.
+  for (let attempt = 0; ; attempt++) {
+    const nonce = exchangeNonces.next(chain.id, sender, Number(committed))
+    const tx = buildExchangeTx({
+      op: input.op,
+      sender,
+      nonce,
+      params: input.params,
+      gasLimit: input.gasLimit,
+      gasPrice: gasPrice !== undefined ? BigInt(gasPrice) : undefined,
+    })
+    const signed = await signer.signExchangeTransaction(tx, input.account.id)
+    const { tx_hash: _local, ...wire } = signed
+    try {
+      const txHash = await nodeRpc<string>(chain, 'exchange_sendTransaction', [wire])
+      exchangeNonces.record(chain.id, sender, nonce)
+      return { txHash, nonce }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (!isNonceConflict(message) || attempt >= MAX_NONCE_RETRIES) throw err
+      exchangeNonces.record(chain.id, sender, nonce)
+    }
+  }
 }
+
 
 /** Poll an exchange receipt. `null` = still pending. */
 export async function exchangeReceipt(

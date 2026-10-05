@@ -24,7 +24,7 @@ import {
   Repeat,
 } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
-import { approvals, type ApprovalRequest } from '@/src/extension/provider/approval-protocol'
+import { approvals, type ApprovalRequest, type ApprovalResult } from '@/src/extension/provider/approval-protocol'
 import { getChain } from '@/src/core/chains'
 import { weiToEth } from '@/src/core/ethereum'
 import { shortenAddress } from '@/src/core/address'
@@ -82,28 +82,42 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-export function ApprovalScreen({ id }: { id: string }) {
+/**
+ * Review one dApp request. Two hosts: the extension's approval window (`id`:
+ * the request is fetched from the background and the window closes when done),
+ * and QRDX Connect in the web / PWA wallet (`request` + `onResolve`, shown in
+ * the page; `remote` adds the scanned-code warning to connect requests).
+ */
+export function ApprovalScreen(
+  props: { id: string } | { request: ApprovalRequest; onResolve: (r: ApprovalResult) => void; remote?: boolean }
+) {
   const w = useWallet()
-  const [request, setRequest] = useState<ApprovalRequest | null>(null)
+  const id = 'id' in props ? props.id : null
+  const [request, setRequest] = useState<ApprovalRequest | null>('request' in props ? props.request : null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+  // Which accounts a connect request shares: the current one until the user changes it.
+  const [picked, setPicked] = useState<Set<string> | null>(null)
+  const selected = picked ?? new Set(w.currentWallet ? [w.currentWallet.id] : [])
   const [busy, setBusy] = useState(false)
+  const remote = 'remote' in props && !!props.remote
+
+  const finish = async (result: ApprovalResult) => {
+    if ('onResolve' in props) return props.onResolve(result)
+    await approvals.resolve(id!, result).catch(() => undefined)
+    window.close()
+  }
 
   useEffect(() => {
+    if (!id) return
     approvals
       .get(id)
       .then(setRequest, (e) => setLoadError(e instanceof Error ? e.message : 'Request not found'))
   }, [id])
 
-  useEffect(() => {
-    if (w.currentWallet && selected.size === 0) setSelected(new Set([w.currentWallet.id]))
-  }, [w.currentWallet]) // eslint-disable-line react-hooks/exhaustive-deps
-
   // An unlock request is satisfied the moment the wallet is unlocked.
   useEffect(() => {
-    if (request?.kind === 'unlock' && !w.locked)
-      void approvals.resolve(id, { approved: true }).then(() => window.close())
-  }, [request, w.locked, id])
+    if (request?.kind === 'unlock' && !w.locked) void finish({ approved: true })
+  }, [request, w.locked]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const account = useMemo(
     () =>
@@ -115,18 +129,14 @@ export function ApprovalScreen({ id }: { id: string }) {
 
   const respond = async (approved: boolean) => {
     setBusy(true)
-    try {
-      await approvals.resolve(
-        id,
-        approved && request?.kind === 'connect'
-          ? { approved: true, accountIds: [...selected] }
-          : approved
-            ? { approved: true }
-            : { approved: false }
-      )
-    } finally {
-      window.close()
-    }
+    await finish(
+      approved && request?.kind === 'connect'
+        ? { approved: true, accountIds: [...selected] }
+        : approved
+          ? { approved: true }
+          : { approved: false }
+    )
+    setBusy(false)
   }
 
   if (loadError) {
@@ -134,7 +144,7 @@ export function ApprovalScreen({ id }: { id: string }) {
       <FlowScreen className="justify-center">
         <ErrorBanner error={loadError} />
         <div className="mt-4">
-          <PrimaryButton variant="outline" onClick={() => window.close()}>
+          <PrimaryButton variant="outline" onClick={() => void finish({ approved: false })}>
             Close
           </PrimaryButton>
         </div>
@@ -234,6 +244,12 @@ export function ApprovalScreen({ id }: { id: string }) {
       <div className="space-y-3 mt-3 flex-1">
         {request.kind === 'connect' && (
           <>
+            {remote && (
+              <Notice tone="warning" icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}>
+                Connecting through a scanned code. Approve only if you scanned it just now, from a screen you are using
+                yourself.
+              </Notice>
+            )}
             <p className="text-xs text-muted-foreground">
               The site will see the selected addresses and your balances, and can{' '}
               <strong>ask</strong> you to sign or send. It cannot move funds without your approval.
@@ -247,14 +263,12 @@ export function ApprovalScreen({ id }: { id: string }) {
                   <input
                     type="checkbox"
                     checked={selected.has(a.id)}
-                    onChange={(e) =>
-                      setSelected((s) => {
-                        const n = new Set(s)
-                        if (e.target.checked) n.add(a.id)
-                        else n.delete(a.id)
-                        return n
-                      })
-                    }
+                    onChange={(e) => {
+                      const n = new Set(selected)
+                      if (e.target.checked) n.add(a.id)
+                      else n.delete(a.id)
+                      setPicked(n)
+                    }}
                   />
                   <span className="text-sm flex-1">{a.name}</span>
                   <span className="text-[11px] font-mono text-muted-foreground">
@@ -380,17 +394,45 @@ export function ApprovalScreen({ id }: { id: string }) {
           })()}
 
         {request.kind === 'exchange' && (
-          <div className="rounded-xl glass p-3">
-            <Field label="Operation">{request.op.replace(/_/g, ' ').toLowerCase()}</Field>
-            {Object.entries(request.params).map(([k, v]) => (
-              <Field key={k} label={k}>
-                {typeof v === 'object' ? JSON.stringify(v) : String(v)}
-              </Field>
+          <div className="space-y-2">
+            {request.summary && (
+              <div className="rounded-xl glass p-3">
+                <p className="text-sm font-semibold leading-snug">{request.summary.headline}</p>
+                {request.summary.details.length > 0 && (
+                  <div className="mt-2">
+                    {request.summary.details.map((d) => (
+                      <Field key={d.label} label={d.label}>
+                        {d.value}
+                      </Field>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {request.summary?.warnings.map((w) => (
+              <Notice key={w} tone="warning" icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}>
+                {w}
+              </Notice>
             ))}
-            <Field label="Signed by">{account ? shortenAddress(account.pqAddress, 5) : ''}</Field>
-            <p className="text-[10px] text-muted-foreground mt-2">
-              A small QRDX fee is burned whether or not the operation succeeds.
-            </p>
+            <details className="rounded-xl glass p-3" open={!request.summary}>
+              <summary className="cursor-pointer text-xs text-muted-foreground">
+                {request.op.replace(/_/g, ' ').toLowerCase()} · raw parameters
+              </summary>
+              <div className="mt-2">
+                {Object.entries(request.params).map(([k, v]) => (
+                  <Field key={k} label={k}>
+                    <span className="break-all">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+                  </Field>
+                ))}
+              </div>
+            </details>
+            <div className="rounded-xl glass p-3">
+              <Field label="Signed by">{account ? shortenAddress(account.pqAddress, 5) : ''}</Field>
+              <p className="text-[10px] text-muted-foreground mt-2">
+                A small QRDX fee is burned whether or not the operation succeeds. It executes when the
+                next block includes it.
+              </p>
+            </div>
           </div>
         )}
 
