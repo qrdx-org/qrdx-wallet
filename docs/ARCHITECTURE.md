@@ -47,6 +47,9 @@ see [PLATFORMS.md](PLATFORMS.md)). This document maps the code.
 | `account-id.ts` | Port of the node's `to_account_id`: every address form → its 20-byte ledger key. |
 | `pq-tx.ts` | Type-`0x51` post-quantum transactions (encode, signing hash, intrinsic gas, sign). |
 | `exchange-tx.ts` | Native exchange transactions: op codes, Python-compatible JSON, signing bytes, BLAKE2b hash. |
+| `exchange-nonce.ts` | Exchange nonces submitted but not yet in a block, so several operations can go out in one block window. |
+| `exchange-describe.ts` | Turns an exchange operation's params into the words the approval window shows. |
+| `connect/` | QRDX Connect protocol (encryption, pairing links, relay client); identical to qrdx-trade `lib/connect`. |
 | `transaction.ts` | Legacy EIP-155 and EIP-1559 secp256k1 transactions; recipients resolved through `account-id`. |
 | `eip712.ts` | Typed-data hashing (`eth_signTypedData_v4`). |
 | `keystore.ts` | Web3 Secret Storage v3 (pbkdf2/scrypt, AES-128-CTR, keccak MAC) with a QRDX block carrying the PQ seed; reads the legacy QRDX format. |
@@ -65,6 +68,7 @@ see [PLATFORMS.md](PLATFORMS.md)). This document maps the code.
 - `platform.ts` detects the target and its default settings.
 - `passkey.ts` runs the WebAuthn ceremonies (create, PRF evaluate) and
   capability detection.
+- `remote-sessions.ts` is QRDX Connect's wallet side: sites paired by QR code, served by the extension's `ProviderRouter` in the page (web / PWA).
 - `contexts/WalletContext.tsx` is React state for everything above: balances
   per credential, network status, prices, history, activity-based auto-lock,
   and lock-when-hidden.

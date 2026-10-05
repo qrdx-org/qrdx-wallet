@@ -23,6 +23,14 @@ Also available:
 
 Both are injected before your scripts run.
 
+### Without the extension: QRDX Connect
+
+Sites can also reach the web wallet and the iPhone PWA by QR code. The site
+gets the same EIP-1193 provider (methods, errors and events as below) over an
+end-to-end encrypted relay, and the user approves on their phone. Protocol,
+relay API and a reference provider: qrdx-trade `docs/CONNECT.md`,
+`lib/wallet/remote.ts`.
+
 ## Accounts and chains
 
 | Method | Notes |
@@ -53,12 +61,38 @@ Events: `connect`, `disconnect`, `accountsChanged`, `chainChanged`.
 |---|---|
 | `eth_sendTransaction(tx)` | From the account's classic `0x` key. On QRDX, EIP-1559 fields are folded into a legacy `gasPrice`, because the node accepts only legacy envelopes. Contract deployment from dApps is not supported. |
 | `qrdx_sendPQTransaction({ to, value, data?, gas? })` | From the account's **post-quantum** credential, as a type-`0x51` transaction. `to` may be any address form (`0x`, `0xPQ`, `0xPQMS`); the wallet resolves it to the 20-byte account ID. Gas is at least the PQ floor (≈145k for a transfer). QRDX networks only. |
-| `qrdx_sendExchangeTransaction({ op, params, gasLimit? })` | A native exchange operation (`SWAP`, `PLACE_ORDER`, `PERP_ORDER`, `TOKEN_TRANSFER`, `STAKE_DEPOSIT`, …; see `ExchangeOp` in `src/core/exchange-tx.ts`), signed with the account's PQ key and its exchange nonce. Returns `{ txHash }`; poll `exchange_getTransactionReceipt`. |
+| `qrdx_sendExchangeTransaction({ op, params, gasLimit? })` | A native exchange operation (`SWAP`, `PLACE_ORDER`, `PERP_ORDER`, `TOKEN_TRANSFER`, `STAKE_DEPOSIT`, …; see `ExchangeOp` in `src/core/exchange-tx.ts`), signed with the account's PQ key and its exchange nonce. Returns `{ txHash, nonce }`; poll `exchange_getTransactionReceipt`. Several operations may be sent before a block includes the first (see below). |
 | `wallet_watchAsset({ type: 'ERC20', options: { address, symbol, decimals } })` | Adds a token after the user approves. |
 
 Every transaction and signature opens an approval window that shows the site's
 real origin, the decoded call (ERC-20 transfers and approvals, with a warning
 for unlimited approvals), and the maximum fee.
+
+Exchange operations are decoded too (`src/core/exchange-describe.ts`): "Buy 0.5
+qBTC at 85,000 qUSDC", "Swap 1,000 qUSDC for at least 0.0117 qBTC", "Close-only
+sell 1 BTC-USD-PERP at up to 64,000". The wallet reads each token the request
+names from the node and shows its address next to its symbol; a token the node
+does not know, a swap with no `min_amount_out`, and a `TOKEN_APPROVE` are
+warnings. For `ADD_LIQUIDITY` it shows the deposit the pool will take. The raw
+parameters stay visible below the summary.
+
+### Exchange nonces and block time
+
+QRDX blocks are about 180 s apart and an exchange operation executes only when
+a block includes it. `exchange_getNonce` counts committed operations only, so
+the wallet keeps track of the nonces it has submitted that no block has
+included yet (`src/core/exchange-nonce.ts`) and signs the next operation with
+the first free nonce. If the node still refuses a nonce as already queued (the
+wallet restarted, or another device of the same account submitted), the wallet
+re-signs the same approved operation with the next nonce, without asking again.
+A dApp can therefore place an order and cancel it inside one block window.
+
+The returned `nonce` is the exchange nonce the operation was signed with. A
+`TOKEN_DEPLOY`'s token address is `0x` + blake2b-160 of
+`"<sender 0xPQ address>:<nonce>:<symbol>"`, so a dApp can create the token's
+pool in the same block without waiting for the receipt (qrdx-trade's launchpad
+does this). The approval window shows such a token as "not created yet" rather
+than as unknown.
 
 ## Reading chain data
 
@@ -67,7 +101,7 @@ connection: `eth_blockNumber`, `eth_call`, `eth_estimateGas`, `eth_gasPrice`,
 `eth_getBalance`, `eth_getBlockBy*`, `eth_getCode`, `eth_getLogs`,
 `eth_getStorageAt`, `eth_getTransaction*`, `eth_getTransactionCount`,
 `eth_feeHistory`, `qrdx_getAccountId`, `qrdx_getIntrinsicGas`, the
-`exchange_get*` / `exchange_quote*` reads, and the `perp_get*` reads.
+`exchange_get*` / `exchange_quote*` reads (including `exchange_getStateRoot`), and the `perp_get*` reads (including `perp_getEvents`).
 
 Anything else returns `4200`.
 

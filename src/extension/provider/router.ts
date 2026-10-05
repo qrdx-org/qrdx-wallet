@@ -38,6 +38,13 @@ import { pqIntrinsicGas } from '../../core/pq-tx'
 import { ExchangeOp, type ExchangeOpName, type JsonValue } from '../../core/exchange-tx'
 import { parseTypedData, typedDataChainId } from '../../core/eip712'
 import { submitExchangeOp } from '../../core/tx-service'
+import {
+  describeExchangeOp,
+  tokenAddressesIn,
+  type DescribeContext,
+  type ExchangeSummary,
+  type TokenInfo,
+} from '../../core/exchange-describe'
 import { weiToEth, type EthTransactionRequest } from '../../core/ethereum'
 
 // ─── Errors ─────────────────────────────────────────────────────────────────
@@ -106,6 +113,8 @@ export type ApprovalRequest =
       chain: string
       op: ExchangeOpName
       params: Record<string, JsonValue>
+      /** What the operation does, decoded for the user (exchange-describe.ts). */
+      summary?: ExchangeSummary
     }
   | { kind: 'switch-chain'; origin: string; chain: string }
   | {
@@ -198,6 +207,8 @@ const READ_ONLY = new Set([
   'perp_getOpenOrders',
   'perp_getVault',
   'perp_getTrades',
+  'perp_getEvents',
+  'exchange_getStateRoot',
 ])
 
 /** Methods that need a connected origin and/or the user. */
@@ -268,10 +279,13 @@ export class ProviderRouter {
     const exposed = await this.exposedAccounts(origin)
     if (exposed.length === 0) throw Errors.unauthorized()
     const target = address ?? exposed[0]
-    if (!exposed.some((a) => addressesEqual(a, target)))
+    // `from` may name the account by either credential: its classic 0x address or,
+    // for exchange operations, the 0xPQ address that signs them.
+    const account = (await this.accounts()).find(
+      (a) => addressesEqual(a.ethAddress, target) || a.pqAddress.toLowerCase() === target.toLowerCase()
+    )
+    if (!account || !exposed.some((a) => addressesEqual(a, account.ethAddress)))
       throw Errors.unauthorized(`${target} is not connected to this site.`)
-    const account = (await this.accounts()).find((a) => addressesEqual(a.ethAddress, target))
-    if (!account) throw Errors.unauthorized()
     return account
   }
 
@@ -639,7 +653,10 @@ export class ProviderRouter {
     return hash
   }
 
-  private async sendExchange(origin: string, params: unknown[]): Promise<{ txHash: string }> {
+  private async sendExchange(
+    origin: string,
+    params: unknown[]
+  ): Promise<{ txHash: string; nonce: number }> {
     const req = params[0] as
       | { op?: string; params?: Record<string, JsonValue>; gasLimit?: number; from?: string }
       | undefined
@@ -649,8 +666,9 @@ export class ProviderRouter {
     const chain = await this.activeChain()
     const op = req.op as ExchangeOpName
     const opParams = req.params ?? {}
+    const summary = await this.describeExchange(chain, op, opParams)
     await this.approve(
-      { kind: 'exchange', origin, account: account.id, chain: chain.id, op, params: opParams },
+      { kind: 'exchange', origin, account: account.id, chain: chain.id, op, params: opParams, summary },
       'postQuantum'
     )
     const result = await submitExchangeOp(
@@ -676,6 +694,49 @@ export class ProviderRouter {
       })
       .catch(() => undefined)
     return result
+  }
+
+  /**
+   * Decode an exchange operation for the approval window, reading the tokens and
+   * pool it names from the node. A failed read degrades to a warning, never to
+   * a blocked request: the user still sees the raw parameters.
+   */
+  private async describeExchange(
+    chain: ChainConfig,
+    op: ExchangeOpName,
+    params: Record<string, JsonValue>
+  ): Promise<ExchangeSummary> {
+    const ctx: DescribeContext = { tokens: {} }
+    if ((op === 'ADD_LIQUIDITY' || op === 'REMOVE_LIQUIDITY') && typeof params.pool_id === 'string') {
+      const pool = await this.d
+        .rpc<{ token0: string; token1: string; price: string }>(chain, 'exchange_getPool', [params.pool_id])
+        .catch(() => null)
+      ctx.pool = pool
+      if (pool && op === 'ADD_LIQUIDITY') {
+        ctx.liquidityCost = await this.d
+          .rpc<{ amount0: string; amount1: string }>(chain, 'exchange_quoteLiquidity', [
+            params.pool_id,
+            params.tick_lower,
+            params.tick_upper,
+            params.amount,
+          ])
+          .catch(() => null)
+      }
+    }
+    const addresses = new Set(tokenAddressesIn(params))
+    if (ctx.pool) {
+      addresses.add(ctx.pool.token0.toLowerCase())
+      addresses.add(ctx.pool.token1.toLowerCase())
+    }
+    await Promise.all(
+      [...addresses].map(async (a) => {
+        ctx.tokens[a] = await this.d
+          .rpc<TokenInfo>(chain, 'exchange_getToken', [a])
+          .then((t) => ({ symbol: t.symbol, name: t.name }))
+          .catch(() => null)
+      })
+    )
+    return describeExchangeOp(op, params, ctx)
   }
 
   // ── Networks & assets ────────────────────────────────────────────────────

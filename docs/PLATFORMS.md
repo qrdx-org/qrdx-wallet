@@ -18,6 +18,7 @@ tab and as the iPhone app when launched from the home screen.
 | Auto-lock default | 10 min | 5 min | 15 min |
 | Lock when hidden | off (configurable) | 30 s (configurable) | n/a (popup closes) |
 | dApp provider (`window.ethereum`, `window.qrdx`, EIP-6963) | — | — | ✓ |
+| Connect to sites by QR code (QRDX Connect) | ✓ | ✓ | — (uses the provider) |
 | Install | browser install prompt | Share → Add to Home Screen | Chrome Web Store / Firefox Add-ons |
 | Storage eviction risk | yes (Safari deletes after 7 days unused) | no (installed apps are exempt) | no |
 | Offline | app shell cached | app shell cached | bundled |
@@ -38,8 +39,8 @@ Runs at `/wallet` of the static export.
   for persistent storage (`navigator.storage.persist()`), shows an install
   prompt, and warns users to keep their recovery phrase. The phrase is the
   real backup on every target.
-- **No dApp provider.** Web pages cannot inject into other origins. Use the
-  extension to connect to dApps.
+- **No injected provider.** Web pages cannot inject into other origins. Sites
+  connect by QR code instead (QRDX Connect, below).
 
 ## iPhone PWA
 
@@ -79,6 +80,25 @@ page; the keys live in the background (`src/extension/background.ts`).
   at a time. Closing the window rejects the request.
 - **Host permissions** (`https://*/*`, localhost) exist so the background can
   call JSON-RPC nodes when signing for dApps, including custom networks.
+
+## QRDX Connect (web and iPhone PWA)
+
+A site shows a QR code (on QRDX Trade: Connect → QRDX Wallet on your phone);
+**Connect to a site** on the dashboard scans it with the camera (BarcodeDetector
+where available, jsQR on iOS) or takes its pasted link, and a link opened from
+the phone camera pairs too. The wallet then serves the site's requests with the
+extension's own `ProviderRouter` (`src/shared/remote-sessions.ts`), so the same
+permissions and approval screens apply, on the phone.
+
+- Pairing is refused unless the relay attests that the site that opened the
+  session is the one the code names.
+- Requests are handled while the app is open. A request sent while it is
+  closed or locked waits in the relay and appears when the app is opened and
+  unlocked; keep the app open while trading.
+- Connected sites are listed on the dashboard and in Connect to a site, each
+  with Disconnect, which also revokes the site's access.
+
+Protocol and relay: qrdx-trade `docs/CONNECT.md`.
 
 ## Biometric unlock (all targets)
 
