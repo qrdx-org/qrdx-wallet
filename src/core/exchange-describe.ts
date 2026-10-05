@@ -284,6 +284,36 @@ export function describeExchangeOp(
       }
     }
 
+    case 'TOKEN_MINT': {
+      const t = str(params.token_address)
+      const to = str(params.to)
+      return {
+        headline: `Mint ${groupDigits(str(params.amount))} new ${sym(t)} to ${to ? short(to) : 'you'}`,
+        details: [tokenDetail('Token', t), { label: 'To', value: to || 'Your account' }],
+        warnings,
+      }
+    }
+
+    case 'TOKEN_SET_AUTHORITY': {
+      const t = str(params.token_address)
+      const kind = str(params.authority).toLowerCase() === 'freeze' ? 'freeze' : 'mint'
+      const next = str(params.new_authority).trim()
+      if (!next) {
+        warnings.push(
+          kind === 'mint'
+            ? `This cannot be undone: no one will ever be able to mint ${sym(t)} again.`
+            : `This cannot be undone: no one will ever be able to freeze ${sym(t)} balances.`
+        )
+        return { headline: `Give up the ${kind} authority of ${sym(t)} for good`, details: [tokenDetail('Token', t)], warnings }
+      }
+      warnings.push(`${short(next)} will control ${kind === 'mint' ? 'minting' : 'freezing'} ${sym(t)}, and you will not.`)
+      return {
+        headline: `Hand the ${kind} authority of ${sym(t)} to ${short(next)}`,
+        details: [tokenDetail('Token', t), { label: 'New authority', value: next }],
+        warnings,
+      }
+    }
+
     case 'TOKEN_TRANSFER': {
       const t = str(params.token_address)
       return {

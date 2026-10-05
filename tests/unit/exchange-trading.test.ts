@@ -154,6 +154,18 @@ describe('describeExchangeOp', () => {
     expect(p.details.find((x) => x.label === 'Fee')?.value).toBe('1%')
   })
 
+  it('describes minting and giving up an authority', () => {
+    const m = describeExchangeOp('TOKEN_MINT', { token_address: BTC, amount: '5000' }, { tokens })
+    expect(m.headline).toBe('Mint 5,000 new qBTC to you')
+    const to = '0xPQ' + 'cd'.repeat(32)
+    expect(describeExchangeOp('TOKEN_MINT', { token_address: BTC, amount: '1', to }, { tokens }).headline).toMatch(/^Mint 1 new qBTC to 0xPQcdcd/)
+    const r = describeExchangeOp('TOKEN_SET_AUTHORITY', { token_address: BTC, authority: 'mint', new_authority: '' }, { tokens })
+    expect(r.headline).toBe('Give up the mint authority of qBTC for good')
+    expect(r.warnings[0]).toMatch(/cannot be undone/)
+    const h = describeExchangeOp('TOKEN_SET_AUTHORITY', { token_address: BTC, authority: 'mint', new_authority: to }, { tokens })
+    expect(h.headline).toMatch(/^Hand the mint authority of qBTC to /)
+  })
+
   it('collects every token address a request names', () => {
     expect(tokenAddressesIn({ pair: `${USDC}:${BTC}`, token_in: BTC.toUpperCase().replace('0X', '0x') }).sort()).toEqual(
       [BTC, USDC].sort()

@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docs: PLATFORMS, DAPP_INTEGRATION, rewritten ARCHITECTURE, SECURITY and DEVELOPMENT.
 - **Readable exchange approvals** for trading dApps (qrdx-trade): orders, swaps, cancels, liquidity and perps are described in words ("Buy 0.01 qBTC at 84,058.6 qUSDC", "Swap 1,000 qUSDC for at least 0.0117 qBTC"), with each token's address, the equivalent order from the other token's side, the deposit a liquidity add takes, and warnings for unknown tokens, swaps with no minimum and approvals. Raw parameters stay visible.
 - `perp_getEvents` and `exchange_getStateRoot` pass through to the node for dApps.
+- Approvals for minting (`TOKEN_MINT`, "Mint 5,000 new X to you") and for giving up or handing over a token's mint or freeze authority, with a warning that renouncing is permanent.
 - **QRDX Connect** (web and iPhone PWA): connect to sites by scanning their QR code (or opening its link) and approve their requests on the phone, with the same router, permissions and approval screens as the extension. End-to-end encrypted; pairing is refused unless the relay attests the site's origin. Camera scanning uses BarcodeDetector or jsQR (iOS).
 - Approvals for token launches: `TOKEN_DEPLOY` states the supply and whether anyone can mint more or freeze balances; `CREATE_POOL` states the pair, starting price, fee and the QRDX it burns or stakes, and names tokens created earlier in the same block as "not created yet".
 
