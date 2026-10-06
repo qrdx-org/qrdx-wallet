@@ -32,11 +32,7 @@ import { isValidMnemonic } from '@/src/core/crypto'
 
 export function FlowScreen({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-background via-background to-primary/5 relative overflow-hidden">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
-        <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-32 -left-32 w-64 h-64 bg-primary/5 rounded-full blur-3xl" />
-      </div>
+    <div className="min-h-screen flex flex-col mono-backdrop relative overflow-hidden">
       {/* Safe-area insets on a wrapper so they add to the screen's own padding. */}
       <div className="flex-1 flex flex-col relative z-10 pt-safe pb-safe">
         <div className={cn('flex-1 flex flex-col px-5 py-6', className)}>{children}</div>
@@ -151,7 +147,7 @@ export function PrimaryButton({
 }) {
   const styles = {
     primary:
-      'bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 text-white',
+      'bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 text-primary-foreground',
     outline: 'glass border hover:bg-accent/50 hover:border-primary/30',
     danger: 'bg-red-600 hover:bg-red-600/90 text-white',
   }
@@ -295,12 +291,12 @@ export function NewPasswordFields({
   const strength = passwordStrength(password)
   const mismatch = confirm.length > 0 && confirm !== password
   const color =
-    strength.score >= 3 ? 'bg-green-500' : strength.score >= 2 ? 'bg-yellow-500' : 'bg-red-500'
+    strength.score >= 3 ? 'bg-green-500' : strength.score >= 2 ? 'bg-foreground/60' : 'bg-red-500'
   const text =
     strength.score >= 3
       ? 'text-green-500'
       : strength.score >= 2
-        ? 'text-yellow-500'
+        ? 'text-foreground/70'
         : 'text-red-500'
   return (
     <div className="space-y-3">

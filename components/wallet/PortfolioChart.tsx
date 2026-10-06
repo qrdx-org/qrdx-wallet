@@ -1,5 +1,6 @@
 'use client'
 
+import { useTheme } from 'next-themes'
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 import { createChart, ColorType, AreaSeries, CrosshairMode } from 'lightweight-charts'
@@ -22,6 +23,7 @@ interface PortfolioChartProps {
  * say so.
  */
 export function PortfolioChart({ data, change24h = 0 }: PortfolioChartProps) {
+  const { resolvedTheme } = useTheme()
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartInstanceRef = useRef<IChartApi | null>(null)
   const seriesRef = useRef<any>(null)
@@ -66,14 +68,14 @@ export function PortfolioChart({ data, change24h = 0 }: PortfolioChartProps) {
           visible: true,
           labelVisible: false,
           width: 1,
-          color: 'rgba(138, 80, 255, 0.4)',
+          color: 'rgba(128, 128, 128, 0.45)',
           style: 0,
         },
         horzLine: {
           visible: true,
           labelVisible: false,
           width: 1,
-          color: 'rgba(138, 80, 255, 0.2)',
+          color: 'rgba(128, 128, 128, 0.25)',
           style: 2,
         },
       },
@@ -85,18 +87,20 @@ export function PortfolioChart({ data, change24h = 0 }: PortfolioChartProps) {
       watermark: { visible: false },
     } as any)
 
-    const lineColor = isPositive ? '#22c55e' : '#ef4444'
+    // Monochrome: the line is ink (white in dark mode, black in light); the % change carries direction.
+    const dark = resolvedTheme ? resolvedTheme === 'dark' : document.documentElement.classList.contains('dark')
+    const lineColor = dark ? '#fafafa' : '#0a0a0a'
 
     const series = chart.addSeries(AreaSeries, {
       lineColor,
-      topColor: isPositive ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)',
+      topColor: dark ? 'rgba(250, 250, 250, 0.16)' : 'rgba(10, 10, 10, 0.10)',
       bottomColor: 'transparent',
       lineWidth: 2,
       crosshairMarkerVisible: true,
       crosshairMarkerRadius: 5,
-      crosshairMarkerBorderColor: isPositive ? '#22c55e' : '#ef4444',
+      crosshairMarkerBorderColor: lineColor,
       crosshairMarkerBorderWidth: 2,
-      crosshairMarkerBackgroundColor: '#0a0e1a',
+      crosshairMarkerBackgroundColor: dark ? '#080808' : '#ffffff',
       priceLineVisible: false,
       lastValueVisible: false,
     })
@@ -143,7 +147,7 @@ export function PortfolioChart({ data, change24h = 0 }: PortfolioChartProps) {
         ;(el as HTMLElement).style.display = 'none'
       })
     })
-  }, [isPositive, data, hasData])
+  }, [data, hasData, resolvedTheme])
 
   useEffect(() => {
     const container = chartContainerRef.current

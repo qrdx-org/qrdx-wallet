@@ -10,7 +10,7 @@ export function Navigation() {
       <div className="max-w-5xl mx-auto px-6 py-4">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-purple-600" />
+            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-primary/60" />
             <span className="font-bold text-lg">QRDX Wallet</span>
           </div>
           <div className="flex-1 max-w-md relative">

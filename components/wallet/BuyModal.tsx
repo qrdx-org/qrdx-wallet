@@ -10,7 +10,7 @@ interface BuyModalProps {
 
 export function BuyModal({ onClose }: BuyModalProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="min-h-screen mono-backdrop">
       {/* Header */}
       <div className="glass-strong sticky top-0 z-20">
         <div className="px-4 py-3">
@@ -31,8 +31,8 @@ export function BuyModal({ onClose }: BuyModalProps) {
       <div className="px-4 py-3">
         {/* Coming Soon overlay */}
         <div className="flex flex-col items-center py-10 animate-fade-in">
-          <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-orange-500/20 to-amber-500/20 flex items-center justify-center shadow-lg mb-4 opacity-60">
-            <CreditCard className="h-8 w-8 text-orange-400/50" />
+          <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg mb-4 opacity-60">
+            <CreditCard className="h-8 w-8 text-foreground/50" />
           </div>
           <span className="text-[10px] bg-primary/15 text-primary px-2.5 py-1 rounded-full font-semibold mb-3">
             Coming Soon
@@ -69,7 +69,7 @@ export function BuyModal({ onClose }: BuyModalProps) {
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-background/60 border border-border/50 shrink-0">
                   <div className="h-6 w-6 rounded-md bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
-                    <span className="text-white text-[9px] font-bold">QR</span>
+                    <span className="text-primary-foreground text-[9px] font-bold">QR</span>
                   </div>
                   <span className="text-sm font-semibold">QRDX</span>
                 </div>
@@ -102,7 +102,7 @@ export function BuyModal({ onClose }: BuyModalProps) {
 
           <Button
             disabled
-            className="w-full h-12 font-semibold text-base bg-gradient-to-r from-orange-500 to-amber-500 shadow-lg"
+            className="w-full h-12 font-semibold text-base bg-gradient-to-r from-primary to-primary/70 shadow-lg"
           >
             <CreditCard className="h-5 w-5 mr-2" />
             Buy QRDX

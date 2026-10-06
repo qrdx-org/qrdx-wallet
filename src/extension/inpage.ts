@@ -192,11 +192,11 @@ declare global {
   }
 }
 
-// Logo as a data URI (EIP-6963 requires one); kept small.
+// Logo as a data URI (EIP-6963 requires one): the QRDX mark, white on black; kept small.
 const ICON =
   'data:image/svg+xml;base64,' +
   btoa(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#6d28d9"/></linearGradient></defs><rect width="96" height="96" rx="22" fill="url(#g)"/><path d="M48 20l22 9v17c0 15-9.5 25-22 30-12.5-5-22-15-22-30V29z" fill="none" stroke="#fff" stroke-width="6" stroke-linejoin="round"/></svg>'
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><defs><mask id="c"><rect width="96" height="96" fill="#fff"/><polygon points="40,42 58,42 84,76 66,76" fill="#000"/></mask></defs><rect width="96" height="96" rx="22" fill="#0a0a0a"/><rect x="22" y="22" width="44" height="42" rx="9" fill="none" stroke="#fff" stroke-width="8" mask="url(#c)"/><polygon points="44,44 55,44 78,72 67,72" fill="#fff"/></svg>'
   )
 
 if (!window.qrdx) {

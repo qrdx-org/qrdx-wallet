@@ -26,7 +26,7 @@ interface ShieldModalProps {
 export function ShieldModal({ onClose, onSend }: ShieldModalProps) {
   const { activeChain, currentWallet } = useWallet()
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-cyan-500/5 flex flex-col">
+    <div className="min-h-screen mono-backdrop flex flex-col">
       <div className="glass-strong sticky top-0 z-20 pt-safe">
         <div className="px-4 py-3 flex items-center gap-3">
           <button
@@ -48,8 +48,8 @@ export function ShieldModal({ onClose, onSend }: ShieldModalProps) {
 
       <div className="flex-1 px-4 py-4 space-y-4">
         <div className="text-center">
-          <div className="inline-flex h-14 w-14 rounded-2xl bg-cyan-500/10 items-center justify-center mb-3">
-            <Shield className="h-7 w-7 text-cyan-400" />
+          <div className="inline-flex h-14 w-14 rounded-2xl bg-foreground/10 items-center justify-center mb-3">
+            <Shield className="h-7 w-7 text-foreground/70" />
           </div>
           <h2 className="text-base font-bold">Cross-chain shielding is not live yet</h2>
           <p className="text-xs text-muted-foreground mt-1.5 max-w-xs mx-auto">
@@ -73,7 +73,7 @@ export function ShieldModal({ onClose, onSend }: ShieldModalProps) {
               <button
                 type="button"
                 onClick={onSend}
-                className="w-full h-10 rounded-xl bg-primary text-white text-sm font-semibold inline-flex items-center justify-center gap-2"
+                className="w-full h-10 rounded-xl bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center justify-center gap-2"
               >
                 <Send className="h-4 w-4" /> Send to my quantum-safe account
               </button>

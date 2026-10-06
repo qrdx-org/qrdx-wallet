@@ -105,7 +105,7 @@ export function AllTokens({
   const pinnedCount = pinnedSymbols.length
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex flex-col">
+    <div className="min-h-screen mono-backdrop flex flex-col">
       {/* Header */}
       <div className="glass-strong sticky top-0 z-20">
         <div className="px-4 py-3">
@@ -236,7 +236,7 @@ export function AllTokens({
                 >
                   <GripVertical className="h-3 w-3 text-primary/30 shrink-0" />
                   <div className={`h-4 w-4 rounded-[4px] bg-gradient-to-br ${token.color} flex items-center justify-center`}>
-                    <span className="text-white text-[7px] font-bold">{token.symbol.slice(0, 2)}</span>
+                    <span className="text-primary-foreground text-[7px] font-bold">{token.symbol.slice(0, 2)}</span>
                   </div>
                   <span className="text-[10px] font-semibold">{token.symbol}</span>
                   <button
@@ -277,7 +277,7 @@ export function AllTokens({
                 {/* Token icon */}
                 <Avatar className="h-9 w-9 shadow-sm shrink-0">
                   <AvatarImage src={token.icon} alt={token.symbol} />
-                  <AvatarFallback className={`bg-gradient-to-br ${token.color} text-white text-xs font-bold`}>
+                  <AvatarFallback className={`bg-gradient-to-br ${token.color} text-primary-foreground text-xs font-bold`}>
                     {token.symbol.slice(0, 2)}
                   </AvatarFallback>
                 </Avatar>
@@ -290,7 +290,7 @@ export function AllTokens({
                       <Pin className="h-2.5 w-2.5 text-primary fill-primary" />
                     )}
                     {isFavorited && (
-                      <Star className="h-2.5 w-2.5 text-yellow-400 fill-yellow-400" />
+                      <Star className="h-2.5 w-2.5 text-foreground/70 fill-foreground" />
                     )}
                   </div>
                   <div className="text-[11px] text-muted-foreground">{token.name}</div>
@@ -323,8 +323,8 @@ export function AllTokens({
                     onClick={() => toggleFavorite(token.symbol)}
                     className={`h-7 w-7 rounded-lg flex items-center justify-center transition-all ${
                       isFavorited
-                        ? 'text-yellow-400 bg-yellow-400/10'
-                        : 'text-muted-foreground/30 hover:text-yellow-400 hover:bg-yellow-400/10'
+                        ? 'text-foreground/70 bg-foreground/10'
+                        : 'text-muted-foreground/30 hover:text-foreground/70 hover:bg-foreground/10'
                     }`}
                     title={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
                   >

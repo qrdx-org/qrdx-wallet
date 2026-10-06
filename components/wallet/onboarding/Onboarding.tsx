@@ -12,6 +12,7 @@
  * vault is created, so backing out at any step leaves no trace.
  */
 
+import { QrdxMark } from '@/components/QrdxMark'
 import { useMemo, useState } from 'react'
 import {
   ArrowRight,
@@ -175,7 +176,7 @@ export function Onboarding({ onDone, onCommit }: { onDone: () => void; onCommit?
       <FlowScreen className="justify-center">
         <div className="text-center mb-6 animate-slide-up">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/60 mb-4 shadow-lg shadow-primary/25">
-            <Shield className="h-8 w-8 text-white" />
+            <QrdxMark className="h-8 w-8 text-primary-foreground" />
           </div>
           <h1 className="text-2xl font-bold gradient-text mb-1.5">QRDX Wallet</h1>
           <p className="text-sm text-muted-foreground">Quantum-resistant self-custody</p>
@@ -296,7 +297,7 @@ export function Onboarding({ onDone, onCommit }: { onDone: () => void; onCommit?
                     setMnemonic(wallet.generateMnemonic(n))
                     setRevealed(false)
                   }}
-                  className={`px-2.5 py-1 rounded-md ${wordCount === n ? 'bg-primary text-white' : 'text-muted-foreground'}`}
+                  className={`px-2.5 py-1 rounded-md ${wordCount === n ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
                 >
                   {n} words
                 </button>

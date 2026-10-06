@@ -51,7 +51,7 @@ export function TradeModal({ onClose }: TradeModalProps) {
   }, [qrdx, activeChain.id, currentWallet])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex flex-col">
+    <div className="min-h-screen mono-backdrop flex flex-col">
       <div className="glass-strong sticky top-0 z-20 pt-safe">
         <div className="px-4 py-3 flex items-center gap-3">
           <button

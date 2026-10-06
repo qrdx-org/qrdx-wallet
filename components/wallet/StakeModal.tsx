@@ -116,7 +116,7 @@ export function StakeModal({ onClose }: StakeModalProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-violet-500/5 flex flex-col">
+    <div className="min-h-screen mono-backdrop flex flex-col">
       <div className="glass-strong sticky top-0 z-20 pt-safe">
         <div className="px-4 py-3 flex items-center gap-3">
           <button
@@ -157,7 +157,7 @@ export function StakeModal({ onClose }: StakeModalProps) {
                   key={s.label}
                   className="flex flex-col items-center gap-1 py-3 rounded-xl glass"
                 >
-                  <s.icon className="h-3.5 w-3.5 text-violet-400" />
+                  <s.icon className="h-3.5 w-3.5 text-foreground/70" />
                   <span className="text-sm font-bold">{s.value}</span>
                   <span className="text-[9px] text-muted-foreground">{s.label}</span>
                 </div>

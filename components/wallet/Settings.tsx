@@ -1,5 +1,6 @@
 'use client'
 
+import { QrdxMark } from '@/components/QrdxMark'
 import { useState } from 'react'
 import {
   ArrowLeft,
@@ -130,10 +131,9 @@ const DEFAULT_INJECTED_APIS: InjectedApi[] = [
 
 // Theme preview colors for the picker
 const THEME_PREVIEWS: Record<ThemeValue, { bg: string; card: string; accent: string; text: string; label: string }> = {
-  dark: { bg: '#020817', card: '#0c1425', accent: '#8A50FF', text: '#f8fafc', label: 'QRDX Purple Dark' },
-  light: { bg: '#ffffff', card: '#ffffff', accent: '#8A50FF', text: '#020817', label: 'QRDX Purple Light' },
-  'mono-light': { bg: '#ffffff', card: '#ffffff', accent: '#0f172a', text: '#020817', label: 'Monochrome Light' },
-  'mono-dark': { bg: '#020817', card: '#020817', accent: '#f8fafc', text: '#f8fafc', label: 'Monochrome Dark' },
+  dark: { bg: '#080808', card: '#101010', accent: '#fafafa', text: '#fafafa', label: 'Dark' },
+  light: { bg: '#ffffff', card: '#ffffff', accent: '#0a0a0a', text: '#0a0a0a', label: 'Light' },
+  system: { bg: 'linear-gradient(90deg, #ffffff 50%, #080808 50%)', card: 'transparent', accent: '#737373', text: '#737373', label: 'Automatic' },
 }
 
 // ─── Sub-page type ──────────────────────────────────────────────────────────
@@ -277,7 +277,7 @@ export function Settings({ onBack }: SettingsProps) {
           danger
             ? 'bg-red-500/10 text-red-500'
             : gradient
-              ? `bg-gradient-to-br ${gradient} text-white`
+              ? `bg-gradient-to-br ${gradient} text-primary-foreground`
               : 'bg-primary/10 text-primary'
         }`}
       >
@@ -359,7 +359,7 @@ export function Settings({ onBack }: SettingsProps) {
   // ── Main ──────────────────────────────────────────────────────────────────
   if (page === 'main') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen mono-backdrop">
         <Header title="Settings" />
         <div className="px-4 py-3 space-y-2">
           {/* General section */}
@@ -383,9 +383,9 @@ export function Settings({ onBack }: SettingsProps) {
                   icon={Palette}
                   label="Theme"
                   description="Appearance & color scheme"
-                  value={THEME_PREVIEWS[(theme as ThemeValue) || 'dark']?.label ?? 'QRDX Purple Dark'}
+                  value={THEME_PREVIEWS[(theme as ThemeValue) || 'dark']?.label ?? 'Dark'}
                   onClick={() => setPage('theme')}
-                  gradient="from-violet-500 to-pink-500"
+                  gradient="from-primary to-primary/70"
                 />
                 <MenuItem
                   icon={Globe}
@@ -393,7 +393,7 @@ export function Settings({ onBack }: SettingsProps) {
                   description="Display language"
                   value={LANGUAGES.find(l => l.code === language)?.label}
                   onClick={() => setPage('language')}
-                  gradient="from-blue-500 to-cyan-500"
+                  gradient="from-primary to-primary/70"
                 />
                 <MenuItem
                   icon={DollarSign}
@@ -401,7 +401,7 @@ export function Settings({ onBack }: SettingsProps) {
                   description="Default fiat currency"
                   value={currency}
                   onClick={() => setPage('currency')}
-                  gradient="from-green-500 to-emerald-500"
+                  gradient="from-primary to-primary/70"
                 />
               </CardContent>
             </Card>
@@ -422,7 +422,7 @@ export function Settings({ onBack }: SettingsProps) {
                     onClick={() => setPage('smart-wallet')}
                     className="w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left opacity-50 cursor-default"
                   >
-                    <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 bg-gradient-to-br from-purple-500/40 to-pink-500/40 text-white/60">
+                    <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 bg-gradient-to-br from-primary to-primary/70 text-primary-foreground/60">
                       <Sparkles className="h-4 w-4" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -443,7 +443,7 @@ export function Settings({ onBack }: SettingsProps) {
                   description="Saved addresses & contacts"
                   value={`${addressBook.length} contacts`}
                   onClick={() => setPage('address-book')}
-                  gradient="from-cyan-500 to-blue-500"
+                  gradient="from-primary to-primary/70"
                 />
               </CardContent>
             </Card>
@@ -463,14 +463,14 @@ export function Settings({ onBack }: SettingsProps) {
                   label="Security"
                   description="Auto-lock, biometrics & backup"
                   onClick={() => setPage('security')}
-                  gradient="from-amber-500 to-orange-500"
+                  gradient="from-primary to-primary/70"
                 />
                 <MenuItem
                   icon={Bell}
                   label="Notifications"
                   description="Transaction & price alerts"
                   onClick={() => setPage('notifications')}
-                  gradient="from-red-500 to-rose-500"
+                  gradient="from-primary to-primary/70"
                 />
               </CardContent>
             </Card>
@@ -491,7 +491,7 @@ export function Settings({ onBack }: SettingsProps) {
                   description="Manage RPC endpoints"
                   value="QRDX Mainnet"
                   onClick={() => setPage('network')}
-                  gradient="from-teal-500 to-emerald-500"
+                  gradient="from-primary to-primary/70"
                 />
                 <MenuItem
                   icon={Link}
@@ -499,7 +499,7 @@ export function Settings({ onBack }: SettingsProps) {
                   description="Manage dApp connections"
                   value={`${connectedSites.length} sites`}
                   onClick={() => setPage('connected-sites')}
-                  gradient="from-blue-500 to-indigo-500"
+                  gradient="from-primary to-primary/70"
                 />
                 <MenuItem
                   icon={Code}
@@ -507,7 +507,7 @@ export function Settings({ onBack }: SettingsProps) {
                   description="Web3 provider & QRDX API"
                   value={`${injectedApis.filter(a => a.enabled).length}/${injectedApis.length} active`}
                   onClick={() => setPage('injected-apis')}
-                  gradient="from-orange-500 to-amber-500"
+                  gradient="from-primary to-primary/70"
                 />
               </CardContent>
             </Card>
@@ -534,7 +534,7 @@ export function Settings({ onBack }: SettingsProps) {
                     label="Developer Options"
                     description="Mock GUI, testnets, UI debugging"
                     onClick={() => setPage('developer')}
-                    gradient="from-purple-500 to-indigo-500"
+                    gradient="from-primary to-primary/70"
                   />
                 )}
               </CardContent>
@@ -553,7 +553,7 @@ export function Settings({ onBack }: SettingsProps) {
     const currentTheme = (theme as ThemeValue) || 'dark'
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen mono-backdrop">
         <Header title="Theme" />
         <div className="px-4 py-3 space-y-3">
           <div className="px-1 mb-1">
@@ -562,7 +562,7 @@ export function Settings({ onBack }: SettingsProps) {
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-3 gap-2">
             {THEME_OPTIONS.map((opt) => {
               const preview = THEME_PREVIEWS[opt.value]
               const isActive = currentTheme === opt.value
@@ -573,14 +573,14 @@ export function Settings({ onBack }: SettingsProps) {
                   onClick={() => setTheme(opt.value)}
                   className={`group relative rounded-xl overflow-hidden border-2 transition-all ${
                     isActive
-                      ? 'border-primary shadow-lg shadow-primary/20 scale-[1.02]'
+                      ? 'border-primary shadow-lg shadow-black/10 scale-[1.02]'
                       : 'border-border/50 hover:border-border'
                   }`}
                 >
                   {/* Mini preview */}
                   <div
                     className="p-2.5 pb-2"
-                    style={{ backgroundColor: preview.bg }}
+                    style={{ background: preview.bg }}
                   >
                     {/* Mini header bar */}
                     <div className="flex items-center gap-1.5 mb-2">
@@ -624,7 +624,7 @@ export function Settings({ onBack }: SettingsProps) {
                   {/* Label */}
                   <div
                     className="px-2.5 py-2 flex items-center justify-between"
-                    style={{ backgroundColor: preview.bg }}
+                    style={{ background: preview.bg }}
                   >
                     <div className="text-left">
                       <div
@@ -655,9 +655,9 @@ export function Settings({ onBack }: SettingsProps) {
 
           <div className="px-1 mt-1">
             <p className="text-[10px] text-muted-foreground leading-relaxed">
-              Choose between QRDX branded themes with purple accents, or clean
-              monochrome themes inspired by the QRDX website. Theme applies to all
-              extension views.
+              QRDX Wallet is monochrome: white on black, or black on white. Colour is kept
+              for what needs it, like failed transactions and warnings. The theme applies
+              to every wallet view.
             </p>
           </div>
         </div>
@@ -668,7 +668,7 @@ export function Settings({ onBack }: SettingsProps) {
   // ── Language ──────────────────────────────────────────────────────────────
   if (page === 'language') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen mono-backdrop">
         <Header title="Language" />
         <div className="px-4 py-3">
           <Card className="glass border-border/50">
@@ -691,7 +691,7 @@ export function Settings({ onBack }: SettingsProps) {
   // ── Currency ──────────────────────────────────────────────────────────────
   if (page === 'currency') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen mono-backdrop">
         <Header title="Currency" />
         <div className="px-4 py-3">
           <Card className="glass border-border/50">
@@ -717,7 +717,7 @@ export function Settings({ onBack }: SettingsProps) {
   // ── Notifications ─────────────────────────────────────────────────────────
   if (page === 'notifications') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen mono-backdrop">
         <Header title="Notifications" />
         <div className="px-4 py-3">
           <Card className="glass border-border/50">
@@ -758,7 +758,7 @@ export function Settings({ onBack }: SettingsProps) {
     const filtered = NETWORKS.filter((n) => (testnetMode ? n.isTestnet : !n.isTestnet))
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen mono-backdrop">
         <Header title="Networks" />
         <div className="px-4 py-3 space-y-3">
           {/* Testnet Mode Toggle */}
@@ -769,8 +769,8 @@ export function Settings({ onBack }: SettingsProps) {
                 className="flex items-center justify-between w-full"
               >
                 <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-lg bg-orange-500/15 flex items-center justify-center">
-                    <Globe className="h-4 w-4 text-orange-400" />
+                  <div className="h-8 w-8 rounded-lg bg-foreground/10 flex items-center justify-center">
+                    <Globe className="h-4 w-4 text-foreground/70" />
                   </div>
                   <div className="text-left">
                     <div className="text-sm font-medium">Testnet Mode</div>
@@ -809,7 +809,7 @@ export function Settings({ onBack }: SettingsProps) {
                     }`}
                   >
                     <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
-                      isActiveNet ? 'bg-primary text-white' : 'bg-primary/10 text-primary'
+                      isActiveNet ? 'bg-primary text-primary-foreground' : 'bg-primary/10 text-primary'
                     }`}>
                       {net.symbol.slice(0, 3)}
                     </div>
@@ -852,7 +852,7 @@ export function Settings({ onBack }: SettingsProps) {
   // ── Network Detail / Edit ─────────────────────────────────────────────────
   if (page === 'network-detail' && editingNetwork) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen mono-backdrop">
         <Header title={selectedNetwork?.name ?? 'Network'} />
         <div className="px-4 py-3 space-y-3">
           {/* Network Icon & Name */}
@@ -930,7 +930,7 @@ export function Settings({ onBack }: SettingsProps) {
             </CardContent>
           </Card>
 
-          <Button className="w-full h-10 font-medium bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/25">
+          <Button className="w-full h-10 font-medium bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25">
             <Save className="h-4 w-4 mr-2" />
             Save Changes
           </Button>
@@ -950,7 +950,7 @@ export function Settings({ onBack }: SettingsProps) {
   // ── Connected Sites ───────────────────────────────────────────────────────
   if (page === 'connected-sites') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen mono-backdrop">
         <Header title="Connected Sites" />
         <div className="px-4 py-3 space-y-3">
           {connectedSites.length === 0 ? (
@@ -1033,7 +1033,7 @@ export function Settings({ onBack }: SettingsProps) {
     const apiIcon = (type: InjectedApi['icon']) => {
       switch (type) {
         case 'ethereum':
-          return <Blocks className="h-4 w-4 text-blue-400" />
+          return <Blocks className="h-4 w-4 text-foreground/70" />
         case 'qrdx':
           return <Zap className="h-4 w-4 text-primary" />
         case 'legacy':
@@ -1050,7 +1050,7 @@ export function Settings({ onBack }: SettingsProps) {
     }
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen mono-backdrop">
         <Header title="Injected APIs" />
         <div className="px-4 py-3 space-y-3">
           <div className="px-1">
@@ -1169,11 +1169,11 @@ export function Settings({ onBack }: SettingsProps) {
   // ── Smart Wallet (Coming Soon) ────────────────────────────────────────────
   if (page === 'smart-wallet') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen mono-backdrop">
         <Header title="Smart Wallet" />
         <div className="px-4 py-3 space-y-4">
           <div className="flex flex-col items-center py-8 animate-fade-in">
-            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center shadow-lg mb-3 opacity-60">
+            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg mb-3 opacity-60">
               <Sparkles className="h-8 w-8 text-primary/50" />
             </div>
             <span className="text-[10px] bg-primary/15 text-primary px-2.5 py-1 rounded-full font-semibold mb-3">
@@ -1281,7 +1281,7 @@ export function Settings({ onBack }: SettingsProps) {
 
     const ContactRow = ({ contact }: { contact: AddressBookEntry }) => (
       <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-accent/30 transition-all group">
-        <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary/80 to-primary/40 flex items-center justify-center text-white text-xs font-bold shrink-0">
+        <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-primary/80 to-primary/40 flex items-center justify-center text-primary-foreground text-xs font-bold shrink-0">
           {contact.name.slice(0, 2).toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
@@ -1290,7 +1290,7 @@ export function Settings({ onBack }: SettingsProps) {
             <span className={`text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded ${
               contact.addressType === 'pq'
                 ? 'bg-primary/15 text-primary'
-                : 'bg-blue-500/15 text-blue-400'
+                : 'bg-foreground/10 text-foreground/70'
             }`}>
               {contact.addressType === 'pq' ? 'PQ' : 'ETH'}
             </span>
@@ -1328,7 +1328,7 @@ export function Settings({ onBack }: SettingsProps) {
     )
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen mono-backdrop">
         <Header title="Address Book" />
         <div className="px-4 py-3 space-y-3">
           {addressBook.length === 0 ? (
@@ -1479,13 +1479,13 @@ export function Settings({ onBack }: SettingsProps) {
   // ── About ─────────────────────────────────────────────────────────────────
   if (page === 'about') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen mono-backdrop">
         <Header title="About" />
         <div className="px-4 py-3 space-y-4">
           {/* Logo & version */}
           <div className="flex flex-col items-center py-4 animate-fade-in">
             <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/25 mb-3">
-              <Shield className="h-8 w-8 text-white" />
+              <QrdxMark className="h-8 w-8 text-primary-foreground" />
             </div>
             <h2 className="text-lg font-bold">QRDX Wallet</h2>
             <p className="text-xs text-muted-foreground">Version 1.0.0</p>
@@ -1563,7 +1563,7 @@ export function Settings({ onBack }: SettingsProps) {
     ]
     const text = diagnostics.map(([k, v]) => `${k}: ${v}`).join('\n')
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="min-h-screen mono-backdrop">
         <Header title="Developer Options" />
         <div className="px-4 py-3 space-y-3">
           <Card className="glass border-border/50">

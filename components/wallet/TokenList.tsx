@@ -23,23 +23,23 @@ export interface Token {
 // Gradient colors for known tokens
 const TOKEN_COLORS: Record<string, string> = {
   QRDX: 'from-primary to-primary/60',
-  ETH: 'from-blue-500 to-blue-600',
-  USDC: 'from-blue-400 to-cyan-500',
-  USDT: 'from-green-400 to-emerald-500',
-  BTC: 'from-orange-400 to-amber-500',
-  WBTC: 'from-orange-400 to-amber-500',
-  DAI: 'from-yellow-400 to-amber-500',
-  WETH: 'from-blue-500 to-blue-600',
-  LINK: 'from-blue-600 to-indigo-600',
-  UNI: 'from-pink-400 to-pink-600',
-  AAVE: 'from-sky-400 to-indigo-500',
-  MATIC: 'from-purple-500 to-violet-600',
-  POL: 'from-purple-500 to-violet-600',
-  BNB: 'from-yellow-500 to-yellow-600',
+  ETH: 'from-primary to-primary/70',
+  USDC: 'from-primary to-primary/70',
+  USDT: 'from-primary to-primary/70',
+  BTC: 'from-primary to-primary/70',
+  WBTC: 'from-primary to-primary/70',
+  DAI: 'from-primary to-primary/70',
+  WETH: 'from-primary to-primary/70',
+  LINK: 'from-primary to-primary/70',
+  UNI: 'from-primary to-primary/70',
+  AAVE: 'from-primary to-primary/70',
+  MATIC: 'from-primary to-primary/70',
+  POL: 'from-primary to-primary/70',
+  BNB: 'from-primary to-primary/70',
   AVAX: 'from-red-500 to-red-600',
-  FTM: 'from-blue-500 to-cyan-500',
-  ARB: 'from-blue-500 to-sky-600',
-  OP: 'from-red-500 to-rose-600',
+  FTM: 'from-primary to-primary/70',
+  ARB: 'from-primary to-primary/70',
+  OP: 'from-primary to-primary/70',
 }
 
 /**
@@ -67,7 +67,7 @@ export function useTokenList(): Token[] {
         valueNum: usdValue,
         change24h,
         icon: undefined,
-        color: TOKEN_COLORS[b.symbol] ?? 'from-gray-500 to-gray-600',
+        color: TOKEN_COLORS[b.symbol] ?? 'from-primary/80 to-primary/50',
         contractAddress: b.address,
         decimals: b.decimals,
       }
@@ -124,7 +124,7 @@ export function TokenList({ pinnedSymbols, onViewAll }: TokenListProps) {
           <div className="flex items-center gap-3">
             <Avatar className="h-9 w-9 shadow-sm">
               <AvatarImage src={token.icon} alt={token.symbol} />
-              <AvatarFallback className={`bg-gradient-to-br ${token.color} text-white text-xs font-bold`}>
+              <AvatarFallback className={`bg-gradient-to-br ${token.color} text-primary-foreground text-xs font-bold`}>
                 {token.symbol.slice(0, 2)}
               </AvatarFallback>
             </Avatar>

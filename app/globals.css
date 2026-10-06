@@ -3,103 +3,60 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 262 83% 58%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 84% 4.9%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 262 60% 70%;
-    --accent-foreground: 222.2 84% 4.9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 262 83% 58%;
-    --radius: 0.75rem;
-    --success: 142 76% 36%;
-    --warning: 38 92% 50%;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 224 71% 8%;
-    --card-foreground: 210 40% 98%;
-    --popover: 224 71% 8%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 262 83% 58%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 262 60% 70%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 262 83% 58%;
-    --success: 142 76% 36%;
-    --warning: 38 92% 50%;
-  }
-
-  /* Monochrome Light — qrdx-website slate palette */
+  /*
+   * Monochrome. Light is black on white, dark is white on black; greys are
+   * neutral (no hue). Colour is kept for meaning only: success, warning, error.
+   */
+  :root,
   .mono-light {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 0 0% 4%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 0 0% 4%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 84% 4.9%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222.2 84% 4.9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --success: 142 76% 36%;
-    --warning: 38 92% 50%;
+    --popover-foreground: 0 0% 4%;
+    --primary: 0 0% 4%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 95.5%;
+    --secondary-foreground: 0 0% 4%;
+    --muted: 0 0% 95.5%;
+    --muted-foreground: 0 0% 42%;
+    --accent: 0 0% 94%;
+    --accent-foreground: 0 0% 4%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 90%;
+    --input: 0 0% 87%;
+    --ring: 0 0% 4%;
+    --radius: 0.875rem;
+    --success: 142 72% 32%;
+    --warning: 35 92% 42%;
   }
 
-  /* Monochrome Dark — qrdx-website dark slate palette */
+  .dark,
   .mono-dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --success: 142 76% 36%;
-    --warning: 38 92% 50%;
+    --background: 0 0% 3%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 6%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 4%;
+    --secondary: 0 0% 11%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 11%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 0 0% 13%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 72% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 14%;
+    --input: 0 0% 17%;
+    --ring: 0 0% 83%;
+    --success: 142 64% 46%;
+    --warning: 38 92% 55%;
+    --spotlight: 0.07;
   }
 }
 
@@ -131,12 +88,12 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--primary) / 0.3);
+  background: hsl(var(--foreground) / 0.18);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--primary) / 0.5);
+  background: hsl(var(--foreground) / 0.35);
 }
 
 /* Input number hide spinner */
@@ -157,8 +114,8 @@ input[type="number"] {
 }
 
 @keyframes glow {
-  0%, 100% { box-shadow: 0 0 15px rgba(138, 80, 255, 0.2); }
-  50% { box-shadow: 0 0 30px rgba(138, 80, 255, 0.4); }
+  0%, 100% { box-shadow: 0 0 15px hsl(var(--foreground) / 0.08); }
+  50% { box-shadow: 0 0 30px hsl(var(--foreground) / 0.16); }
 }
 
 @keyframes shimmer {
@@ -208,9 +165,9 @@ input[type="number"] {
   animation: fade-in 0.4s ease-out forwards;
 }
 
-/* Gradient text */
+/* Gradient text: ink that fades a little toward the end, like light on metal. */
 .gradient-text {
-  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%);
+  background: linear-gradient(135deg, hsl(var(--foreground)) 30%, hsl(var(--foreground) / 0.55) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -263,4 +220,33 @@ input[type="number"] {
     -webkit-user-select: text;
     user-select: text;
   }
+}
+
+/* ── Monochrome surfaces ───────────────────────────────────────────────────── */
+
+/* A faint spotlight from the top and fine grain, so flat black or white has depth. */
+.mono-backdrop {
+  background-color: hsl(var(--background));
+  background-image:
+    radial-gradient(80% 50% at 50% -10%, hsl(var(--foreground) / var(--spotlight, 0.03)), transparent 70%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0.035 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* The balance card: brushed ink in light mode, brushed silver-on-black in dark. */
+.metal-card {
+  background-image:
+    linear-gradient(135deg, hsl(var(--foreground) / 0.06) 0%, transparent 38%, hsl(var(--foreground) / 0.04) 62%, transparent 100%),
+    repeating-linear-gradient(90deg, hsl(var(--foreground) / 0.012) 0 1px, transparent 1px 3px);
+}
+
+/* Hidden balances: blurred in place rather than replaced, so the layout never jumps. */
+.privacy-blur {
+  filter: blur(9px);
+  transition: filter 0.25s ease;
+  user-select: none;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-float, .animate-glow, .animate-pulse-ring, .animate-shimmer { animation: none; }
 }

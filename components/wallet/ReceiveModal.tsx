@@ -34,7 +34,7 @@ export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: Re
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="min-h-screen mono-backdrop">
       {/* Header */}
       <div className="glass-strong sticky top-0 z-20">
         <div className="px-4 py-3">
@@ -59,12 +59,12 @@ export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: Re
             onClick={() => setAddressType('eth')}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-semibold transition-all ${
               addressType === 'eth'
-                ? 'bg-background shadow-sm text-blue-400'
+                ? 'bg-background shadow-sm text-foreground/70'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded ${
-              addressType === 'eth' ? 'bg-blue-500/20' : ''
+              addressType === 'eth' ? 'bg-foreground/10' : ''
             }`}>
               ETH
             </span>
@@ -97,7 +97,7 @@ export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: Re
                 size={180}
                 level="M"
                 bgColor="#ffffff"
-                fgColor={addressType === 'eth' ? '#3b82f6' : '#8A50FF'}
+                fgColor="#000000"
                 imageSettings={{
                   src: '',
                   height: 0,
@@ -107,11 +107,8 @@ export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: Re
               />
               {/* Center badge */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-[10px] font-bold text-white shadow-md ${
-                  addressType === 'eth'
-                    ? 'bg-blue-500'
-                    : 'bg-primary'
-                }`}>
+                {/* The code is always black on white, so its badge is too. */}
+                <div className="h-8 w-8 rounded-lg flex items-center justify-center text-[10px] font-bold text-white bg-black shadow-md ring-2 ring-white">
                   {addressType === 'eth' ? 'ETH' : 'PQ'}
                 </div>
               </div>
@@ -122,7 +119,7 @@ export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: Re
               <div className="flex items-center gap-2 justify-center mb-2">
                 <span className={`text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded ${
                   addressType === 'eth'
-                    ? 'bg-blue-500/15 text-blue-400'
+                    ? 'bg-foreground/10 text-foreground/70'
                     : 'bg-primary/15 text-primary'
                 }`}>
                   {addressType === 'eth' ? 'EVM' : 'PQ'}

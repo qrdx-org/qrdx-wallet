@@ -29,13 +29,13 @@ const MAIN_ACTIONS: QuickAction[] = [
     key: 'send',
     icon: <ArrowUpRight className="h-5 w-5" />,
     label: 'Send',
-    gradient: 'from-blue-500 to-blue-600',
+    gradient: 'from-primary to-primary/70',
   },
   {
     key: 'receive',
     icon: <ArrowDownLeft className="h-5 w-5" />,
     label: 'Receive',
-    gradient: 'from-green-500 to-emerald-600',
+    gradient: 'from-primary to-primary/70',
   },
   {
     key: 'swap',
@@ -50,25 +50,25 @@ const FOLDER_ACTIONS: QuickAction[] = [
     key: 'shield',
     icon: <Shield className="h-5 w-5" />,
     label: 'Shield',
-    gradient: 'from-cyan-500 to-teal-600',
+    gradient: 'from-primary to-primary/70',
   },
   {
     key: 'buy',
     icon: <CreditCard className="h-5 w-5" />,
     label: 'Buy',
-    gradient: 'from-orange-500 to-amber-600',
+    gradient: 'from-primary to-primary/70',
   },
   {
     key: 'trade',
     icon: <TrendingUp className="h-5 w-5" />,
     label: 'Trade',
-    gradient: 'from-rose-500 to-pink-600',
+    gradient: 'from-primary to-primary/70',
   },
   {
     key: 'stake',
     icon: <Landmark className="h-5 w-5" />,
     label: 'Stake',
-    gradient: 'from-violet-500 to-purple-600',
+    gradient: 'from-primary to-primary/70',
   },
 ]
 
@@ -92,7 +92,7 @@ export function QuickActions({ onAction }: QuickActionsProps) {
             onClick={() => onAction?.(action.key)}
             className="group flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl bg-background/50 border border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all"
           >
-            <div className={`h-9 w-9 rounded-lg bg-gradient-to-br ${action.gradient} flex items-center justify-center text-white shadow-sm group-hover:scale-105 transition-transform`}>
+            <div className={`h-9 w-9 rounded-lg bg-gradient-to-br ${action.gradient} flex items-center justify-center text-primary-foreground shadow-sm group-hover:scale-105 transition-transform`}>
               {action.icon}
             </div>
             <span className="text-[10px] font-medium text-muted-foreground group-hover:text-foreground transition-colors">{action.label}</span>
@@ -135,7 +135,7 @@ export function QuickActions({ onAction }: QuickActionsProps) {
               }}
               className="group flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl bg-background/50 border border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all"
             >
-              <div className={`h-9 w-9 rounded-lg bg-gradient-to-br ${action.gradient} flex items-center justify-center text-white shadow-sm group-hover:scale-105 transition-transform`}>
+              <div className={`h-9 w-9 rounded-lg bg-gradient-to-br ${action.gradient} flex items-center justify-center text-primary-foreground shadow-sm group-hover:scale-105 transition-transform`}>
                 {action.icon}
               </div>
               <span className="text-[10px] font-medium text-muted-foreground group-hover:text-foreground transition-colors">{action.label}</span>

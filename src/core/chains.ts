@@ -225,7 +225,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isTestnet: false,
     // QRDX targets a 180s block interval (qrdx/constants.py: BLOCK_TIME = 180).
     blockTimeSec: 180,
-    color: 'from-purple-500 to-violet-600',
+    color: 'from-primary to-primary/70',
     tokens: [QRDX_NATIVE],
     pqBridgeTarget: undefined,
   },
@@ -244,7 +244,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: true,
     blockTimeSec: 180,
-    color: 'from-purple-400 to-violet-500',
+    color: 'from-primary/50 to-primary/25',
     tokens: [QRDX_NATIVE],
   },
 
@@ -271,7 +271,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: true,
     blockTimeSec: 180,
-    color: 'from-slate-400 to-slate-500',
+    color: 'from-primary/50 to-primary/25',
     tokens: [QRDX_NATIVE],
   },
 
@@ -294,7 +294,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: false,
     blockTimeSec: 12,
-    color: 'from-blue-500 to-blue-600',
+    color: 'from-primary to-primary/70',
     tokens: [
       ETH_NATIVE,
       USDC_ETHEREUM,
@@ -325,7 +325,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: true,
     blockTimeSec: 12,
-    color: 'from-blue-400 to-blue-500',
+    color: 'from-primary/50 to-primary/25',
     tokens: [ETH_NATIVE],
     pqBridgeTarget: 'qrdx-testnet',
   },
@@ -348,7 +348,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: false,
     blockTimeSec: 2,
-    color: 'from-purple-500 to-indigo-600',
+    color: 'from-primary to-primary/70',
     tokens: [
       { address: '', symbol: 'POL', name: 'POL', decimals: 18, coingeckoId: 'matic-network' },
       { address: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', symbol: 'USDC', name: 'USD Coin', decimals: 6, coingeckoId: 'usd-coin' },
@@ -369,7 +369,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: true,
     blockTimeSec: 2,
-    color: 'from-purple-400 to-indigo-500',
+    color: 'from-primary/50 to-primary/25',
     tokens: [{ address: '', symbol: 'POL', name: 'POL', decimals: 18 }],
   },
 
@@ -391,7 +391,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: false,
     blockTimeSec: 0.25,
-    color: 'from-blue-500 to-sky-600',
+    color: 'from-primary to-primary/70',
     tokens: [
       ETH_NATIVE,
       { address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', symbol: 'USDC', name: 'USD Coin', decimals: 6, coingeckoId: 'usd-coin' },
@@ -412,7 +412,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: true,
     blockTimeSec: 0.25,
-    color: 'from-blue-400 to-sky-500',
+    color: 'from-primary/50 to-primary/25',
     tokens: [ETH_NATIVE],
   },
 
@@ -434,7 +434,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: false,
     blockTimeSec: 2,
-    color: 'from-red-500 to-rose-600',
+    color: 'from-primary to-primary/70',
     tokens: [
       ETH_NATIVE,
       { address: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85', symbol: 'USDC', name: 'USD Coin', decimals: 6, coingeckoId: 'usd-coin' },
@@ -455,7 +455,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: true,
     blockTimeSec: 2,
-    color: 'from-red-400 to-rose-500',
+    color: 'from-primary/50 to-primary/25',
     tokens: [ETH_NATIVE],
   },
 
@@ -477,7 +477,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: false,
     blockTimeSec: 2,
-    color: 'from-blue-600 to-blue-700',
+    color: 'from-primary to-primary/70',
     tokens: [
       ETH_NATIVE,
       { address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', symbol: 'USDC', name: 'USD Coin', decimals: 6, coingeckoId: 'usd-coin' },
@@ -497,7 +497,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: true,
     blockTimeSec: 2,
-    color: 'from-blue-500 to-blue-600',
+    color: 'from-primary to-primary/70',
     tokens: [ETH_NATIVE],
   },
 
@@ -519,7 +519,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: false,
     blockTimeSec: 2,
-    color: 'from-red-500 to-red-600',
+    color: 'from-primary to-primary/70',
     tokens: [
       { address: '', symbol: 'AVAX', name: 'Avalanche', decimals: 18, coingeckoId: 'avalanche-2' },
       { address: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E', symbol: 'USDC', name: 'USD Coin', decimals: 6, coingeckoId: 'usd-coin' },
@@ -539,7 +539,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: true,
     blockTimeSec: 2,
-    color: 'from-red-400 to-red-500',
+    color: 'from-primary/50 to-primary/25',
     tokens: [{ address: '', symbol: 'AVAX', name: 'Avalanche', decimals: 18 }],
   },
 
@@ -562,7 +562,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: false,
     blockTimeSec: 3,
-    color: 'from-yellow-400 to-yellow-500',
+    color: 'from-primary/50 to-primary/25',
     tokens: [
       { address: '', symbol: 'BNB', name: 'BNB', decimals: 18, coingeckoId: 'binancecoin' },
       { address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', symbol: 'USDC', name: 'USD Coin', decimals: 18, coingeckoId: 'usd-coin' },
@@ -582,7 +582,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: true,
     blockTimeSec: 3,
-    color: 'from-yellow-300 to-yellow-400',
+    color: 'from-primary/50 to-primary/25',
     tokens: [{ address: '', symbol: 'BNB', name: 'BNB', decimals: 18 }],
   },
 
@@ -604,7 +604,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: false,
     blockTimeSec: 1,
-    color: 'from-blue-500 to-cyan-500',
+    color: 'from-primary to-primary/70',
     tokens: [
       { address: '', symbol: 'FTM', name: 'Fantom', decimals: 18, coingeckoId: 'fantom' },
     ],
@@ -627,7 +627,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     isEvm: true,
     isTestnet: false,
     blockTimeSec: 1,
-    color: 'from-indigo-500 to-purple-600',
+    color: 'from-primary to-primary/70',
     tokens: [
       ETH_NATIVE,
       { address: '0x1d17CBcF0D6D143135aE902365D2E5e2A16538D4', symbol: 'USDC', name: 'USD Coin', decimals: 6, coingeckoId: 'usd-coin' },

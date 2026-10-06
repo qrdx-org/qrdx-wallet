@@ -1,7 +1,8 @@
 'use client'
 
+import { QrdxMark } from '@/components/QrdxMark'
 import { useEffect, useState } from 'react'
-import { Fingerprint, Shield, AlertTriangle } from 'lucide-react'
+import { Fingerprint, AlertTriangle } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import {
   ErrorBanner,
@@ -77,7 +78,7 @@ export function Unlock() {
     <FlowScreen className="justify-center">
       <div className="text-center mb-8 animate-slide-up">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/60 mb-4 shadow-lg shadow-primary/25">
-          <Shield className="h-8 w-8 text-white" />
+          <QrdxMark className="h-8 w-8 text-primary-foreground" />
         </div>
         <h1 className="text-2xl font-bold mb-1.5">Welcome back</h1>
         <p className="text-sm text-muted-foreground">Unlock your QRDX Wallet</p>

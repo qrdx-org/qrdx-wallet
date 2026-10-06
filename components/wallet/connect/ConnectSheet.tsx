@@ -43,7 +43,7 @@ export function ConnectSheet({ onClose }: { onClose: () => void }) {
   )
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="min-h-screen mono-backdrop">
       <div className="glass-strong sticky top-0 z-20">
         <div className="flex items-center gap-3 px-4 py-3">
           <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/50" onClick={onClose} aria-label="Back">

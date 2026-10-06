@@ -55,7 +55,7 @@ export function ActivityList() {
       case 'swap':
         return 'text-primary bg-primary/10'
       case 'contract':
-        return 'text-blue-400 bg-blue-400/10'
+        return 'text-foreground/70 bg-foreground/10'
     }
   }
 
@@ -86,7 +86,7 @@ export function ActivityList() {
     switch (status) {
       case 'pending':
         return (
-          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400">
+          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-500">
             Pending
           </span>
         )

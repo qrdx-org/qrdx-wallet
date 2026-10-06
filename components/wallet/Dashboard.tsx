@@ -21,14 +21,29 @@ import { BuyModal } from './BuyModal'
 import { ShieldModal } from './ShieldModal'
 import { TradeModal } from './TradeModal'
 import { StakeModal } from './StakeModal'
-import { formatAddress } from '@/lib/utils'
+import { cn, formatAddress } from '@/lib/utils'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 
 export function Dashboard() {
   const { lock, currentWallet, balances, balancesLoading, activeChain, portfolioValue, portfolioChange24h, priceHistory, transactions, pqBalance, combinedNativeBalance } = useWallet()
   const nativeSym = activeChain.nativeCurrency?.symbol ?? 'ETH'
   const [copied, setCopied] = useState<'eth' | 'pq' | null>(null)
-  const [balanceVisible, setBalanceVisible] = useState(true)
+  // Hidden balances stay hidden across visits (a per-device preference).
+  const [balanceVisible, setBalanceVisibleState] = useState(() => {
+    try {
+      return typeof window === 'undefined' || localStorage.getItem('qrdx_hide_balances') !== '1'
+    } catch {
+      return true
+    }
+  })
+  const setBalanceVisible = (v: boolean) => {
+    setBalanceVisibleState(v)
+    try {
+      localStorage.setItem('qrdx_hide_balances', v ? '0' : '1')
+    } catch {
+      /* storage unavailable: this visit only */
+    }
+  }
   const [activeTab, setActiveTab] = useState<'tokens' | 'nfts' | 'activity'>('tokens')
   const [showSettings, setShowSettings] = useState(false)
   const [showConnect, setShowConnect] = useState(false)
@@ -140,7 +155,7 @@ export function Dashboard() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="min-h-screen mono-backdrop">
       {/* Header */}
       <div className="glass-strong sticky top-0 z-20">
         <div className="px-4 py-3">
@@ -148,7 +163,7 @@ export function Dashboard() {
             <div className="flex items-center gap-2.5">
               <div className="relative">
                 <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-md shadow-primary/20">
-                  <span className="text-white font-bold text-xs">
+                  <span className="text-primary-foreground font-bold text-xs">
                     {accountName.slice(0, 2).toUpperCase()}
                   </span>
                 </div>
@@ -165,7 +180,7 @@ export function Dashboard() {
                     onClick={() => setAddressMode('eth')}
                     className={`text-[9px] font-semibold uppercase px-1 py-0.5 rounded transition-colors ${
                       addressMode === 'eth'
-                        ? 'bg-blue-500/20 text-blue-400'
+                        ? 'bg-foreground/10 text-foreground/70'
                         : 'text-muted-foreground/50 hover:text-muted-foreground'
                     }`}
                   >
@@ -236,8 +251,8 @@ export function Dashboard() {
         <NetworkStatusBanner />
 
         {/* Balance Card */}
-        <Card className="glass border-primary/10">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/10 pointer-events-none" />
+        <Card className="glass metal-card relative overflow-hidden border-border/70">
+          <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-foreground/30 to-transparent" />
           <CardContent className="p-4 relative">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-muted-foreground font-medium">
@@ -248,6 +263,8 @@ export function Dashboard() {
                 size="icon"
                 className="h-7 w-7 rounded-lg"
                 onClick={() => setBalanceVisible(!balanceVisible)}
+                aria-label={balanceVisible ? 'Hide balances' : 'Show balances'}
+                title={balanceVisible ? 'Hide balances' : 'Show balances'}
               >
                 {balanceVisible ? (
                   <Eye className="h-3.5 w-3.5 text-muted-foreground" />
@@ -256,8 +273,8 @@ export function Dashboard() {
                 )}
               </Button>
             </div>
-            <div className="text-3xl font-bold tracking-tight mb-1">
-              {balanceVisible ? totalBalance : '••••••••'}
+            <div className={cn('text-3xl font-bold tracking-tight mb-1 tabular-nums', !balanceVisible && 'privacy-blur')} aria-hidden={!balanceVisible}>
+              {totalBalance}
             </div>
             {/* Breakdown of the combined figure. Always shown so the split is
                 visible rather than something the user has to go looking for. */}
@@ -268,9 +285,9 @@ export function Dashboard() {
                   addressMode === 'eth' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <span className="h-1.5 w-1.5 rounded-full bg-blue-400" />
+                <span className="h-1.5 w-1.5 rounded-full bg-foreground/60" />
                 <span className="font-medium uppercase tracking-wide">EVM</span>
-                <span className="font-mono">{formatUnits(evmNativeWei, nativeDecimals)}</span>
+                <span className={cn('font-mono', !balanceVisible && 'privacy-blur')}>{formatUnits(evmNativeWei, nativeDecimals)}</span>
               </button>
               <button
                 onClick={() => setAddressMode('pq')}
@@ -280,7 +297,7 @@ export function Dashboard() {
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-primary" />
                 <span className="font-medium uppercase tracking-wide">PQ</span>
-                <span className="font-mono">{formatUnits(pqNativeWei, nativeDecimals)}</span>
+                <span className={cn('font-mono', !balanceVisible && 'privacy-blur')}>{formatUnits(pqNativeWei, nativeDecimals)}</span>
               </button>
             </div>
             <PortfolioChart data={priceHistory} change24h={portfolioChange24h} />

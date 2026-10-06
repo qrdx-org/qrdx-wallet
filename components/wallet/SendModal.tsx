@@ -47,14 +47,14 @@ interface TokenOption {
 // Gradient colors for known tokens
 const TOKEN_COLORS: Record<string, string> = {
   QRDX: 'from-primary to-primary/60',
-  ETH: 'from-blue-500 to-blue-600',
-  USDC: 'from-blue-400 to-cyan-500',
-  BTC: 'from-orange-400 to-amber-500',
-  DAI: 'from-yellow-400 to-amber-500',
-  LINK: 'from-blue-600 to-indigo-600',
-  UNI: 'from-pink-400 to-pink-600',
-  MATIC: 'from-purple-500 to-violet-600',
-  BNB: 'from-yellow-500 to-yellow-600',
+  ETH: 'from-primary to-primary/70',
+  USDC: 'from-primary to-primary/70',
+  BTC: 'from-primary to-primary/70',
+  DAI: 'from-primary to-primary/70',
+  LINK: 'from-primary to-primary/70',
+  UNI: 'from-primary to-primary/70',
+  MATIC: 'from-primary to-primary/70',
+  BNB: 'from-primary to-primary/70',
   AVAX: 'from-red-500 to-red-600',
 }
 
@@ -108,7 +108,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
         balance: '0.0000',
         balanceNum: 0,
         value: '',
-        color: TOKEN_COLORS[nativeSymbol] ?? 'from-gray-500 to-gray-600',
+        color: TOKEN_COLORS[nativeSymbol] ?? 'from-primary/80 to-primary/50',
         icon: nativeSymbol.slice(0, 2),
         decimals: nativeDecimals,
       }]
@@ -121,7 +121,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
         balance: bal.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }),
         balanceNum: bal,
         value: '',
-        color: TOKEN_COLORS[b.symbol] ?? 'from-gray-500 to-gray-600',
+        color: TOKEN_COLORS[b.symbol] ?? 'from-primary/80 to-primary/50',
         icon: b.symbol.slice(0, 2),
         contractAddress: b.address,
         decimals: b.decimals ?? 18,
@@ -265,7 +265,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
   /* ─── Step 1: Token Selection ─── */
   if (step === 'select-token') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex flex-col">
+      <div className="min-h-screen mono-backdrop flex flex-col">
         {/* Header */}
         <div className="glass-strong sticky top-0 z-20">
           <div className="px-4 py-3">
@@ -318,7 +318,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
               >
                 {/* Token icon */}
                 <div className={`h-10 w-10 rounded-xl bg-gradient-to-br ${token.color} flex items-center justify-center shadow-lg shadow-black/10 group-hover:scale-105 transition-transform`}>
-                  <span className="text-white text-sm font-bold">{token.icon}</span>
+                  <span className="text-primary-foreground text-sm font-bold">{token.icon}</span>
                 </div>
 
                 {/* Token info */}
@@ -352,7 +352,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
   const token = selectedToken!
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex flex-col">
+    <div className="min-h-screen mono-backdrop flex flex-col">
       {/* Header */}
       <div className="glass-strong sticky top-0 z-20">
         <div className="px-4 py-3">
@@ -367,7 +367,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
             </Button>
             <div className="flex items-center gap-2.5 flex-1">
               <div className={`h-7 w-7 rounded-lg bg-gradient-to-br ${token.color} flex items-center justify-center shadow-md`}>
-                <span className="text-white text-xs font-bold">{token.icon}</span>
+                <span className="text-primary-foreground text-xs font-bold">{token.icon}</span>
               </div>
               <div>
                 <h1 className="text-base font-semibold">Send {token.symbol}</h1>
@@ -410,7 +410,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
                 onClick={() => setAddressType('classic')}
                 className={`text-[9px] font-semibold uppercase px-2 py-0.5 rounded-md transition-all ${
                   addressType === 'classic'
-                    ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30'
+                    ? 'bg-foreground/10 text-foreground/70 ring-1 ring-foreground/30'
                     : 'bg-muted/50 text-muted-foreground/50 hover:text-muted-foreground/70'
                 }`}
               >
@@ -529,7 +529,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
               />
               <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
                 <div className={`h-5 w-5 rounded-md bg-gradient-to-br ${token.color} flex items-center justify-center`}>
-                  <span className="text-white text-[8px] font-bold">{token.icon}</span>
+                  <span className="text-primary-foreground text-[8px] font-bold">{token.icon}</span>
                 </div>
                 <span className="text-sm font-semibold text-muted-foreground">{token.symbol}</span>
               </div>
