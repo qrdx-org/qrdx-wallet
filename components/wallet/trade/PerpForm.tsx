@@ -70,6 +70,7 @@ export function PerpForm({
   const margin = notional && isAmount(leverage) && dec(leverage) > 0n ? str(div(dec(notional), dec(leverage))) : null
 
   const problem = (() => {
+    if (market.collateralToken === '') return 'No collateral on this network'
     if (!market.oraclePrice) return 'Waiting for an oracle price'
     if (!isAmount(size) || dec(size) <= 0n) return 'Enter a size'
     if (!execPrice) return kind === 'market' ? 'Book is empty on that side' : 'Enter a price'
@@ -105,6 +106,16 @@ export function PerpForm({
 
   return (
     <div className="space-y-2.5">
+      {market.collateralToken === '' && (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-[10.5px] leading-snug">
+          This network&apos;s nodes have no perps collateral configured, so deposits and orders are refused until they set one.
+        </p>
+      )}
+      {market.collateralToken !== '' && !market.oraclePrice && (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-[10.5px] leading-snug">
+          No oracle price yet: validators have not voted a {market.base} price, so new positions are refused.
+        </p>
+      )}
       <div className="flex gap-1.5">
         <button type="button" onClick={() => setLevOpen(true)} className="flex-1 rounded-lg border py-1.5 text-[11px] font-semibold hover:bg-accent">
           {current ? `${Number(current.leverage)}× ${current.mode === 'cross' ? 'Cross' : 'Isolated'}` : `${effective ? Number(effective) : Number(market.maxLeverage ?? 20)}× default`}

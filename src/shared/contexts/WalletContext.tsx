@@ -49,6 +49,7 @@ import type { ExchangeOpName, JsonValue } from '../../core/exchange-tx'
 import type { KeystoreV3 } from '../../core/keystore'
 import { WatchedTokens } from '../../core/watched-tokens'
 import { exchange } from '../../core/exchange-client'
+import { qrdxPriceHistory, qrdxUsdPrice } from '../../core/trade/prices'
 import { ActivityLog, fetchQrdxHistory } from '../../core/activity'
 import { AddressBook, type AddressBookEntry, type AddressBookInput } from '../../core/address-book'
 import { SitePermissions, type SitePermission, type SiteCapability } from '../../core/permissions'
@@ -687,12 +688,21 @@ export function WalletProvider({
     const all = [...balances, ...pqBalances]
     if (all.length === 0) return
     const priceMap = await fetchPricesBySymbol([...new Set(all.map((b) => b.symbol))])
+    // CoinGecko does not list QRDX: on QRDX networks its price and chart come from the trade API.
+    const qrdx = isQrdxChain(activeChain)
+    if (qrdx) {
+      const p = await qrdxUsdPrice(activeChain)
+      if (p) priceMap.set('QRDX', p)
+    }
     setPrices(priceMap)
     const { totalUsd, change24hPercent } = computePortfolioValue(all, priceMap)
     setPortfolioValue(totalUsd)
     setPortfolioChange24h(change24hPercent)
-    const nativeId = priceMap.get(activeChain.nativeCurrency?.symbol ?? 'ETH')?.id
-    if (nativeId) setPriceHistory(await fetchPriceHistory(nativeId, 1))
+    if (qrdx) setPriceHistory(await qrdxPriceHistory(activeChain))
+    else {
+      const nativeId = priceMap.get(activeChain.nativeCurrency?.symbol ?? 'ETH')?.id
+      if (nativeId) setPriceHistory(await fetchPriceHistory(nativeId, 1))
+    }
   }, [balances, pqBalances, activeChain])
 
   useEffect(() => {
