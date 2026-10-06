@@ -57,6 +57,7 @@ see [PLATFORMS.md](PLATFORMS.md)). This document maps the code.
 | `ethereum.ts` | JSON-RPC client with fallbacks, balances (native + ERC-20), gas. |
 | `chains.ts` / `chain-identity.ts` | Network registry; live chain-ID verification before signing. |
 | `exchange-client.ts` | Typed reads of `exchange_*` (tokens, balances, swap quotes, receipts). |
+| `trade/` | The trading screen's data and orders. `api.ts` reads the trade API for the active QRDX network (trade.qrdx.org `/api/v1`, `/api/v1-test`; the local network uses `NEXT_PUBLIC_QRDX_TRADE_LOCAL_API`) and checks it serves the wallet's chain first. `orders.ts`, `decimal.ts`, `format.ts`, `types.ts` are ported from qrdx-trade, so an order signed here is the order the site would sign. |
 | `activity.ts` | Durable log of transactions this wallet submitted, resolved from receipts. Plus incoming token transfers from logs. QRDX's history source. |
 | `permissions.ts` | Per-origin dApp capabilities. Absence means denial. |
 | `storage.ts` | `ChromeStorage`, `WebStorage`, `MemoryStorage`, and `chromeSessionStore()`. |
@@ -95,6 +96,17 @@ see [PLATFORMS.md](PLATFORMS.md)). This document maps the code.
 - `wallet/settings/AccountsPage.tsx` and `SecurityPage.tsx` handle accounts,
   imports, discovery, exports, locking, biometrics, password and reset.
 - `wallet/approval/ApprovalScreen.tsx` is the extension's request review.
+- `wallet/TradeModal.tsx` and `wallet/trade/` are the trading screen, laid out
+  like trade.qrdx.org: market list (spot, perpetuals), chart, book and trades,
+  spot limit / market orders, perps (long / short, limit / IOC market,
+  leverage and margin mode, reduce-only, collateral), open orders, balances,
+  positions and activity. Nothing in the wallet asks for approval a second
+  time, so every order passes through a review sheet (`trade/submit.tsx`) that
+  decodes the exact params with `exchange-describe.ts`, the approval window's
+  decoder, before the PQ key signs it; it then follows the receipt.
+- `wallet/SwapModal.tsx` is the swap card (node quote, minimum out, deadline),
+  through the same review sheet. It works from the node alone; the trade API
+  adds logos, verification and USD estimates when it serves the network.
 
 ## Data on disk
 

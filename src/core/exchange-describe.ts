@@ -223,6 +223,22 @@ export function describeExchangeOp(
         warnings,
       }
 
+    case 'CREATE_MARKET': {
+      const base = str(params.base_token)
+      const quote = str(params.quote_token) || 'USD'
+      const lev = str(params.max_leverage) || '20'
+      warnings.push(`Anyone can create a market. It trades only once validators publish a ${base} price.`)
+      return {
+        headline: `Create the ${base}-${quote} perpetual market, up to ${lev}× leverage`,
+        details: [
+          { label: 'Market', value: `${base}-${quote}-PERP` },
+          { label: 'Max leverage', value: `${lev}×` },
+          { label: 'Initial / maintenance margin', value: `${trimTo(String(100 / Number(lev)), 2)}% / ${trimTo(String(50 / Number(lev)), 2)}%` },
+        ],
+        warnings,
+      }
+    }
+
     case 'PERP_DEPOSIT':
       return { headline: `Deposit ${groupDigits(str(params.amount))} perps collateral`, details: [], warnings }
     case 'PERP_WITHDRAW':

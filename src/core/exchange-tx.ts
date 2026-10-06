@@ -79,6 +79,7 @@ const REQUIRED_PARAMS: Partial<Record<ExchangeOpCode, string[]>> = {
   [ExchangeOp.TOKEN_DEPLOY]: ['name', 'symbol'],
   [ExchangeOp.STAKE_DEPOSIT]: ['validator_public_key', 'stake_amount'],
   [ExchangeOp.PERP_DEPOSIT]: ['amount'],
+  [ExchangeOp.CREATE_MARKET]: ['base_token'],
   [ExchangeOp.PERP_WITHDRAW]: ['amount'],
   [ExchangeOp.PERP_SET_LEVERAGE]: ['market_id', 'leverage'],
   [ExchangeOp.PERP_ORDER]: ['market_id', 'side', 'size', 'price'],

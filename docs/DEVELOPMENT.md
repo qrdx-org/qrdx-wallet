@@ -73,3 +73,17 @@ literal old-format fixture.
 - **iPhone PWA:** Safari on a Mac → Develop → *your iPhone* → the web app.
 - **Settings → Developer** shows platform, backend, vault version, passkey
   support and RPC status. You can copy it into bug reports; it contains no secrets.
+
+## Trading screen and the trade API
+
+The trading screen (and the swap's logos and USD estimates) read the trade API
+of the active QRDX network:
+
+| Variable | Default |
+|---|---|
+| `NEXT_PUBLIC_QRDX_TRADE_URL` | `https://trade.qrdx.org` (mainnet `/api/v1`, testnet `/api/v1-test`) |
+| `NEXT_PUBLIC_QRDX_TRADE_LOCAL_API` | `http://127.0.0.1:3100/api/v1-test`: qrdx-trade in development with `NEXT_PUBLIC_QRDX_TEST_NETWORK=local` |
+
+The wallet checks that the API serves the chain it is on before showing
+anything from it. Orders are built and signed in the wallet; the API only
+supplies market data.

@@ -133,6 +133,14 @@ describe('describeExchangeOp', () => {
     expect(s.details.find((d) => d.label === 'Deposit')?.value).toBe('0.1 qBTC + 8,500 qUSDC')
   })
 
+  it('describes creating a perp market with its margins and the oracle caveat', () => {
+    const s = describeExchangeOp('CREATE_MARKET', { base_token: 'SOL', max_leverage: '10' }, { tokens: {} })
+    expect(s.headline).toBe('Create the SOL-USD perpetual market, up to 10× leverage')
+    expect(s.details).toContainEqual({ label: 'Market', value: 'SOL-USD-PERP' })
+    expect(s.details).toContainEqual({ label: 'Initial / maintenance margin', value: '10% / 5%' })
+    expect(s.warnings.join(' ')).toMatch(/validators publish a SOL price/)
+  })
+
   it('describes a token launch: deploy with fixed supply, and its pool before the token exists', () => {
     const d = describeExchangeOp('TOKEN_DEPLOY', { name: 'Quantum Frog', symbol: 'QFROG', decimals: 18, initial_supply: '1000000000' }, { tokens: {} })
     expect(d.headline).toBe('Create token Quantum Frog (QFROG) with 1,000,000,000 supply')
