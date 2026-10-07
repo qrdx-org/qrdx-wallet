@@ -276,7 +276,7 @@ export function AllTokens({
               >
                 {/* Token icon */}
                 <Avatar className="h-9 w-9 shadow-sm shrink-0">
-                  <AvatarImage src={token.icon} alt={token.symbol} />
+                  <AvatarImage src={token.icon} alt={token.symbol} referrerPolicy="no-referrer" className="logo-mono object-cover" />
                   <AvatarFallback className={`bg-gradient-to-br ${token.color} text-primary-foreground text-xs font-bold`}>
                     {token.symbol.slice(0, 2)}
                   </AvatarFallback>

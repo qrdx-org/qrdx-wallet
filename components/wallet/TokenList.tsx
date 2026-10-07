@@ -1,10 +1,11 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { TrendingUp, TrendingDown, ChevronRight, Loader2 } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { formatUsd } from '@/src/core/prices'
+import { tokenImages } from '@/src/core/profiles'
 
 export interface Token {
   symbol: string
@@ -47,7 +48,14 @@ const TOKEN_COLORS: Record<string, string> = {
  * This replaces the old hardcoded ALL_TOKENS array.
  */
 export function useTokenList(): Token[] {
-  const { balances, prices } = useWallet()
+  const { balances, prices, activeChain } = useWallet()
+  // Images token creators published (docs/PROFILES.md in qrdx-trade), by contract address.
+  const [images, setImages] = useState<Map<string, string>>(new Map())
+  useEffect(() => {
+    const ctrl = new AbortController()
+    tokenImages(activeChain, ctrl.signal).then((m) => !ctrl.signal.aborted && setImages(m))
+    return () => ctrl.abort()
+  }, [activeChain])
 
   return useMemo(() => {
     if (balances.length === 0) return []
@@ -66,13 +74,13 @@ export function useTokenList(): Token[] {
         value: usdValue > 0 ? formatUsd(usdValue) : '',
         valueNum: usdValue,
         change24h,
-        icon: undefined,
+        icon: b.address ? images.get(b.address.toLowerCase()) : undefined,
         color: TOKEN_COLORS[b.symbol] ?? 'from-primary/80 to-primary/50',
         contractAddress: b.address,
         decimals: b.decimals,
       }
     }).sort((a, b) => b.valueNum - a.valueNum) // sort by value descending
-  }, [balances, prices])
+  }, [balances, prices, images])
 }
 
 // Keep ALL_TOKENS export for backwards compatibility with AllTokens component
@@ -123,7 +131,7 @@ export function TokenList({ pinnedSymbols, onViewAll }: TokenListProps) {
         >
           <div className="flex items-center gap-3">
             <Avatar className="h-9 w-9 shadow-sm">
-              <AvatarImage src={token.icon} alt={token.symbol} />
+              <AvatarImage src={token.icon} alt={token.symbol} referrerPolicy="no-referrer" className="logo-mono object-cover" />
               <AvatarFallback className={`bg-gradient-to-br ${token.color} text-primary-foreground text-xs font-bold`}>
                 {token.symbol.slice(0, 2)}
               </AvatarFallback>

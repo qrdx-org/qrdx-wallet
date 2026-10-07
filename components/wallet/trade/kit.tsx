@@ -84,20 +84,39 @@ export function usePriceFlash(value: string | null | undefined): string {
 const LOGOS = new Set(['qrdx', 'btc', 'eth', 'usdc', 'usdt', 'sol', 'bnb', 'avax', 'link', 'uni', 'ada', 'dot', 'doge'])
 const SIZES = { xs: 'h-4 w-4 text-[6px]', sm: 'h-5 w-5 text-[7px]', md: 'h-7 w-7 text-[9px]', lg: 'h-9 w-9 text-[11px]' }
 
-/** Verified assets show their logo in greyscale; anything else an initials disc with a dashed ring. */
+/**
+ * Verified assets show their logo in greyscale; others the image their creator
+ * published, also greyscale, or an initials disc. Unverified tokens keep a dashed
+ * ring either way, so a borrowed logo still reads as unverified.
+ */
 export function TokenBadge({
   asset,
   size = 'sm',
   className,
 }: {
-  asset: Pick<ApiAsset, 'symbol' | 'verified'> & { slug?: string | null }
+  asset: Pick<ApiAsset, 'symbol' | 'verified'> & { slug?: string | null; image?: string | null }
   size?: keyof typeof SIZES
   className?: string
 }) {
+  const [broken, setBroken] = useState<string | null>(null)
   const slug = asset.verified ? (asset.slug ?? asset.symbol.toLowerCase().replace(/^[qw](?=[a-z]{3})/, '')) : null
   if (slug && LOGOS.has(slug)) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={`/tokens/${slug}.svg`} alt="" aria-hidden className={cn('logo-mono shrink-0 rounded-full', SIZES[size], className)} />
+  }
+  if (asset.image && broken !== asset.image) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={asset.image}
+        alt=""
+        aria-hidden
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setBroken(asset.image ?? null)}
+        className={cn('logo-mono shrink-0 rounded-full bg-muted object-cover', !asset.verified && 'outline-dashed outline-1 outline-offset-1 outline-amber-500', SIZES[size], className)}
+      />
+    )
   }
   return (
     <span

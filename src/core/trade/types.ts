@@ -22,6 +22,8 @@ export interface ApiAsset {
   color: string
   /** Verified asset with a token on this network. Unverified tokens are always listed. */
   listed: boolean
+  /** The image the token's creator published (qrdx-trade docs/PROFILES.md), proxied by the trade site. */
+  image?: string | null
 }
 
 export interface IndexPrice {
