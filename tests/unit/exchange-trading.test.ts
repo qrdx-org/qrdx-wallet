@@ -133,6 +133,14 @@ describe('describeExchangeOp', () => {
     expect(s.details.find((d) => d.label === 'Deposit')?.value).toBe('0.1 qBTC + 8,500 qUSDC')
   })
 
+  it('names native QRDX in spot operations without an unknown-token warning', () => {
+    const USDC = '0x4227d3846511a16656b521361c10faf6358f0708'
+    const s = describeExchangeOp('SWAP', { token_in: 'QRDX', token_out: USDC, amount_in: '10', min_amount_out: '9' }, { tokens: { [USDC]: { symbol: 'USDC' } } })
+    expect(s.headline).toBe('Swap 10 QRDX for at least 9 USDC')
+    expect(s.details).toContainEqual({ label: 'Pay', value: 'QRDX · native' })
+    expect(s.warnings).toEqual([])
+  })
+
   it('describes creating a perp market with its margins and the oracle caveat', () => {
     const s = describeExchangeOp('CREATE_MARKET', { base_token: 'SOL', max_leverage: '10' }, { tokens: {} })
     expect(s.headline).toBe('Create the SOL-USD perpetual market, up to 10× leverage')

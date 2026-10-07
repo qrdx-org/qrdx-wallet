@@ -20,6 +20,19 @@ export function collateralLabel(account: AccountResponse | null): string {
   return account?.balances.find((b) => b.asset.address === t.toLowerCase())?.asset.symbol ?? `${t.slice(0, 8)}…`
 }
 
+/** The wallet's own balance of the collateral asset (native QRDX or the token): what can be deposited. */
+export function walletCollateral(account: AccountResponse | null): string | null {
+  const t = account?.perp?.collateral_token
+  if (!account || !t) return null
+  return account.balances.find((b) => b.asset.address?.toLowerCase() === t.toLowerCase())?.balance ?? '0'
+}
+
+/** Deposit enough to cover `margin` beyond what is free, plus 1 % for fees, rounded up to 2 places. */
+export function collateralShortfall(margin: string | null, free: string | null | undefined): string | null {
+  if (!margin || !free || dec(margin) <= dec(free)) return null
+  return round(str(((dec(margin) - dec(free)) * 101n) / 100n), 2, 'up')
+}
+
 /**
  * Perps orders. Limit orders rest on the market's book; "market" is IOC at the
  * far side of the book plus 1 %, so it fills at the book's prices and cancels the
@@ -69,13 +82,18 @@ export function PerpForm({
   const leverage = effective ?? market.maxLeverage ?? ''
   const margin = notional && isAmount(leverage) && dec(leverage) > 0n ? str(div(dec(notional), dec(leverage))) : null
 
+  // Margin beyond the free collateral can come from the wallet, deposited with the order.
+  const inWallet = walletCollateral(account)
+  const topUp = perp && !reduceOnly ? collateralShortfall(margin, perp.withdrawable) : null
+  const canTopUp = !!topUp && inWallet !== null && dec(inWallet) >= dec(topUp)
+
   const problem = (() => {
     if (market.collateralToken === '') return 'No collateral on this network'
     if (!market.oraclePrice) return 'Waiting for an oracle price'
     if (!isAmount(size) || dec(size) <= 0n) return 'Enter a size'
     if (!execPrice) return kind === 'market' ? 'Book is empty on that side' : 'Enter a price'
     if (!isAmount(execPrice) || dec(execPrice) <= 0n) return 'Enter a price'
-    if (perp && !reduceOnly && margin && dec(margin) > dec(perp.withdrawable)) return `Not enough free ${unit}`
+    if (topUp && !canTopUp) return `Not enough ${unit}`
     return null
   })()
 
@@ -97,6 +115,7 @@ export function PerpForm({
         { k: 'Margin', v: margin ? `${fixed(margin, 2)} ${unit} at ${leverage}×` : '—' },
         { k: 'Mark / oracle', v: `${fmtPrice(market.markPrice, ref)} / ${fmtPrice(market.oraclePrice, ref)}` },
       ],
+      before: canTopUp ? [{ op: 'PERP_DEPOSIT', params: { amount: topUp! }, label: `Deposit ${topUp} ${unit} perps collateral` }] : undefined,
       onDone: () => {
         setSize('')
         onDone()
@@ -144,9 +163,19 @@ export function PerpForm({
         value={kind}
         onChange={setKind}
       />
-      <div className="flex justify-between text-[11px]">
-        <span className="text-muted-foreground">Free collateral</span>
-        <span className="num font-medium">{perp ? `${fixed(perp.withdrawable, 2)} ${unit}` : '—'}</span>
+      <div className="space-y-0.5 text-[11px]">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Free collateral</span>
+          <span className="num font-medium">{perp ? `${fixed(perp.withdrawable, 2)} ${unit}` : '—'}</span>
+        </div>
+        {inWallet !== null && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">In wallet</span>
+            <span className="num">
+              {Number(inWallet).toLocaleString('en-US', { maximumFractionDigits: 2 })} {unit}
+            </span>
+          </div>
+        )}
       </div>
       {kind === 'limit' ? (
         <AmountField label="Price" unit={market.quote} value={price} onChange={setPrice} />
@@ -170,7 +199,7 @@ export function PerpForm({
         disabled={!!problem}
         className={cn('h-10 w-full rounded-lg text-[13px] font-semibold text-white transition-opacity disabled:opacity-50', side === 'buy' ? 'bg-bid' : 'bg-ask')}
       >
-        {problem ?? `${side === 'buy' ? 'Long' : 'Short'} ${market.base}`}
+        {problem ?? (canTopUp ? `Deposit ${fixed(topUp!, 2)} & ${side === 'buy' ? 'long' : 'short'}` : `${side === 'buy' ? 'Long' : 'Short'} ${market.base}`)}
       </button>
 
       <LeverageSheet
@@ -317,7 +346,25 @@ function CollateralSheet({
           value={dir}
           onChange={setDir}
         />
-        <AmountField label={`Amount (${unit})`} unit={unit} value={amount} onChange={setAmount} />
+        <AmountField
+          label={`Amount (${unit})`}
+          unit={unit}
+          value={amount}
+          onChange={setAmount}
+          extra={
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                const max = dir === 'deposit' ? walletCollateral(account) : perp?.withdrawable
+                if (max) setAmount(round(max, 2, 'down'))
+              }}
+              className="rounded px-1 text-[9px] font-semibold uppercase tracking-wide hover:bg-accent hover:text-foreground"
+            >
+              Max {dir === 'deposit' ? `· wallet ${Number(walletCollateral(account) ?? 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}` : ''}
+            </button>
+          }
+        />
         {perp && !perp.collateral_token && <p className="text-[11px] text-amber-500">This node has no perps collateral token configured.</p>}
         <button
           type="button"

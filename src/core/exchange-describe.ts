@@ -77,6 +77,8 @@ export function describeExchangeOp(
   const sym = (address: string | undefined | null) => {
     if (!address) return '?'
     const a = address.toLowerCase()
+    // Native QRDX: spot names it "QRDX" (any casing) and settles it in account balances.
+    if (a === 'qrdx') return 'QRDX'
     const t = ctx.tokens[a]
     if (t === null || t === undefined) {
       if (!warnings.some((w) => w.includes(a))) warnings.push(`Unknown token ${a}. The node has no record of it.`)
@@ -86,7 +88,7 @@ export function describeExchangeOp(
   }
   const tokenDetail = (label: string, address: string) => ({
     label,
-    value: `${sym(address)} · ${short(address.toLowerCase())}`,
+    value: address.toLowerCase() === 'qrdx' ? 'QRDX · native' : `${sym(address)} · ${short(address.toLowerCase())}`,
   })
 
   switch (op) {
@@ -293,7 +295,7 @@ export function describeExchangeOp(
           { label: burn ? 'Burns' : 'Stakes', value: `${groupDigits(stake)} QRDX` },
           ...[a, b].map((t) => ({
             label: name(t),
-            value: pending(t) ? `${short(t.toLowerCase())} · not created yet` : short(t.toLowerCase()),
+            value: pending(t) ? `${short(t.toLowerCase())} · not created yet` : t.toLowerCase() === 'qrdx' ? 'native' : short(t.toLowerCase()),
           })),
         ],
         warnings,

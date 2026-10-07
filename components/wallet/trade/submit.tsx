@@ -32,6 +32,8 @@ export interface TradeRequest {
   estimates?: { k: string; v: string }[]
   /** Called once the block includes it successfully. */
   onDone?: () => void
+  /** Operations signed first, in the same block window (e.g. a collateral deposit for the order). */
+  before?: { op: ExchangeOpName; params: Record<string, JsonValue>; label: string }[]
 }
 
 export interface Submission {
@@ -61,19 +63,28 @@ export function useTradeSubmit() {
     const req = review
     setBusy(true)
     setError(null)
-    try {
-      const { txHash } = await submitExchangeOp(req.op, req.params)
-      const item: Submission = { id: txHash, label: req.label, status: 'pending', txHash, at: Date.now() / 1000 }
-      setSubmissions((s) => [item, ...s].slice(0, 30))
-      setReview(null)
+    const follow = (txHash: string, onSuccess?: () => void) =>
       waitForExchangeReceipt(activeChain, txHash)
         .then((r) => {
           setSubmissions((s) =>
             s.map((x) => (x.id === txHash ? { ...x, status: r.success ? 'done' : 'failed', error: r.error || undefined, block: r.block_height } : x))
           )
-          if (r.success) req.onDone?.()
+          if (r.success) onSuccess?.()
         })
         .catch((e) => setSubmissions((s) => s.map((x) => (x.id === txHash ? { ...x, error: (e as Error).message } : x))))
+    const track = (txHash: string, label: string) =>
+      setSubmissions((s) => [{ id: txHash, label, status: 'pending' as const, txHash, at: Date.now() / 1000 }, ...s].slice(0, 30))
+    try {
+      // Earlier operations take the earlier nonces, so they execute first in the block.
+      for (const b of req.before ?? []) {
+        const { txHash } = await submitExchangeOp(b.op, b.params)
+        track(txHash, b.label)
+        void follow(txHash)
+      }
+      const { txHash } = await submitExchangeOp(req.op, req.params)
+      track(txHash, req.label)
+      setReview(null)
+      void follow(txHash, req.onDone)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not sign the operation')
     } finally {
@@ -106,9 +117,17 @@ function ReviewSheet({
   for (const a of request.assets ?? []) if (a.address) ctx.tokens[a.address.toLowerCase()] = { symbol: a.onChainSymbol ?? a.symbol, name: a.name }
   for (const [addr, symbol] of Object.entries(request.symbols ?? {})) ctx.tokens[addr.toLowerCase()] = { symbol }
   const summary = describeExchangeOp(request.op, request.params, ctx)
+  const first = (request.before ?? []).map((b) => describeExchangeOp(b.op, b.params, ctx))
   return (
-    <Sheet open onClose={onCancel} title="Review and sign">
+    <Sheet open onClose={onCancel} title={first.length ? `Review and sign ${first.length + 1} operations` : 'Review and sign'}>
+      {first.map((f, i) => (
+        <div key={i} className="mb-2 rounded-xl border bg-background p-3">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">First</p>
+          <p className="text-sm font-semibold leading-snug">{f.headline}</p>
+        </div>
+      ))}
       <div className="rounded-xl border bg-background p-3">
+        {first.length > 0 && <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Then</p>}
         <p className="text-sm font-semibold leading-snug">{summary.headline}</p>
         {summary.details.length > 0 && (
           <div className="mt-2 space-y-1 border-t border-border/60 pt-2">

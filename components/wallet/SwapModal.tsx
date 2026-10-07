@@ -88,9 +88,6 @@ export function SwapModal({ onClose }: SwapModalProps) {
         .then((r) => {
           const all = [...r.assets, ...r.tokens].filter((t) => t.address)
           setMeta(Object.fromEntries(all.map((t) => [t.address!.toLowerCase(), t])))
-          // Native QRDX has no pools of its own: the exchange trades wQRDX (the verified "qrdx").
-          const wqrdx = r.assets.find((a) => a.slug === 'qrdx' && a.address)?.address
-          if (wqrdx) setFromId((f) => (f === NATIVE_QRDX ? wqrdx : f))
         })
         .catch(() => undefined)
     }
@@ -317,10 +314,9 @@ export function SwapModal({ onClose }: SwapModalProps) {
   )
 }
 
-/** The node's "liquidity … not found" in words, and why for native QRDX. */
+/** The node's "no liquidity …" in words. Native QRDX trades directly against tokens with a pool. */
 function noRoute(error: string, from: Asset | undefined, to: Asset | undefined): string {
   if (!/liquidity|not found|no route/i.test(error)) return error
-  if (from?.id === NATIVE_QRDX || to?.id === NATIVE_QRDX) return 'Native QRDX has no market: the exchange trades wQRDX'
   return `No pool or order book trades ${from?.symbol}/${to?.symbol} yet`
 }
 
