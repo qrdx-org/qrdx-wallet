@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -20,7 +20,8 @@ import { useWallet, type SendInput } from '@/src/shared/contexts/WalletContext'
 import { validateAddress, addressesEqual, shortenAddress } from '@/src/core/address'
 import { sameAccount } from '@/src/core/account-id'
 import { resolveRecipient, type Credential, type SendQuote } from '@/src/core/tx-service'
-import { weiToEth } from '@/src/core/ethereum'
+import { ethToWei, weiToEth } from '@/src/core/ethereum'
+import { defaultCredential, formatAmount, formatUnitsExact } from '@/src/core/balances'
 import { isQrdxChain } from '@/src/core/chains'
 
 interface SendModalProps {
@@ -84,7 +85,13 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
   const [txStatus, setTxStatus] = useState<TxStatus>('idle')
   const [txError, setTxError] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
-  const [addressType, setAddressTypeState] = useState<Credential>('classic')
+  // Start on the address that holds funds: on QRDX that is usually the post-quantum
+  // one, where exchange tokens live; until the reader picks one themselves.
+  const [addressType, setAddressTypeState] = useState<Credential>(() => defaultCredential(balances, pqBalances, qrdx))
+  const pickedCredential = useRef(false)
+  useEffect(() => {
+    if (!pickedCredential.current) setAddressTypeState(defaultCredential(balances, pqBalances, qrdx))
+  }, [balances, pqBalances, qrdx])
   const [quote, setQuote] = useState<SendQuote | null>(null)
 
   const fromAddress = addressType === 'classic' ? ethAddress : pqAddress
@@ -93,6 +100,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
   const nativeDecimals = activeChain.nativeCurrency?.decimals ?? 18
 
   const setAddressType = (t: Credential) => {
+    pickedCredential.current = true
     setAddressTypeState(t)
     setQuote(null)
     // Token balances differ per credential; re-pick the same token from the new source.
@@ -113,12 +121,13 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
         decimals: nativeDecimals,
       }]
     }
-    return sourceBalances.map(b => {
-      const bal = parseFloat(b.formattedBalance)
+    // The native coin, and the tokens this address holds (every QRDX token is listed by the node).
+    return sourceBalances.filter(b => b.address === '' || b.rawBalance > 0n).map(b => {
+      const bal = Number(formatUnitsExact(b.rawBalance, b.decimals ?? 18))
       return {
         symbol: b.symbol,
         name: b.name ?? b.symbol,
-        balance: bal.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }),
+        balance: formatAmount(b.rawBalance, b.decimals ?? 18),
         balanceNum: bal,
         value: '',
         color: TOKEN_COLORS[b.symbol] ?? 'from-primary/80 to-primary/50',
@@ -191,7 +200,13 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
     if (!/^\d*\.?\d*$/.test(raw) || !Number.isFinite(value) || value <= 0) {
       return { state: 'invalid' as const, message: 'Enter an amount greater than zero' }
     }
-    if (selectedToken && value > selectedToken.balanceNum) {
+    // Exact: compare base units, not floats.
+    const exceeds = selectedToken
+      ? selectedToken.raw !== undefined
+        ? (() => { try { return ethToWei(raw, selectedToken.decimals) > selectedToken.raw! } catch { return true } })()
+        : value > selectedToken.balanceNum
+      : false
+    if (selectedToken && exceeds) {
       return { state: 'invalid' as const, message: `Exceeds your balance of ${selectedToken.balance} ${selectedToken.symbol}` }
     }
     return { state: 'valid' as const, value }
@@ -259,7 +274,8 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
       setAmount(weiToEth(spendable, selectedToken.decimals).replace(/\.?0+$/, '') || '0')
       return
     }
-    setAmount(selectedToken.balance.replace(/,/g, ''))
+    // Tokens: the exact holding, not the rounded display.
+    setAmount(selectedToken.raw !== undefined ? formatUnitsExact(selectedToken.raw, selectedToken.decimals) : selectedToken.balance.replace(/,/g, ''))
   }
 
   /* ─── Step 1: Token Selection ─── */
@@ -285,6 +301,24 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
             </div>
           </div>
         </div>
+
+        {/* Which address to send from: each holds its own balances. */}
+        {qrdx && (
+          <div className="px-4 pt-3">
+            <div className="grid grid-cols-2 gap-1 rounded-xl border border-border/50 bg-background/60 p-1 text-xs font-medium">
+              {([['pq', 'Quantum-safe', pqAddress], ['classic', 'Classic', ethAddress]] as const).map(([c, label, addr]) => (
+                <button
+                  key={c}
+                  onClick={() => setAddressType(c)}
+                  className={`rounded-lg px-2 py-1.5 transition-all ${addressType === c ? 'bg-foreground/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  {label}
+                  <span className="block font-mono text-[9px] font-normal text-muted-foreground">{addr.slice(0, 8)}…{addr.slice(-4)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Search */}
         <div className="px-4 pt-3 pb-1">
@@ -312,7 +346,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
           ) : (
             filteredTokens.map((token) => (
               <button
-                key={token.symbol}
+                key={token.contractAddress || token.symbol}
                 onClick={() => handleSelectToken(token)}
                 className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-accent/30 active:bg-accent/50 transition-all group text-left"
               >
@@ -333,10 +367,12 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
                 </div>
 
                 {/* Value */}
-                <div className="text-right shrink-0">
-                  <div className="text-sm font-semibold">{token.value}</div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">balance</div>
-                </div>
+                {token.value && (
+                  <div className="text-right shrink-0">
+                    <div className="text-sm font-semibold">{token.value}</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">value</div>
+                  </div>
+                )}
 
                 {/* Arrow hint */}
                 <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-primary/60 transition-colors shrink-0" />

@@ -6,6 +6,7 @@ import { TrendingUp, TrendingDown, ChevronRight, Loader2 } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { formatUsd } from '@/src/core/prices'
 import { tokenImages } from '@/src/core/profiles'
+import { formatAmount, mergeCredentialBalances } from '@/src/core/balances'
 
 export interface Token {
   symbol: string
@@ -19,6 +20,8 @@ export interface Token {
   color: string
   contractAddress?: string
   decimals: number
+  /** Which of the account's two addresses hold it (QRDX): the classic 0x one, the post-quantum one, or both. */
+  heldIn?: 'classic' | 'pq' | 'both'
 }
 
 // Gradient colors for known tokens
@@ -44,11 +47,12 @@ const TOKEN_COLORS: Record<string, string> = {
 }
 
 /**
- * Build the token list from real wallet balances and live prices.
- * This replaces the old hardcoded ALL_TOKENS array.
+ * The account's holdings with live prices: both credentials' balances summed per
+ * token (on QRDX, exchange tokens live in the post-quantum account), the native
+ * coin always, other tokens only when held.
  */
 export function useTokenList(): Token[] {
-  const { balances, prices, activeChain } = useWallet()
+  const { balances, pqBalances, prices, activeChain } = useWallet()
   // Images token creators published (docs/PROFILES.md in qrdx-trade), by contract address.
   const [images, setImages] = useState<Map<string, string>>(new Map())
   useEffect(() => {
@@ -58,10 +62,10 @@ export function useTokenList(): Token[] {
   }, [activeChain])
 
   return useMemo(() => {
-    if (balances.length === 0) return []
+    if (balances.length === 0 && pqBalances.length === 0) return []
 
-    return balances.map((b) => {
-      const bal = parseFloat(b.formattedBalance) || 0
+    return mergeCredentialBalances(balances, pqBalances).map((b) => {
+      const bal = Number(b.formattedBalance) || 0
       const price = prices.get(b.symbol.toUpperCase())
       const usdValue = price ? bal * price.usd : 0
       const change24h = price?.usd_24h_change ?? 0
@@ -69,7 +73,7 @@ export function useTokenList(): Token[] {
       return {
         symbol: b.symbol,
         name: b.name ?? b.symbol,
-        balance: bal.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 }),
+        balance: formatAmount(b.rawBalance, b.decimals),
         balanceNum: bal,
         value: usdValue > 0 ? formatUsd(usdValue) : '',
         valueNum: usdValue,
@@ -78,9 +82,10 @@ export function useTokenList(): Token[] {
         color: TOKEN_COLORS[b.symbol] ?? 'from-primary/80 to-primary/50',
         contractAddress: b.address,
         decimals: b.decimals,
-      }
-    }).sort((a, b) => b.valueNum - a.valueNum) // sort by value descending
-  }, [balances, prices, images])
+        heldIn: b.classicRaw > 0n && b.pqRaw > 0n ? 'both' : b.pqRaw > 0n ? 'pq' : b.classicRaw > 0n ? 'classic' : undefined,
+      } satisfies Token
+    }).sort((a, b) => b.valueNum - a.valueNum || b.balanceNum - a.balanceNum)
+  }, [balances, pqBalances, prices, images])
 }
 
 // Keep ALL_TOKENS export for backwards compatibility with AllTokens component
@@ -96,12 +101,13 @@ export function TokenList({ pinnedSymbols, onViewAll }: TokenListProps) {
   const tokens = useTokenList()
   const { balancesLoading } = useWallet()
 
-  // Show pinned tokens if any, otherwise top 4 by value
+  // Pinned tokens first, then the largest other holdings, four rows at least:
+  // pinning QRDX alone must not hide every other token the account holds.
   const pinned = pinnedSymbols
     .map((s) => tokens.find((t) => t.symbol === s))
     .filter(Boolean) as Token[]
-
-  const displayTokens = pinned.length > 0 ? pinned : tokens.slice(0, 4)
+  const rest = tokens.filter((t) => !pinned.includes(t))
+  const displayTokens = [...pinned, ...rest.slice(0, Math.max(0, 4 - pinned.length))]
 
   if (balancesLoading && tokens.length === 0) {
     return (
@@ -125,7 +131,7 @@ export function TokenList({ pinnedSymbols, onViewAll }: TokenListProps) {
     <div className="space-y-1">
       {displayTokens.map((token, index) => (
         <div
-          key={token.symbol}
+          key={token.contractAddress || token.symbol}
           className="flex items-center justify-between p-3 rounded-xl hover:bg-accent/30 transition-all cursor-pointer group animate-slide-up"
           style={{ animationDelay: `${index * 50}ms` }}
         >
@@ -138,13 +144,16 @@ export function TokenList({ pinnedSymbols, onViewAll }: TokenListProps) {
             </Avatar>
             <div>
               <div className="font-semibold text-sm">{token.symbol}</div>
-              <div className="text-xs text-muted-foreground">{token.name}</div>
+              <div className="text-xs text-muted-foreground">
+                {token.name}
+                {token.heldIn === 'pq' ? ' · PQ address' : token.heldIn === 'classic' ? ' · 0x address' : ''}
+              </div>
             </div>
           </div>
           <div className="text-right">
-            <div className="font-semibold text-sm">{token.value || token.balance}</div>
+            <div className="num font-semibold text-sm">{token.value || `${token.balance} ${token.symbol}`}</div>
             <div className="flex items-center gap-1 justify-end">
-              <span className="text-xs text-muted-foreground">{token.balance}</span>
+              {token.value && <span className="num text-xs text-muted-foreground">{token.balance}</span>}
               {token.change24h !== 0 && (
                 <div
                   className={`flex items-center text-[11px] font-medium ${

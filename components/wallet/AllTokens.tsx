@@ -271,7 +271,7 @@ export function AllTokens({
 
             return (
               <div
-                key={token.symbol}
+                key={token.contractAddress || token.symbol}
                 className="flex items-center gap-2.5 px-2 py-2.5 rounded-xl hover:bg-accent/30 transition-all group"
               >
                 {/* Token icon */}
@@ -293,14 +293,17 @@ export function AllTokens({
                       <Star className="h-2.5 w-2.5 text-foreground/70 fill-foreground" />
                     )}
                   </div>
-                  <div className="text-[11px] text-muted-foreground">{token.name}</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {token.name}
+                    {token.heldIn === 'pq' ? ' · PQ address' : token.heldIn === 'classic' ? ' · 0x address' : ''}
+                  </div>
                 </div>
 
                 {/* Value + change */}
                 <div className="text-right shrink-0 mr-1">
-                  <div className="text-sm font-semibold">{token.value}</div>
+                  <div className="num text-sm font-semibold">{token.value || `${token.balance} ${token.symbol}`}</div>
                   <div className="flex items-center gap-0.5 justify-end">
-                    <span className="text-[10px] text-muted-foreground">{token.balance}</span>
+                    {token.value && <span className="num text-[10px] text-muted-foreground">{token.balance}</span>}
                     <div
                       className={`flex items-center text-[10px] font-medium ${
                         token.change24h > 0 ? 'text-green-500' : token.change24h < 0 ? 'text-red-500' : 'text-muted-foreground'

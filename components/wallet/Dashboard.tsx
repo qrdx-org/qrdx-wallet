@@ -22,10 +22,11 @@ import { ShieldModal } from './ShieldModal'
 import { TradeModal } from './TradeModal'
 import { StakeModal } from './StakeModal'
 import { cn, formatAddress } from '@/lib/utils'
+import { mergeCredentialBalances } from '@/src/core/balances'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 
 export function Dashboard() {
-  const { lock, currentWallet, balances, balancesLoading, activeChain, portfolioValue, portfolioChange24h, priceHistory, transactions, pqBalance, combinedNativeBalance } = useWallet()
+  const { lock, currentWallet, balances, pqBalances, balancesLoading, activeChain, portfolioValue, portfolioChange24h, priceHistory, transactions, pqBalance, combinedNativeBalance } = useWallet()
   const nativeSym = activeChain.nativeCurrency?.symbol ?? 'ETH'
   const [copied, setCopied] = useState<'eth' | 'pq' | null>(null)
   // Hidden balances stay hidden across visits (a per-device preference).
@@ -149,7 +150,7 @@ export function Dashboard() {
   }
 
   const tabs = [
-    { key: 'tokens' as const, label: 'Tokens', count: balances.length },
+    { key: 'tokens' as const, label: 'Tokens', count: mergeCredentialBalances(balances, pqBalances).length },
     { key: 'nfts' as const, label: 'NFTs', count: 0 },
     { key: 'activity' as const, label: 'Activity', count: transactions.length },
   ]
