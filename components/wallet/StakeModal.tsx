@@ -261,7 +261,7 @@ export function StakeModal({ onClose }: StakeModalProps) {
       </div>
 
       {qrdx && validator === null && (
-        <div className="sticky bottom-0 p-4 glass-strong pb-safe">
+        <div className="sticky bottom-0 p-4 pb-safe-4 glass-strong">
           <PrimaryButton
             loading={busy}
             disabled={!!amountError || !understood}

@@ -233,7 +233,7 @@ export function Settings({ onBack }: SettingsProps) {
 
   // ── Header ────────────────────────────────────────────────────────────────
   const Header = ({ title }: { title: string }) => (
-    <div className="glass-strong sticky top-0 z-20">
+    <div className="glass-strong sticky top-0 z-20 pt-safe">
       <div className="px-4 py-3">
         <div className="flex items-center gap-3">
           <Button

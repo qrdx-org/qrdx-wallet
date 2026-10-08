@@ -12,7 +12,7 @@ export function BuyModal({ onClose }: BuyModalProps) {
   return (
     <div className="min-h-screen mono-backdrop">
       {/* Header */}
-      <div className="glass-strong sticky top-0 z-20">
+      <div className="glass-strong sticky top-0 z-20 pt-safe">
         <div className="px-4 py-3">
           <div className="flex items-center gap-3">
             <Button

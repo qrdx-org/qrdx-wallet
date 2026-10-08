@@ -44,7 +44,7 @@ export function ConnectSheet({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="min-h-screen mono-backdrop">
-      <div className="glass-strong sticky top-0 z-20">
+      <div className="glass-strong sticky top-0 z-20 pt-safe">
         <div className="flex items-center gap-3 px-4 py-3">
           <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/50" onClick={onClose} aria-label="Back">
             <ArrowLeft className="h-4 w-4" />

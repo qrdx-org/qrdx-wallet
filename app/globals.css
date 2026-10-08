@@ -203,6 +203,11 @@ input[type="number"] {
 .pb-safe {
   padding-bottom: max(env(safe-area-inset-bottom), 0px);
 }
+/* A bar's own 1rem of bottom padding, or the home-indicator inset where that is larger.
+   (pb-safe alone would replace the 1rem with 0 in a browser tab.) */
+.pb-safe-4 {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
 
 /* iOS zooms into focused inputs with text smaller than 16px. */
 @supports (-webkit-touch-callout: none) {

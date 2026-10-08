@@ -267,7 +267,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
     return (
       <div className="min-h-screen mono-backdrop flex flex-col">
         {/* Header */}
-        <div className="glass-strong sticky top-0 z-20">
+        <div className="glass-strong sticky top-0 z-20 pt-safe">
           <div className="px-4 py-3">
             <div className="flex items-center gap-3">
               <Button
@@ -354,7 +354,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
   return (
     <div className="min-h-screen mono-backdrop flex flex-col">
       {/* Header */}
-      <div className="glass-strong sticky top-0 z-20">
+      <div className="glass-strong sticky top-0 z-20 pt-safe">
         <div className="px-4 py-3">
           <div className="flex items-center gap-3">
             <Button
@@ -636,7 +636,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
       </div>
 
       {/* Sticky send button */}
-      <div className="sticky bottom-0 p-4 glass-strong space-y-2">
+      <div className="sticky bottom-0 p-4 pb-safe-4 glass-strong space-y-2">
         {amountCheck.state === 'invalid' && (
           <p className="flex items-start gap-1.5 text-[10px] text-red-400">
             <AlertCircle className="h-3 w-3 shrink-0 mt-px" />
