@@ -351,6 +351,36 @@ export function describeExchangeOp(
       }
     }
 
+    // Delegation pools (qrdx-node docs/STAKING.md).
+    case 'STAKE_DELEGATE': {
+      const validator = str(params.validator)
+      warnings.push('The QRDX joins the pool after a warm-up of a few epochs, and is slashed with the pool if the validator misbehaves.')
+      warnings.push('Taking it back means undelegating, then waiting out unbonding and the withdrawal delay (about 3.9 days at the standard parameters).')
+      return {
+        headline: `Delegate ${groupDigits(str(params.amount))} QRDX to ${short(validator)}`,
+        details: [{ label: 'Validator', value: validator }],
+        warnings,
+      }
+    }
+    case 'STAKE_UNDELEGATE': {
+      const validator = str(params.validator)
+      const shares = str(params.shares ?? 'all')
+      warnings.push('The QRDX is paid after unbonding and the withdrawal delay (about 3.9 days at the standard parameters), and is slashed with the pool until then.')
+      return {
+        headline: shares.toLowerCase() === 'all' ? `Undelegate everything from ${short(validator)}` : `Undelegate ${groupDigits(shares)} pool shares from ${short(validator)}`,
+        details: [{ label: 'Validator', value: validator }],
+        warnings,
+      }
+    }
+    case 'STAKE_SET_COMMISSION': {
+      const bps = Number(str(params.commission_bps))
+      return {
+        headline: `Set your pool's commission to ${Number.isFinite(bps) ? (bps / 100).toFixed(2) : '?'}%`,
+        details: [{ label: 'Takes effect', value: 'from the next epoch' }],
+        warnings,
+      }
+    }
+
     default:
       for (const k of TOKEN_KEYS) if (typeof params[k] === 'string') sym(String(params[k]))
       return { headline: op.replace(/_/g, ' ').toLowerCase(), details: [], warnings }

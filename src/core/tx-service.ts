@@ -300,9 +300,11 @@ export async function submitExchangeOp(
   const chain = chainOf(input.chain)
   if (!isQrdxChain(chain)) throw new TxError('Exchange operations exist only on QRDX networks')
   const sender = input.account.pqAddress
-  const [committed, gasPrice] = await Promise.all([
+  const [committed, gasPrice, chainId] = await Promise.all([
     nodeRpc<number>(chain, 'exchange_getNonce', [sender]),
     nodeRpc<number | string>(chain, 'exchange_gasPrice', []).catch(() => undefined),
+    // Exchange signatures are bound to the chain id; sign with the node's, once it matches the registry.
+    resolveSigningChainId(chain),
   ])
   // Re-sign the same (already approved) operation with the next free nonce when
   // the node says a nonce is taken: an earlier operation is still waiting for a block.
@@ -310,6 +312,7 @@ export async function submitExchangeOp(
     const nonce = exchangeNonces.next(chain.id, sender, Number(committed))
     const tx = buildExchangeTx({
       op: input.op,
+      chainId,
       sender,
       nonce,
       params: input.params,

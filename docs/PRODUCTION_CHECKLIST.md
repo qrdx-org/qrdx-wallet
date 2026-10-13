@@ -50,7 +50,7 @@ e2e checks, **16/16** extension e2e checks, `tsc` clean, ESLint 0 errors.
 - [~] **`0xPQMS` / legacy `Q…`/`R…` recipients.** Accepted by the send path and provider (`resolveRecipient`); protocol holders (`0xPOOL`/`0xCLOB`/`0xPERP`) are refused. *Left:* `src/core/address.ts` validation and the address book still accept only `0x`/`0xPQ`.
 - [x] **PQ balances and nonces** read through `eth_getBalance` / `eth_getTransactionCount(pqAccountId, "pending")` (`tx-service.fetchBalances`).
 - [x] **PQ gas floor**: `pqIntrinsicGas()` plus `eth_estimateGas` with `type: 0x51`. Signing refuses a gas limit below the floor.
-- [ ] ⛔ **Canonical chain IDs.** The wallet ships `1337`/`31337`; the node defaults to `1`, with an `88888` fallback. Needs unique registered IDs pinned in node config (§10 #2), then `src/core/chains.ts`.
+- [~] **Canonical chain IDs.** The node now takes its chain id from its chain spec (`/chain_spec`), and exchange signatures are bound to it. Testnet is `7620` (`src/core/chains.ts`); the wallet signs with the node's id only when it matches the registry. *Left:* mainnet's id (`1337` here) until its chain spec is published.
 - [x] **EIP-1559 → legacy** for dApp transactions on QRDX (`provider/router.ts`).
 - [x] **PQ message prefix uses the byte length**: `pqPrefixedMessage()` in `src/core/pq.ts`, with non-ASCII vectors.
 - [x] **Fake QRDX tokens removed** (`qETH`/`qBTC`/`qUSDC` at `0x…0101-0103`). Native tokens are discovered via `exchange_getTokens`.
@@ -119,9 +119,9 @@ e2e checks, **16/16** extension e2e checks, `tsc` clean, ESLint 0 errors.
 
 ### 5.4 Staking (P1)
 
-- [x] **`STAKE_DEPOSIT`** (validator = this account's PQ key) and **`STAKE_EXIT`**, with real parameters and slashing table, and status from `GET /get_validators` (`components/wallet/StakeModal.tsx`).
-- [x] **Misleading copy removed** (delegation, invented APY and block time). The screen states that a validator node must run with this key.
-- [ ] ⛔ `ValidatorModule` is still not registered on `/rpc` (§10 #1); the screen uses REST meanwhile.
+- [x] **Delegation** (`STAKE_DELEGATE` / `STAKE_UNDELEGATE`, all or part): validators, pools, commission, the rate after commission, warm-up and unstaking times, the account's stake and payouts, all from `staking_*` and the chain spec (`components/wallet/StakeModal.tsx`). Approvals describe both, with the warm-up, slashing and unbonding warnings.
+- [x] **`STAKE_DEPOSIT`** (validator = this account's PQ key) and **`STAKE_EXIT`**, under "Run your own validator", with the node's minimum and slashing table.
+- [x] Staking reads use `staking_*` on `/rpc` (the node's `ValidatorModule` is not served on testnet).
 
 ### 5.5 Native tokens
 

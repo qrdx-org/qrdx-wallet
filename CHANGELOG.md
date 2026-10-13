@@ -27,7 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **QRDX Connect** (web and iPhone PWA): connect to sites by scanning their QR code (or opening its link) and approve their requests on the phone, with the same router, permissions and approval screens as the extension. End-to-end encrypted; pairing is refused unless the relay attests the site's origin. Camera scanning uses BarcodeDetector or jsQR (iOS).
 - Approvals for token launches: `TOKEN_DEPLOY` states the supply and whether anyone can mint more or freeze balances; `CREATE_POOL` states the pair, starting price, fee and the QRDX it burns or stakes, and names tokens created earlier in the same block as "not created yet".
 
+- **Delegation**: the Stake screen delegates QRDX to a validator's pool (`STAKE_DELEGATE`) and undelegates all or part (`STAKE_UNDELEGATE`), with each validator's commission and the rate after it, warm-up and unstaking times, and the account's stake and payouts, read from the node's `staking_*` methods. Running your own validator (`STAKE_DEPOSIT` / `STAKE_EXIT`) moves under it. dApps can send both operations; approvals describe them.
+- Exchange op codes up to 55 (token extensions, NFTs, governance, bridge withdrawals, delegation).
+
 ### Fixed
+- **Exchange signatures bound to the chain.** The node now signs exchange transactions over a domain tag and the network's chain id (`QRDX-EXCHANGE-TX-v1\0` ‖ chain id ‖ …) and carries `chain_id` in the envelope; the wallet's older bytes no longer verified, so every swap, order and launch was refused. The wallet signs the new form with the node's chain id; conformance vectors regenerated from the node.
+- Testnet's chain id is `7620` (its chain spec), and QRDX blocks are 250 ms apart: receipts are polled every second, not every 180 s.
 - A second exchange operation before the next block reused the pending nonce and the node refused it ("nonce N already queued"). The wallet now tracks nonces it has submitted and retries a refused nonce with the next free one.
 - `qrdx_sendExchangeTransaction` refused `from` set to the account's own `0xPQ` address.
 - Changing the password left the recovery phrase encrypted under the old password.

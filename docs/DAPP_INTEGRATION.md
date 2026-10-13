@@ -78,8 +78,8 @@ parameters stay visible below the summary.
 
 ### Exchange nonces and block time
 
-QRDX blocks are about 180 s apart and an exchange operation executes only when
-a block includes it. `exchange_getNonce` counts committed operations only, so
+QRDX makes a block every 250 ms slot, and an exchange operation executes only
+when a block includes it. `exchange_getNonce` counts committed operations only, so
 the wallet keeps track of the nonces it has submitted that no block has
 included yet (`src/core/exchange-nonce.ts`) and signs the next operation with
 the first free nonce. If the node still refuses a nonce as already queued (the

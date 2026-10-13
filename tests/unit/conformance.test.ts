@@ -120,6 +120,7 @@ describe('exchange transactions match qrdx/exchange/transactions.py', () => {
   for (const [i, v] of vectors.exchangeTransactions.entries()) {
     const tx = {
       op_type: v.opType as never,
+      chain_id: v.chainId,
       sender: v.sender,
       nonce: v.nonce,
       params: v.params as never,
@@ -135,21 +136,30 @@ describe('exchange transactions match qrdx/exchange/transactions.py', () => {
   it('signs with the key that derives to the sender, and refuses any other', async () => {
     const seed = '22'.repeat(32)
     const pair = await pqKeyPairFromSeed(hexToBytes(seed))
-    const tx = buildExchangeTx({ op: 'STAKE_EXIT', sender: pair.address, nonce: 0 })
+    const tx = buildExchangeTx({ op: 'STAKE_EXIT', chainId: 7620, sender: pair.address, nonce: 0 })
     const signed = await signExchangeTx(tx, seed)
     expect(pqVerify(exchangeSigningBytes(tx), signed.signature, pair.publicKey)).toBe(true)
 
-    const other = buildExchangeTx({ op: 'STAKE_EXIT', sender: '0xPQ' + 'ab'.repeat(32), nonce: 0 })
+    const other = buildExchangeTx({ op: 'STAKE_EXIT', chainId: 7620, sender: '0xPQ' + 'ab'.repeat(32), nonce: 0 })
     await expect(signExchangeTx(other, seed)).rejects.toThrow(/does not control/)
   })
 
   it('rejects missing params and classic senders before signing', () => {
     expect(() =>
-      buildExchangeTx({ op: 'SWAP', sender: '0xPQ' + 'ab'.repeat(32), nonce: 0, params: {} })
+      buildExchangeTx({ op: 'SWAP', chainId: 7620, sender: '0xPQ' + 'ab'.repeat(32), nonce: 0, params: {} })
     ).toThrow(/Missing/)
     expect(() =>
-      buildExchangeTx({ op: 'STAKE_EXIT', sender: '0x' + 'ab'.repeat(20), nonce: 0 })
+      buildExchangeTx({ op: 'STAKE_EXIT', chainId: 7620, sender: '0x' + 'ab'.repeat(20), nonce: 0 })
     ).toThrow(/0xPQ/)
+    expect(() =>
+      buildExchangeTx({ op: 'STAKE_DELEGATE', chainId: 7620, sender: '0xPQ' + 'ab'.repeat(32), nonce: 0, params: { amount: '5' } })
+    ).toThrow(/validator/)
+    expect(() => buildExchangeTx({ op: 'STAKE_EXIT', chainId: 0, sender: '0xPQ' + 'ab'.repeat(32), nonce: 0 })).toThrow(/chain id/)
+  })
+
+  it('binds the signature to the chain: the same operation signs differently on another network', () => {
+    const base = { op: 'STAKE_EXIT' as const, sender: '0xPQ' + 'ab'.repeat(32), nonce: 0 }
+    expect(exchangeTxHash(buildExchangeTx({ ...base, chainId: 7620 }))).not.toBe(exchangeTxHash(buildExchangeTx({ ...base, chainId: 1337 })))
   })
 })
 

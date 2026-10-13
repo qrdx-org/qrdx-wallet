@@ -676,8 +676,17 @@ export function WalletProvider({
             ? `${params.amount_in} ${params.token_in === 'QRDX' ? 'QRDX' : 'token'}`
             : op === 'STAKE_DEPOSIT' && params
               ? `${params.stake_amount} QRDX`
-              : '',
-        label: op.replace(/_/g, ' ').toLowerCase(),
+              : op === 'STAKE_DELEGATE' && params
+                ? `${params.amount} QRDX`
+                : '',
+        label:
+          op === 'STAKE_DELEGATE'
+            ? 'delegate'
+            : op === 'STAKE_UNDELEGATE'
+              ? params?.shares === 'all'
+                ? 'undelegate all'
+                : 'undelegate'
+              : op.replace(/_/g, ' ').toLowerCase(),
       })
       .catch(() => undefined)
     return result

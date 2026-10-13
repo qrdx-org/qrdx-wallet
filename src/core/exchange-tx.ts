@@ -10,6 +10,8 @@
  *  A classic `0x` key cannot sign one.
  *
  *  Signing bytes (concatenated):
+ *    tag       "QRDX-EXCHANGE-TX-v1\0" (20 bytes, domain separation)
+ *    chain_id  8 bytes, big-endian       ← the network's chain id (its chain spec)
  *    op_type   1 byte
  *    sender    UTF-8
  *    nonce     8 bytes, big-endian       ← the EXCHANGE nonce (exchange_getNonce)
@@ -18,7 +20,9 @@
  *    gas_price decimal string of wei, UTF-8
  *
  *  The signature covers those bytes directly (not a digest). The transaction
- *  hash is BLAKE2b-256 of the same bytes, hex without `0x`.
+ *  hash is BLAKE2b-256 of the same bytes, hex without `0x`. The chain id binds
+ *  the signature to one network: the same operation signed for testnet does not
+ *  verify on mainnet. The envelope carries it as `chain_id`.
  *
  *  `json.dumps` defaults matter: `", "` and `": "` separators, sorted keys at
  *  every depth, and `ensure_ascii=True` (non-ASCII becomes `\uXXXX`). See
@@ -59,6 +63,32 @@ export const ExchangeOp = {
   TOKEN_SET_AUTHORITY: 30,
   TOKEN_FREEZE: 31,
   TOKEN_THAW: 32,
+  TOKEN_UPDATE_METADATA: 33,
+  TOKEN_SET_TRANSFER_FEE: 34,
+  TOKEN_WITHDRAW_FEES: 35,
+  TOKEN_PAUSE: 36,
+  TOKEN_RESUME: 37,
+  TOKEN_AUTHORIZE_OPERATOR: 38,
+  TOKEN_REVOKE_OPERATOR: 39,
+  NFT_CREATE_COLLECTION: 40,
+  NFT_MINT: 41,
+  NFT_TRANSFER: 42,
+  NFT_BURN: 43,
+  NFT_APPROVE: 44,
+  NFT_SET_APPROVAL_FOR_ALL: 45,
+  NFT_UPDATE: 46,
+  NFT_SET_AUTHORITY: 47,
+  GOV_PROPOSE: 48,
+  GOV_VOTE: 49,
+  GOV_VETO: 50,
+  GOV_EXECUTE: 51,
+  BRIDGE_WITHDRAW: 52,
+  /** Lock QRDX in a validator's delegation pool (docs/STAKING.md). */
+  STAKE_DELEGATE: 53,
+  /** Redeem pool shares ("all" also refunds what is still warming up). */
+  STAKE_UNDELEGATE: 54,
+  /** A validator sets its commission on its pool's rewards. */
+  STAKE_SET_COMMISSION: 55,
 } as const
 
 export type ExchangeOpName = keyof typeof ExchangeOp
@@ -78,6 +108,9 @@ const REQUIRED_PARAMS: Partial<Record<ExchangeOpCode, string[]>> = {
   [ExchangeOp.TOKEN_BURN]: ['token_address', 'amount'],
   [ExchangeOp.TOKEN_DEPLOY]: ['name', 'symbol'],
   [ExchangeOp.STAKE_DEPOSIT]: ['validator_public_key', 'stake_amount'],
+  [ExchangeOp.STAKE_DELEGATE]: ['validator', 'amount'],
+  [ExchangeOp.STAKE_UNDELEGATE]: ['validator'],
+  [ExchangeOp.STAKE_SET_COMMISSION]: ['commission_bps'],
   [ExchangeOp.PERP_DEPOSIT]: ['amount'],
   [ExchangeOp.CREATE_MARKET]: ['base_token'],
   [ExchangeOp.PERP_WITHDRAW]: ['amount'],
@@ -96,6 +129,8 @@ export type JsonValue = string | number | boolean | null | JsonValue[] | { [k: s
 
 export interface UnsignedExchangeTx {
   op_type: ExchangeOpCode
+  /** The network's chain id; part of the signed bytes. */
+  chain_id: number
   /** The signer's `0xPQ` address. */
   sender: string
   nonce: number
@@ -196,12 +231,20 @@ function concat(parts: Uint8Array[]): Uint8Array {
 
 const utf8 = new TextEncoder()
 
+/** Domain tag at the start of every exchange transaction's signed bytes. */
+const SIGNING_TAG = utf8.encode('QRDX-EXCHANGE-TX-v1\0')
+
 /** The bytes the sender's ML-DSA-65 key signs. */
 export function exchangeSigningBytes(tx: UnsignedExchangeTx): Uint8Array {
   if (!/^\d+$/.test(tx.gas_price)) {
     throw new ExchangeTxError('gas_price must be a whole number of wei as a decimal string')
   }
+  if (!Number.isSafeInteger(tx.chain_id) || tx.chain_id < 0) {
+    throw new ExchangeTxError('chain_id must be a non-negative integer')
+  }
   return concat([
+    SIGNING_TAG,
+    u64be(tx.chain_id),
     new Uint8Array([tx.op_type]),
     utf8.encode(tx.sender),
     u64be(tx.nonce),
@@ -219,6 +262,8 @@ export function exchangeTxHash(tx: UnsignedExchangeTx): string {
 /** Assemble and validate an unsigned exchange transaction. */
 export function buildExchangeTx(input: {
   op: ExchangeOpName | ExchangeOpCode
+  /** The chain id the node reports (resolveSigningChainId): signatures are bound to it. */
+  chainId: number
   sender: string
   nonce: number
   params?: Record<string, JsonValue>
@@ -245,8 +290,12 @@ export function buildExchangeTx(input: {
       `Gas price is below the exchange floor of ${EXCHANGE_MIN_GAS_PRICE_WEI} wei`
     )
   }
+  if (!Number.isSafeInteger(input.chainId) || input.chainId <= 0) {
+    throw new ExchangeTxError('A chain id is required to sign an exchange transaction')
+  }
   return {
     op_type,
+    chain_id: input.chainId,
     sender: input.sender,
     nonce: input.nonce,
     params,

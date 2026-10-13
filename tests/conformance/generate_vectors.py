@@ -268,25 +268,32 @@ for case in PQ_CASES:
 
 # Exchange transactions — the signing bytes the node verifies against.
 EX_CASES = [
-    dict(op_type=ex_tx.ExchangeOpType.SWAP, sender="0xPQ" + "ab" * 32, nonce=0,
+    dict(op_type=ex_tx.ExchangeOpType.SWAP, sender="0xPQ" + "ab" * 32, nonce=0, chain_id=7620,
          params={"token_in": "QRDX", "token_out": "0x" + "11" * 20, "amount_in": "1.5",
                  "min_amount_out": "0.9"}, gas_limit=1_000_000, gas_price=1_000_000_000),
-    dict(op_type=ex_tx.ExchangeOpType.STAKE_DEPOSIT, sender="0xPQ" + "cd" * 32, nonce=12,
+    dict(op_type=ex_tx.ExchangeOpType.STAKE_DEPOSIT, sender="0xPQ" + "cd" * 32, nonce=12, chain_id=1,
          params={"validator_public_key": "ff" * 8, "stake_amount": "10000"},
          gas_limit=500_000, gas_price=2_000_000_000),
-    dict(op_type=ex_tx.ExchangeOpType.TOKEN_TRANSFER, sender="0xPQ" + "ab" * 32, nonce=3,
+    dict(op_type=ex_tx.ExchangeOpType.TOKEN_TRANSFER, sender="0xPQ" + "ab" * 32, nonce=3, chain_id=7620,
          params={"token_address": "0x" + "22" * 20, "to": "0xPQ" + "cd" * 32, "amount": "42",
                  "memo": "héllo ✓"}, gas_limit=100_000, gas_price=1_000_000_000),
-    dict(op_type=ex_tx.ExchangeOpType.STAKE_EXIT, sender="0xPQ" + "ab" * 32, nonce=4,
+    dict(op_type=ex_tx.ExchangeOpType.STAKE_EXIT, sender="0xPQ" + "ab" * 32, nonce=4, chain_id=9999,
          params={}, gas_limit=100_000, gas_price=1_000_000_000),
+    dict(op_type=ex_tx.ExchangeOpType.STAKE_DELEGATE, sender="0xPQ" + "ab" * 32, nonce=5, chain_id=7620,
+         params={"validator": "0xPQ" + "cd" * 32, "amount": "250.5"}, gas_limit=200_000,
+         gas_price=1_000_000_000),
+    dict(op_type=ex_tx.ExchangeOpType.STAKE_UNDELEGATE, sender="0xPQ" + "ab" * 32, nonce=6, chain_id=7620,
+         params={"validator": "0xPQ" + "cd" * 32, "shares": "all"}, gas_limit=200_000,
+         gas_price=1_000_000_000),
 ]
 
 ex_vectors = []
 for case in EX_CASES:
     tx = ex_tx.ExchangeTransaction(**case, timestamp=1.0)
     ex_vectors.append({
-        "opType": int(case["op_type"]), "sender": case["sender"], "nonce": case["nonce"],
-        "params": case["params"], "gasLimit": case["gas_limit"], "gasPrice": str(case["gas_price"]),
+        "opType": int(case["op_type"]), "chainId": case["chain_id"], "sender": case["sender"],
+        "nonce": case["nonce"], "params": case["params"], "gasLimit": case["gas_limit"],
+        "gasPrice": str(case["gas_price"]),
         "signingBytes": "0x" + tx.signing_bytes().hex(),
         "txHash": tx.tx_hash(),
     })

@@ -100,3 +100,76 @@ export function minimumOut(amountOut: string, slippagePercent: number): string {
   const s = min.toString().padStart(19, '0')
   return `${s.slice(0, -18)}.${s.slice(-18)}`.replace(/\.?0+$/, '') || '0'
 }
+
+// ─── Staking and delegation pools (qrdx-node docs/STAKING.md) ───────────────
+// Reads only; delegating is STAKE_DELEGATE / STAKE_UNDELEGATE through submitExchangeOp.
+
+export interface StakingValidator {
+  address: string
+  status: string
+  stake: string
+  effective_stake: string
+  /** QRDX in its delegation pool. */
+  delegated: string
+  /** Own effective stake plus delegated: what it proposes and votes with. */
+  weight: string
+  earned: string
+  activation_epoch: number | null
+  exit_epoch: number | null
+  slashed: boolean
+}
+
+export interface StakingPool {
+  validator: string
+  commission_bps: number
+  next_commission_bps: number | null
+  value: string
+  total_shares: string
+  share_price: string
+  delegators: number
+  warming_up: string
+}
+
+export interface StakingParams {
+  reward_rate_bps_per_year: number
+  default_commission_bps: number
+  min_delegation: string
+  min_validator_stake: string
+  warmup_epochs: number
+  unbonding_epochs: number
+  withdrawal_delay_epochs: number
+}
+
+export interface Delegations {
+  stakes: { validator: string; shares: string; value: string; warming_up: { amount: string; active_from_epoch: number }[] }[]
+  payouts: { id: number; kind: string; amount: string; due_epoch: number; validator: string }[]
+}
+
+export const staking = {
+  validators: (chain: ChainConfig) => rpc<StakingValidator[]>(chain, 'staking_getValidators'),
+  pools: (chain: ChainConfig) => rpc<StakingPool[]>(chain, 'staking_getPools'),
+  params: (chain: ChainConfig) => rpc<StakingParams>(chain, 'staking_getParams'),
+  delegations: (chain: ChainConfig, address: string) => rpc<Delegations>(chain, 'staking_getDelegations', [address]),
+  /** Slot length and slots an epoch, from the node's chain spec. */
+  clock: async (chain: ChainConfig): Promise<{ slotMs: number; slotsPerEpoch: number; epochMs: number } | null> => {
+    const spec = await rpc<{ params: { SLOT_DURATION_MS: number; SLOTS_PER_EPOCH: number } }>(chain, 'qrdx_chainSpec').catch(() => null)
+    if (!spec) return null
+    const slotMs = Number(spec.params.SLOT_DURATION_MS)
+    const slotsPerEpoch = Number(spec.params.SLOTS_PER_EPOCH)
+    return { slotMs, slotsPerEpoch, epochMs: slotMs * slotsPerEpoch }
+  },
+  /** The head block's epoch (warm-ups and payouts count in epochs), from the node's REST API. */
+  headEpoch: async (chain: ChainConfig): Promise<number | null> => {
+    if (!chain.nodeApiUrl) return null
+    try {
+      const status = (await (await fetch(`${chain.nodeApiUrl}/get_status`)).json()) as { result?: { height: number } }
+      const height = status.result?.height
+      if (height == null) return null
+      const block = (await (await fetch(`${chain.nodeApiUrl}/get_block?block=${height}`)).json()) as { result?: { block?: { content?: string } } }
+      const m = /['"]epoch['"]:\s*(\d+)/.exec(block.result?.block?.content ?? '')
+      return m ? Number(m[1]) : null
+    } catch {
+      return null
+    }
+  },
+}

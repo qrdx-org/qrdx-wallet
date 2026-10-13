@@ -223,8 +223,8 @@ export const CHAINS: Record<string, ChainConfig> = {
     feeModel: 'legacy',
     isEvm: true,
     isTestnet: false,
-    // QRDX targets a 180s block interval (qrdx/constants.py: BLOCK_TIME = 180).
-    blockTimeSec: 180,
+    // One block a slot: the chain spec's SLOT_DURATION_MS (standard 250).
+    blockTimeSec: 0.25,
     color: 'from-primary to-primary/70',
     tokens: [QRDX_NATIVE],
     pqBridgeTarget: undefined,
@@ -234,7 +234,8 @@ export const CHAINS: Record<string, ChainConfig> = {
     id: 'qrdx-testnet',
     name: 'QRDX Testnet',
     shortName: 'QRDX Test',
-    chainId: 31337,
+    // The testnet chain spec's id (test.qrdx.org/chain_spec), since the reset of 2026-10-12.
+    chainId: 7620,
     rpcUrl: 'https://test.qrdx.org/rpc',
     nodeApiUrl: 'https://test.qrdx.org',
     explorerUrl: 'https://explorer.qrdx.org',
@@ -243,7 +244,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     feeModel: 'legacy',
     isEvm: true,
     isTestnet: true,
-    blockTimeSec: 180,
+    blockTimeSec: 0.25,
     color: 'from-primary/50 to-primary/25',
     tokens: [QRDX_NATIVE],
   },
@@ -270,7 +271,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     feeModel: 'legacy',
     isEvm: true,
     isTestnet: true,
-    blockTimeSec: 180,
+    blockTimeSec: 0.25,
     color: 'from-primary/50 to-primary/25',
     tokens: [QRDX_NATIVE],
   },

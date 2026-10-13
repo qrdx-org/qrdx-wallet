@@ -528,7 +528,7 @@ export class EvmProvider {
 
   /**
    * Wait for a transaction to be mined.
-   * Polls every `intervalMs` (default: chain block time × 1000).
+   * Polls every `intervalMs` (default: the chain's block time, at least a second).
    * Throws after `timeoutMs` (default: 2 minutes).
    */
   async waitForTransaction(
@@ -536,7 +536,8 @@ export class EvmProvider {
     timeoutMs = 120_000,
     intervalMs?: number
   ): Promise<EthTransactionReceipt> {
-    const pollInterval = intervalMs ?? this.chain.blockTimeSec * 1000
+    // At least a second apart: a chain with sub-second blocks need not be asked four times a second.
+    const pollInterval = intervalMs ?? Math.max(1000, this.chain.blockTimeSec * 1000)
     const deadline = Date.now() + timeoutMs
 
     while (Date.now() < deadline) {
