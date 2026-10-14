@@ -34,7 +34,7 @@ export interface PriceHistoryPoint {
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
-const COINGECKO_API = 'https://api.coingecko.com/api/v3'
+export const COINGECKO_API = 'https://api.coingecko.com/api/v3'
 const CACHE_TTL_MS = 60_000 // 1 minute cache for prices
 const HISTORY_CACHE_TTL_MS = 300_000 // 5 minutes for price history
 

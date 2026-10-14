@@ -23,11 +23,15 @@ import { resolveRecipient, type Credential, type SendQuote } from '@/src/core/tx
 import { ethToWei, weiToEth } from '@/src/core/ethereum'
 import { defaultCredential, formatAmount, formatUnitsExact } from '@/src/core/balances'
 import { isQrdxChain } from '@/src/core/chains'
+import { formatFiat as formatUsd } from '@/src/core/fiat'
+import { ConfirmSheet } from './flow/ConfirmSheet'
 
 interface SendModalProps {
   ethAddress: string
   pqAddress: string
   onClose: () => void
+  /** Open on this token (contract address, or the native symbol) instead of the token list. */
+  initialToken?: string
 }
 
 interface TokenOption {
@@ -73,8 +77,10 @@ type TxStatus = 'idle' | 'estimating' | 'sending' | 'success' | 'error'
  * is shown so the user can see exactly where funds go. The fee shown is the
  * quote the transaction is then built with.
  */
-export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
-  const { balances, pqBalances, activeChain, quoteSend, send, addressBook, networkStatus } = useWallet()
+export function SendModal({ ethAddress, pqAddress, onClose, initialToken }: SendModalProps) {
+  const { balances, pqBalances, activeChain, quoteSend, send, addressBook, networkStatus, prices, currentWallet, transactions } = useWallet()
+  // Nothing is signed from the form: Review opens the confirmation, which signs.
+  const [reviewing, setReviewing] = useState(false)
   const qrdx = isQrdxChain(activeChain)
 
   const [step, setStep] = useState<Step>('select-token')
@@ -150,6 +156,18 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
     setStep('send-form')
     setSearch('')
   }
+
+  // Opened from a token's page: go straight to the form for it, once.
+  const preselected = useRef(false)
+  useEffect(() => {
+    if (!initialToken || preselected.current || !tokenOptions.length) return
+    const want = initialToken.toLowerCase()
+    const match = tokenOptions.find((t) => (t.contractAddress ?? '').toLowerCase() === want || (!t.contractAddress && t.symbol.toLowerCase() === want))
+    if (match) {
+      preselected.current = true
+      handleSelectToken(match)
+    }
+  }, [initialToken, tokenOptions])
 
   const handleBack = () => {
     if (step === 'send-form') {
@@ -259,6 +277,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
       const result = await send(input, quote)
       setTxHash(result.hash)
       setTxStatus('success')
+      setReviewing(false)
     } catch (err) {
       setTxError(err instanceof Error ? err.message : 'Transaction failed')
       setTxStatus('error')
@@ -695,7 +714,7 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
         )}
 
         <Button
-          onClick={handleSend}
+          onClick={() => setReviewing(true)}
           disabled={!canSend}
           className="w-full h-12 font-semibold text-base rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 disabled:opacity-40 disabled:shadow-none transition-all"
         >
@@ -704,11 +723,63 @@ export function SendModal({ ethAddress, pqAddress, onClose }: SendModalProps) {
           ) : (
             <>
               <ArrowUpRight className="h-5 w-5 mr-2" />
-              Send {token.symbol}
+              Review send
             </>
           )}
         </Button>
       </div>
+      {reviewing && recipientCheck.state === 'valid' && quote && (
+        <ConfirmSheet
+          title="Review send"
+          headline={`Send ${amount} ${token.symbol}`}
+          rows={[
+            {
+              label: 'To',
+              value: recipientCheck.contactName ?? shortenAddress(recipientCheck.address),
+              sub: recipientCheck.contactName ? shortenAddress(recipientCheck.address) : undefined,
+            },
+            { label: 'Amount', value: `${amount} ${token.symbol}`, sub: usdOf(token.symbol, amount), strong: true },
+            { label: 'From', value: `${currentWallet?.name ?? 'Account'} · ${addressType === 'pq' ? 'post-quantum' : 'EVM'}`, sub: shortenAddress(fromAddress) },
+            { label: 'Network', value: activeChain.name },
+            { label: 'Network fee', value: `${gasEstimate ?? '—'} ${nativeSymbol}`, sub: usdOf(nativeSymbol, quote.feeFormatted) },
+            ...(!token.contractAddress
+              ? [{ label: 'Total', value: `${totalNative(amount, quote.feeFormatted)} ${nativeSymbol}`, sub: usdOf(nativeSymbol, totalNative(amount, quote.feeFormatted)), strong: true }]
+              : []),
+          ]}
+          warnings={[
+            ...(!recipientCheck.contactName && !sentBefore(recipientCheck.address)
+              ? ['You have not sent to this address before. Check every character: a transfer cannot be reversed.']
+              : []),
+            ...(addressType === 'classic' && qrdx ? ['This sends from the EVM (classic) account. Its key is not quantum-safe.'] : []),
+          ]}
+          confirmLabel={`Send ${token.symbol}`}
+          busy={txStatus === 'sending'}
+          error={txStatus === 'error' ? txError : null}
+          onConfirm={() => void handleSend()}
+          onCancel={() => setReviewing(false)}
+        />
+      )}
     </div>
   )
+
+  /** A USD figure for an amount of a symbol, when there is a price. */
+  function usdOf(symbol: string, value: string): string | undefined {
+    const price = prices.get(symbol.toUpperCase())?.usd
+    const n = Number(String(value).replace(/,/g, ''))
+    return price && Number.isFinite(n) ? `≈ ${formatUsd(n * price)}` : undefined
+  }
+
+  /** Amount plus fee, for a native send (display only; the signed values are exact). */
+  function totalNative(value: string, fee: string): string {
+    const sum = Number(String(value).replace(/,/g, '')) + Number(fee)
+    return sum.toLocaleString('en-US', { maximumFractionDigits: 8 })
+  }
+
+  /** Whether this account has sent to `address` before (from the activity list). */
+  function sentBefore(address: string): boolean {
+    return transactions.some((t) => {
+      const to = (t as { to?: string | null }).to
+      return !!to && addressesEqual(to, address)
+    })
+  }
 }

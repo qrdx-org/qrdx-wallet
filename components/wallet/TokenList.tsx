@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { TrendingUp, TrendingDown, ChevronRight, Loader2 } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
-import { formatUsd } from '@/src/core/prices'
+import { formatFiat as formatUsd } from '@/src/core/fiat'
 import { tokenImages } from '@/src/core/profiles'
 import { formatAmount, mergeCredentialBalances } from '@/src/core/balances'
+import { hiddenTokens, onHiddenTokensChange } from '@/src/core/hidden-tokens'
 
 export interface Token {
   symbol: string
@@ -51,8 +52,11 @@ const TOKEN_COLORS: Record<string, string> = {
  * token (on QRDX, exchange tokens live in the post-quantum account), the native
  * coin always, other tokens only when held.
  */
-export function useTokenList(): Token[] {
+export function useTokenList(options: { includeHidden?: boolean } = {}): Token[] {
   const { balances, pqBalances, prices, activeChain } = useWallet()
+  // Tokens the user hid stay out of the lists unless asked for (src/core/hidden-tokens.ts).
+  const [hiddenVersion, setHiddenVersion] = useState(0)
+  useEffect(() => onHiddenTokensChange(() => setHiddenVersion((v) => v + 1)), [])
   // Images token creators published (docs/PROFILES.md in qrdx-trade), by contract address.
   const [images, setImages] = useState<Map<string, string>>(new Map())
   useEffect(() => {
@@ -64,7 +68,10 @@ export function useTokenList(): Token[] {
   return useMemo(() => {
     if (balances.length === 0 && pqBalances.length === 0) return []
 
-    return mergeCredentialBalances(balances, pqBalances).map((b) => {
+    const hidden = hiddenTokens(activeChain.id)
+    return mergeCredentialBalances(balances, pqBalances)
+      .filter((b) => options.includeHidden || !b.address || !hidden.has(b.address.toLowerCase()))
+      .map((b) => {
       const bal = Number(b.formattedBalance) || 0
       const price = prices.get(b.symbol.toUpperCase())
       const usdValue = price ? bal * price.usd : 0
@@ -85,7 +92,7 @@ export function useTokenList(): Token[] {
         heldIn: b.classicRaw > 0n && b.pqRaw > 0n ? 'both' : b.pqRaw > 0n ? 'pq' : b.classicRaw > 0n ? 'classic' : undefined,
       } satisfies Token
     }).sort((a, b) => b.valueNum - a.valueNum || b.balanceNum - a.balanceNum)
-  }, [balances, pqBalances, prices, images])
+  }, [balances, pqBalances, prices, images, hiddenVersion, options.includeHidden, activeChain.id])
 }
 
 // Keep ALL_TOKENS export for backwards compatibility with AllTokens component
@@ -95,9 +102,11 @@ export const ALL_TOKENS: Token[] = []
 interface TokenListProps {
   pinnedSymbols: string[]
   onViewAll: () => void
+  /** Open a token's page. */
+  onSelect?: (token: Token) => void
 }
 
-export function TokenList({ pinnedSymbols, onViewAll }: TokenListProps) {
+export function TokenList({ pinnedSymbols, onViewAll, onSelect }: TokenListProps) {
   const tokens = useTokenList()
   const { balancesLoading } = useWallet()
 
@@ -132,6 +141,10 @@ export function TokenList({ pinnedSymbols, onViewAll }: TokenListProps) {
       {displayTokens.map((token, index) => (
         <div
           key={token.contractAddress || token.symbol}
+          role="button"
+          tabIndex={0}
+          onClick={() => onSelect?.(token)}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelect?.(token)}
           className="flex items-center justify-between p-3 rounded-xl hover:bg-accent/30 transition-all cursor-pointer group animate-slide-up"
           style={{ animationDelay: `${index * 50}ms` }}
         >

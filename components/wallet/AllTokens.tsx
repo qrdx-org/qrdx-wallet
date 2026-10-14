@@ -14,7 +14,9 @@ import {
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { useTokenList } from './TokenList'
+import { useTokenList, type Token } from './TokenList'
+import { useWallet } from '@/src/shared/contexts/WalletContext'
+import { hiddenTokens } from '@/src/core/hidden-tokens'
 
 interface AllTokensProps {
   pinnedSymbols: string[]
@@ -22,6 +24,8 @@ interface AllTokensProps {
   onPinnedChange: (pinned: string[]) => void
   onFavoritedChange: (favorited: string[]) => void
   onClose: () => void
+  /** Open a token's page. */
+  onSelect?: (token: Token) => void
 }
 
 type SortOption = 'value' | 'favorites' | 'name' | 'change'
@@ -40,9 +44,11 @@ export function AllTokens({
   favoritedSymbols,
   onPinnedChange,
   onFavoritedChange,
-  onClose,
-}: AllTokensProps) {
-  const allTokens = useTokenList()
+  onClose, onSelect }: AllTokensProps) {
+  const { activeChain } = useWallet()
+  const [showHidden, setShowHidden] = useState(false)
+  const allTokens = useTokenList({ includeHidden: showHidden })
+  const hiddenSet = hiddenTokens(activeChain.id)
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortOption>('value')
   const [showSortMenu, setShowSortMenu] = useState(false)
@@ -141,7 +147,7 @@ export function AllTokens({
         </div>
 
         {/* Sort bar */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <div className="relative">
             <button
               onClick={() => setShowSortMenu(!showSortMenu)}
@@ -171,7 +177,14 @@ export function AllTokens({
               </div>
             )}
           </div>
-
+          <button
+            type="button"
+            onClick={() => setShowHidden((v) => !v)}
+            aria-pressed={showHidden}
+            className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-semibold transition-colors ${showHidden ? 'bg-foreground text-background' : 'bg-accent/30 text-muted-foreground hover:text-foreground'}`}
+          >
+            {showHidden ? 'Hide hidden' : `Show hidden${hiddenSet.size ? ` (${hiddenSet.size})` : ''}`}
+          </button>
         </div>
       </div>
 
@@ -282,8 +295,8 @@ export function AllTokens({
                   </AvatarFallback>
                 </Avatar>
 
-                {/* Token info */}
-                <div className="flex-1 min-w-0">
+                {/* Token info: opens the token's page */}
+                <div className="flex-1 min-w-0 cursor-pointer" role="button" tabIndex={0} onClick={() => onSelect?.(token)} onKeyDown={(e) => e.key === 'Enter' && onSelect?.(token)}>
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-semibold">{token.symbol}</span>
                     {isPinned && (
@@ -291,6 +304,9 @@ export function AllTokens({
                     )}
                     {isFavorited && (
                       <Star className="h-2.5 w-2.5 text-foreground/70 fill-foreground" />
+                    )}
+                    {token.contractAddress && hiddenSet.has(token.contractAddress.toLowerCase()) && (
+                      <span className="rounded bg-muted px-1 text-[9px] font-medium text-muted-foreground">Hidden</span>
                     )}
                   </div>
                   <div className="text-[11px] text-muted-foreground">
@@ -300,7 +316,7 @@ export function AllTokens({
                 </div>
 
                 {/* Value + change */}
-                <div className="text-right shrink-0 mr-1">
+                <div className="text-right shrink-0 mr-1 cursor-pointer" onClick={() => onSelect?.(token)}>
                   <div className="num text-sm font-semibold">{token.value || `${token.balance} ${token.symbol}`}</div>
                   <div className="flex items-center gap-0.5 justify-end">
                     {token.value && <span className="num text-[10px] text-muted-foreground">{token.balance}</span>}

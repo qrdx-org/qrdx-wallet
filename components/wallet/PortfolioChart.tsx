@@ -10,6 +10,8 @@ import type { PriceHistoryPoint } from '@/src/core/prices'
 interface PortfolioChartProps {
   data?: PriceHistoryPoint[]
   change24h?: number
+  /** What the change covers (the token page's chart shows ranges). */
+  changeLabel?: string
 }
 
 /**
@@ -22,7 +24,7 @@ interface PortfolioChartProps {
  * — a new chain, an unpriced token, an offline oracle — the honest answer is to
  * say so.
  */
-export function PortfolioChart({ data, change24h = 0 }: PortfolioChartProps) {
+export function PortfolioChart({ data, change24h = 0, changeLabel = '24h' }: PortfolioChartProps) {
   const { resolvedTheme } = useTheme()
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartInstanceRef = useRef<IChartApi | null>(null)
@@ -209,7 +211,11 @@ export function PortfolioChart({ data, change24h = 0 }: PortfolioChartProps) {
   return (
     <div className="space-y-2 mt-2">
       <div className="flex items-center gap-2">
-        {isPositive ? (
+        {Math.abs(change24h) < 0.005 ? (
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted">
+            <span className="text-xs font-semibold text-muted-foreground">0.00%</span>
+          </div>
+        ) : isPositive ? (
           <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10">
             <TrendingUp className="h-3.5 w-3.5 text-green-500" />
             <span className="text-xs font-semibold text-green-500">
@@ -224,7 +230,7 @@ export function PortfolioChart({ data, change24h = 0 }: PortfolioChartProps) {
             </span>
           </div>
         )}
-        <span className="text-xs text-muted-foreground">24h</span>
+        <span className="text-xs text-muted-foreground">{changeLabel}</span>
       </div>
 
       <div

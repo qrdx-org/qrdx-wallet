@@ -55,7 +55,7 @@ const FOLDER_ACTIONS: QuickAction[] = [
   {
     key: 'buy',
     icon: <CreditCard className="h-5 w-5" />,
-    label: 'Buy',
+    label: 'Fund',
     gradient: 'from-primary to-primary/70',
   },
   {

@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Confirmations before anything is signed or removed**: sending opens a review (recipient and contact name, amount and its fiat value, from-account and address, network, fee, total, a warning for an address never sent to); every staking operation and NFT transfer is reviewed; removing a contact and disconnecting sites ask first.
+- **Account switcher**: the account name in the header opens every account with its value, switches on tap, and adds or manages accounts.
+- **Balance in fiat first**: the total across both addresses leads, with the native amount and the day's change under it.
+- **Currency**: values follow Settings → Currency (EUR, GBP, JPY, CAD, AUD, CHF), converted at CoinGecko's rates; without a rate they stay in USD.
+- **Token pages**: price with 1H/1D/1W/1M charts, the holding by address, the token's on-chain record (supply, authorities, creator), the account's activity in it, and send, receive and swap; tokens can be hidden and shown again.
+- **NFTs**: the account's NFTs from the node, by collection, with images and traits from their metadata, and sending them.
+- **Notifications**: funds received and sends confirmed or failed, and price alerts set in Settings, while the wallet is open.
+- **Get QRDX** replaces the card-purchase mock: receive, swap, and how QRDX is funded on each network. Shield shows the network's bridged assets.
+
 - **Vault v2** (envelope encryption): a random data key wrapped by the password (PBKDF2-SHA256, 600k) and optionally by passkeys. v1 vaults migrate on first unlock.
 - **Biometric unlock** with passkeys (WebAuthn PRF) on web, the iPhone PWA (Face ID / Touch ID) and the extension, where supported. The password is never stored.
 - **New onboarding**: create (12/24 words, tap-to-pick verification) or import a recovery phrase, private key, or V3 keystore; then a "secure this device" step (biometrics, install, persistent storage).
@@ -50,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Simulated Shield, Trade and Swap flows, hard-coded qETH/qBTC/qUSDC token addresses, and the developer "mock GUI" controls.
 - `WalletManager.signTransaction` (signed JSON as a message) and `QuantumCrypto.verify` (accepted any signature).
 - QUICKSTART.md and PROJECT_SUMMARY.md, which described commands and files that no longer exist.
+- Settings that did nothing: Language (no translations exist), Smart Wallet ("coming soon"), and the security and news notification toggles.
 
 ## [1.0.0] - TBD
 

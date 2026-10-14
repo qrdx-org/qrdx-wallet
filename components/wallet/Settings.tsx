@@ -9,7 +9,6 @@ import {
   Globe,
   DollarSign,
   Bell,
-  Key,
   Trash2,
   Plus,
   Check,
@@ -27,7 +26,6 @@ import {
   Zap,
   X,
   BookUser,
-  Sparkles,
   UserPlus,
   Star,
   Users } from 'lucide-react'
@@ -46,19 +44,12 @@ import { useWallet } from '@/src/shared/contexts/WalletContext'
 
 interface SettingsProps {
   onBack: () => void
+  /** Open on this page (the account switcher's "Manage accounts" opens 'wallets'). */
+  initialPage?: 'main' | 'wallets'
 }
 
 
 
-const LANGUAGES = [
-  { code: 'en', label: 'English' },
-  { code: 'es', label: 'Español' },
-  { code: 'fr', label: 'Français' },
-  { code: 'de', label: 'Deutsch' },
-  { code: 'ja', label: '日本語' },
-  { code: 'ko', label: '한국어' },
-  { code: 'zh', label: '中文' },
-]
 
 const CURRENCIES = [
   { code: 'USD', symbol: '$', label: 'US Dollar' },
@@ -141,7 +132,6 @@ type SettingsPage =
   | 'main'
   | 'wallets'
   | 'theme'
-  | 'language'
   | 'currency'
   | 'security'
   | 'notifications'
@@ -150,13 +140,15 @@ type SettingsPage =
   | 'connected-sites'
   | 'injected-apis'
   | 'address-book'
-  | 'smart-wallet'
   | 'about'
   | 'developer'
 
 // ─── Component ──────────────────────────────────────────────────────────────
-export function Settings({ onBack }: SettingsProps) {
-  const [page, setPage] = useState<SettingsPage>('main')
+import { useConfirm } from './flow/ConfirmSheet'
+import { NotificationsPage } from './settings/NotificationsPage'
+
+export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
+  const [page, setPage] = useState<SettingsPage>(initialPage)
   const { theme, setTheme } = useTheme()
   const {
     allWallets,
@@ -176,17 +168,20 @@ export function Settings({ onBack }: SettingsProps) {
     disconnectSite,
     disconnectAllSites,
   } = useWallet()
+  // Removing and disconnecting ask first.
+  const { dialog: confirmDialog, confirm } = useConfirm()
+  const askDisconnect = async (origin: string) => {
+    if (await confirm({ title: 'Disconnect site', message: <>Disconnect <strong className="text-foreground">{origin}</strong>? It loses access to your accounts and has to ask again.</>, confirmLabel: 'Disconnect', danger: true }))
+      void disconnectSite(origin)
+  }
+  const askDisconnectAll = async () => {
+    if (await confirm({ title: 'Disconnect all sites', message: `Every connected site (${connectedSites.length}) loses access to your accounts and has to ask again.`, confirmLabel: 'Disconnect all', danger: true }))
+      void disconnectAllSites()
+  }
 
   // Settings state (initialised from persisted settings if available)
   const savedSettings = state?.settings
-  const [language, setLanguageLocal] = useState(savedSettings?.language ?? 'en')
   const [currency, setCurrencyLocal] = useState(savedSettings?.currency ?? 'USD')
-  const [notifications, setNotifications] = useState({
-    transactions: true,
-    priceAlerts: true,
-    securityAlerts: true,
-    marketing: false,
-  })
   // Mirrors the persisted `showTestnets` setting so the network list here and
   // the dashboard's network selector agree, and the choice survives a restart.
   const [testnetMode, setTestnetModeLocal] = useState(savedSettings?.showTestnets ?? false)
@@ -209,10 +204,6 @@ export function Settings({ onBack }: SettingsProps) {
   // Developer settings
   const [developerMode, setDeveloperMode] = useState(savedSettings?.developerMode ?? false)
 
-  const handleSetLanguage = (code: string) => {
-    setLanguageLocal(code)
-    updateSettings({ language: code })
-  }
 
   const handleSetCurrency = (code: string) => {
     setCurrencyLocal(code as typeof currency)
@@ -241,6 +232,7 @@ export function Settings({ onBack }: SettingsProps) {
             size="icon"
             className="h-8 w-8 rounded-lg hover:bg-accent/50"
             onClick={goBack}
+            aria-label="Back"
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -388,14 +380,6 @@ export function Settings({ onBack }: SettingsProps) {
                   gradient="from-primary to-primary/70"
                 />
                 <MenuItem
-                  icon={Globe}
-                  label="Language"
-                  description="Display language"
-                  value={LANGUAGES.find(l => l.code === language)?.label}
-                  onClick={() => setPage('language')}
-                  gradient="from-primary to-primary/70"
-                />
-                <MenuItem
                   icon={DollarSign}
                   label="Currency"
                   description="Default fiat currency"
@@ -416,27 +400,6 @@ export function Settings({ onBack }: SettingsProps) {
             </div>
             <Card className="glass border-border/50">
               <CardContent className="p-1.5 space-y-0.5">
-                {/* Smart Wallet - Coming Soon */}
-                <div className="relative">
-                  <button
-                    onClick={() => setPage('smart-wallet')}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left opacity-50 cursor-default"
-                  >
-                    <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 bg-gradient-to-br from-primary to-primary/70 text-primary-foreground/60">
-                      <Sparkles className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-muted-foreground">Smart Wallet</span>
-                        <span className="text-[9px] bg-primary/15 text-primary px-1.5 py-0.5 rounded-full font-semibold">
-                          Coming Soon
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-muted-foreground/60 truncate">Account abstraction & gasless txns</div>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground/30 shrink-0" />
-                  </button>
-                </div>
                 <MenuItem
                   icon={BookUser}
                   label="Address Book"
@@ -666,28 +629,6 @@ export function Settings({ onBack }: SettingsProps) {
   }
 
   // ── Language ──────────────────────────────────────────────────────────────
-  if (page === 'language') {
-    return (
-      <div className="min-h-screen mono-backdrop">
-        <Header title="Language" />
-        <div className="px-4 py-3">
-          <Card className="glass border-border/50">
-            <CardContent className="p-1.5 space-y-0.5">
-              {LANGUAGES.map((lang) => (
-                <SelectItem
-                  key={lang.code}
-                  label={lang.label}
-                  selected={language === lang.code}
-                  onClick={() => handleSetLanguage(lang.code)}
-                />
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
-
   // ── Currency ──────────────────────────────────────────────────────────────
   if (page === 'currency') {
     return (
@@ -716,41 +657,7 @@ export function Settings({ onBack }: SettingsProps) {
 
   // ── Notifications ─────────────────────────────────────────────────────────
   if (page === 'notifications') {
-    return (
-      <div className="min-h-screen mono-backdrop">
-        <Header title="Notifications" />
-        <div className="px-4 py-3">
-          <Card className="glass border-border/50">
-            <CardContent className="p-1.5 space-y-0.5">
-              <ToggleItem
-                label="Transactions"
-                description="Incoming & outgoing transaction alerts"
-                checked={notifications.transactions}
-                onChange={(v) => setNotifications({ ...notifications, transactions: v })}
-              />
-              <ToggleItem
-                label="Price Alerts"
-                description="Significant price movements"
-                checked={notifications.priceAlerts}
-                onChange={(v) => setNotifications({ ...notifications, priceAlerts: v })}
-              />
-              <ToggleItem
-                label="Security Alerts"
-                description="Suspicious activity warnings"
-                checked={notifications.securityAlerts}
-                onChange={(v) => setNotifications({ ...notifications, securityAlerts: v })}
-              />
-              <ToggleItem
-                label="News & Updates"
-                description="Product updates & announcements"
-                checked={notifications.marketing}
-                onChange={(v) => setNotifications({ ...notifications, marketing: v })}
-              />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
+    return <NotificationsPage header={<Header title="Notifications" />} />
   }
 
   // ── Networks ──────────────────────────────────────────────────────────────
@@ -951,6 +858,7 @@ export function Settings({ onBack }: SettingsProps) {
   if (page === 'connected-sites') {
     return (
       <div className="min-h-screen mono-backdrop">
+        {confirmDialog}
         <Header title="Connected Sites" />
         <div className="px-4 py-3 space-y-3">
           {connectedSites.length === 0 ? (
@@ -1001,8 +909,9 @@ export function Settings({ onBack }: SettingsProps) {
                           </div>
                         </div>
                         <button
-                          onClick={() => { void disconnectSite(site.origin) }}
-                          className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                          onClick={() => { void askDisconnect(site.origin) }}
+                          aria-label={`Disconnect ${site.origin}`}
+                          className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all shrink-0"
                           title="Disconnect"
                         >
                           <X className="h-3.5 w-3.5" />
@@ -1015,8 +924,8 @@ export function Settings({ onBack }: SettingsProps) {
 
               <Button
                 variant="outline"
-                onClick={() => { void disconnectAllSites() }}
-                className="w-full h-10 font-medium glass text-red-400 hover:bg-red-500/10 hover:border-red-500/30"
+                onClick={() => { void askDisconnectAll() }}
+                className="w-full h-10 font-medium glass hover:bg-accent/50"
               >
                 <Unplug className="h-4 w-4 mr-2" />
                 Disconnect All Sites
@@ -1166,76 +1075,6 @@ export function Settings({ onBack }: SettingsProps) {
     )
   }
 
-  // ── Smart Wallet (Coming Soon) ────────────────────────────────────────────
-  if (page === 'smart-wallet') {
-    return (
-      <div className="min-h-screen mono-backdrop">
-        <Header title="Smart Wallet" />
-        <div className="px-4 py-3 space-y-4">
-          <div className="flex flex-col items-center py-8 animate-fade-in">
-            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg mb-3 opacity-60">
-              <Sparkles className="h-8 w-8 text-primary/50" />
-            </div>
-            <span className="text-[10px] bg-primary/15 text-primary px-2.5 py-1 rounded-full font-semibold mb-3">
-              Coming Soon
-            </span>
-            <h2 className="text-base font-bold text-muted-foreground">Smart Wallet</h2>
-            <p className="text-[11px] text-muted-foreground/60 text-center mt-1 max-w-[260px] leading-relaxed">
-              ERC-4337 account abstraction with gasless transactions, social recovery, session keys, and batch operations.
-            </p>
-          </div>
-
-          <Card className="glass border-border/50 opacity-50">
-            <CardContent className="p-1.5 space-y-0.5">
-              <div className="flex items-center gap-3 p-3 rounded-xl">
-                <div className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center shrink-0">
-                  <Zap className="h-4 w-4 text-muted-foreground/50" />
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-muted-foreground/60">Gasless Transactions</div>
-                  <div className="text-[10px] text-muted-foreground/40">Sponsor gas fees via paymasters</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 rounded-xl">
-                <div className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center shrink-0">
-                  <Key className="h-4 w-4 text-muted-foreground/50" />
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-muted-foreground/60">Social Recovery</div>
-                  <div className="text-[10px] text-muted-foreground/40">Recover wallet with trusted guardians</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 rounded-xl">
-                <div className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center shrink-0">
-                  <Shield className="h-4 w-4 text-muted-foreground/50" />
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-muted-foreground/60">Session Keys</div>
-                  <div className="text-[10px] text-muted-foreground/40">Approve dApps for limited-scope access</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 rounded-xl">
-                <div className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center shrink-0">
-                  <Blocks className="h-4 w-4 text-muted-foreground/50" />
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-muted-foreground/60">Batch Operations</div>
-                  <div className="text-[10px] text-muted-foreground/40">Bundle multiple transactions in one</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="px-1 py-2 text-center">
-            <p className="text-[10px] text-muted-foreground/50">
-              Smart wallet features are under development and will be available in a future update.
-            </p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   // ── Address Book ──────────────────────────────────────────────────────────
   if (page === 'address-book') {
     const favorites = addressBook.filter((c) => c.isFavorite)
@@ -1248,7 +1087,9 @@ export function Settings({ onBack }: SettingsProps) {
       void toggleContactFavorite(id)
     }
 
-    const deleteContact = (id: string) => {
+    const deleteContact = async (id: string) => {
+      const c = addressBook.find((x) => x.id === id)
+      if (!(await confirm({ title: 'Remove contact', message: <>Remove <strong className="text-foreground">{c?.name ?? 'this contact'}</strong> from your address book?</>, confirmLabel: 'Remove', danger: true }))) return
       void removeContact(id)
     }
 
@@ -1304,21 +1145,22 @@ export function Settings({ onBack }: SettingsProps) {
             {contact.address}
           </div>
         </div>
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+        <div className="flex items-center gap-0.5 transition-all">
           <button
             onClick={() => toggleFavorite(contact.id)}
             className={`h-7 w-7 rounded-lg flex items-center justify-center transition-colors ${
               contact.isFavorite
-                ? 'text-amber-400 hover:bg-amber-500/10'
+                ? 'text-foreground hover:bg-accent/50'
                 : 'text-muted-foreground hover:bg-accent/50'
             }`}
             title={contact.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
           >
-            <Star className={`h-3.5 w-3.5 ${contact.isFavorite ? 'fill-amber-400' : ''}`} />
+            <Star className={`h-3.5 w-3.5 ${contact.isFavorite ? 'fill-foreground' : ''}`} />
           </button>
           <button
-            onClick={() => deleteContact(contact.id)}
-            className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            onClick={() => void deleteContact(contact.id)}
+            aria-label={`Remove ${contact.name}`}
+            className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
             title="Remove"
           >
             <X className="h-3.5 w-3.5" />
@@ -1329,6 +1171,7 @@ export function Settings({ onBack }: SettingsProps) {
 
     return (
       <div className="min-h-screen mono-backdrop">
+        {confirmDialog}
         <Header title="Address Book" />
         <div className="px-4 py-3 space-y-3">
           {addressBook.length === 0 ? (

@@ -34,6 +34,7 @@ import {
 } from '@/src/core/exchange-client'
 import { cn } from '@/lib/utils'
 import { ErrorBanner, Notice, PrimaryButton, TextField } from './flow/FlowKit'
+import { ConfirmSheet, type ReviewRow } from './flow/ConfirmSheet'
 
 interface StakeModalProps {
   onClose: () => void
@@ -144,7 +145,12 @@ export function StakeModal({ onClose }: StakeModalProps) {
   const yearlyWei = !amountError && amountWei !== null && chosen ? (amountWei * BigInt(Math.round(earnBps(rate, commissionOf(chosen)) * 100))) / 1_000_000n : null
   const maxWei = balance > GAS_RESERVE ? balance - GAS_RESERVE : 0n
 
-  const run = async (label: string, op: 'STAKE_DELEGATE' | 'STAKE_UNDELEGATE' | 'STAKE_DEPOSIT' | 'STAKE_EXIT', params: Record<string, string>, success: string) => {
+  type StakeOp = 'STAKE_DELEGATE' | 'STAKE_UNDELEGATE' | 'STAKE_DEPOSIT' | 'STAKE_EXIT'
+  // Every staking operation is reviewed first: `run` opens the confirmation, Confirm signs.
+  const [pending, setPending] = useState<{ label: string; op: StakeOp; params: Record<string, string>; success: string } | null>(null)
+  const run = (label: string, op: StakeOp, params: Record<string, string>, success: string) => setPending({ label, op, params, success })
+
+  const execute = async (label: string, op: StakeOp, params: Record<string, string>, success: string) => {
     setBusy(label)
     setError(null)
     setDone(null)
@@ -318,10 +324,78 @@ export function StakeModal({ onClose }: StakeModalProps) {
           </PrimaryButton>
         </div>
       )}
+      {pending && snap && (
+        <ConfirmSheet
+          title="Review staking"
+          headline={stakeHeadline(pending.op, pending.params)}
+          rows={stakeRows(pending.op, pending.params)}
+          warnings={stakeWarnings(pending.op)}
+          confirmLabel={pending.op === 'STAKE_EXIT' ? 'Request exit' : pending.op === 'STAKE_UNDELEGATE' ? 'Undelegate' : pending.op === 'STAKE_DEPOSIT' ? 'Stake as validator' : 'Delegate'}
+          danger={pending.op === 'STAKE_EXIT'}
+          busy={!!busy}
+          onCancel={() => setPending(null)}
+          onConfirm={() => {
+            const p = pending
+            void execute(p.label, p.op, p.params, p.success).finally(() => setPending(null))
+          }}
+        />
+      )}
     </div>
   )
-}
 
+  function validatorName(address: string | undefined): string {
+    return address ? short(address) : '—'
+  }
+
+  function stakeHeadline(op: StakeOp, params: Record<string, string>): string {
+    if (op === 'STAKE_DELEGATE') return `Delegate ${params.amount} QRDX`
+    if (op === 'STAKE_UNDELEGATE') return params.shares === 'all' ? 'Undelegate everything' : 'Undelegate part of your stake'
+    if (op === 'STAKE_DEPOSIT') return `Stake ${Number(params.stake_amount).toLocaleString()} QRDX as a validator`
+    return 'Exit as a validator'
+  }
+
+  function stakeRows(op: StakeOp, params: Record<string, string>): ReviewRow[] {
+    const s = snap!
+    const from: ReviewRow = { label: 'From', value: `${currentWallet?.name ?? 'Account'} · post-quantum`, sub: pq ? short(pq) : undefined }
+    if (op === 'STAKE_DELEGATE') {
+      const v = s.validators.find((x) => x.address === params.validator)
+      const bps = v ? earnBps(rate, commissionOf(v)) : rate
+      const wei = AMOUNT_RE.test(params.amount) ? ethToWei(params.amount) : 0n
+      return [
+        { label: 'Validator', value: validatorName(params.validator), sub: v ? `${pct(commissionOf(v))} commission` : undefined },
+        { label: 'Amount', value: `${params.amount} QRDX`, strong: true },
+        { label: 'Earns a year', value: `${formatAmount((wei * BigInt(Math.round(bps * 100))) / 1_000_000n, 18, 4)} QRDX`, sub: `${pct(bps)} after commission` },
+        { label: 'Joins the pool', value: epochsAsTime(s.params.warmup_epochs, epochMs) },
+        { label: 'To unstake', value: epochsAsTime(unbondEpochs, epochMs) },
+        from,
+      ]
+    }
+    if (op === 'STAKE_UNDELEGATE') {
+      return [
+        { label: 'Validator', value: validatorName(params.validator) },
+        { label: 'Shares', value: params.shares === 'all' ? 'All, and anything still warming up' : qrdx(params.shares, 6), strong: true },
+        { label: 'Paid', value: `in ${epochsAsTime(unbondEpochs, epochMs)}` },
+        from,
+      ]
+    }
+    if (op === 'STAKE_DEPOSIT') {
+      return [
+        { label: 'Stake', value: `${Number(params.stake_amount).toLocaleString()} QRDX`, strong: true },
+        { label: 'Validator key', value: 'This account\u2019s post-quantum key' },
+        { label: 'Active after', value: epochsAsTime(s.params.warmup_epochs, epochMs) },
+        from,
+      ]
+    }
+    return [{ label: 'Validator', value: `${currentWallet?.name ?? 'This account'}` }, { label: 'Stake returns', value: 'after the exit is finalized and the withdrawal delay' }, from]
+  }
+
+  function stakeWarnings(op: StakeOp): string[] {
+    if (op === 'STAKE_DELEGATE') return ['Delegated QRDX is slashed with the validator\u2019s pool if it double signs or casts conflicting votes.']
+    if (op === 'STAKE_UNDELEGATE') return ['Until it is paid, the QRDX can still be slashed with the pool.']
+    if (op === 'STAKE_DEPOSIT') return ['Run a validator node with this key, or the stake earns nothing and loses to downtime penalties.']
+    return ['The validator stops proposing and earning once the exit takes effect.']
+  }
+}
 function Row({ k, v }: { k: string; v: string }) {
   return (
     <div className="flex justify-between gap-3">

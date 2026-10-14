@@ -109,6 +109,7 @@ const REQUIRED_PARAMS: Partial<Record<ExchangeOpCode, string[]>> = {
   [ExchangeOp.TOKEN_DEPLOY]: ['name', 'symbol'],
   [ExchangeOp.STAKE_DEPOSIT]: ['validator_public_key', 'stake_amount'],
   [ExchangeOp.STAKE_DELEGATE]: ['validator', 'amount'],
+  [ExchangeOp.NFT_TRANSFER]: ['collection', 'token_id', 'to'],
   [ExchangeOp.STAKE_UNDELEGATE]: ['validator'],
   [ExchangeOp.STAKE_SET_COMMISSION]: ['commission_bps'],
   [ExchangeOp.PERP_DEPOSIT]: ['amount'],

@@ -50,6 +50,7 @@ import type { KeystoreV3 } from '../../core/keystore'
 import { WatchedTokens } from '../../core/watched-tokens'
 import { exchange } from '../../core/exchange-client'
 import { qrdxPriceHistory, qrdxUsdPrice } from '../../core/trade/prices'
+import { fetchUsdRate, setDisplayCurrency, type FiatCode } from '../../core/fiat'
 import { ActivityLog, fetchQrdxHistory } from '../../core/activity'
 import { AddressBook, type AddressBookEntry, type AddressBookInput } from '../../core/address-book'
 import { SitePermissions, type SitePermission, type SiteCapability } from '../../core/permissions'
@@ -693,6 +694,24 @@ export function WalletProvider({
   }
 
   // ── Prices ──────────────────────────────────────────────────────────────
+  // Values are shown in the chosen currency (Settings → Currency), converted from USD.
+  const [, setFiatVersion] = useState(0)
+  const displayCode = (state?.settings?.currency ?? 'USD') as FiatCode
+  useEffect(() => {
+    let live = true
+    const apply = (perUsd: number | null) => {
+      if (!live) return
+      setDisplayCurrency(perUsd ? displayCode : 'USD', perUsd ?? 1)
+      setFiatVersion((v) => v + 1)
+    }
+    fetchUsdRate(displayCode).then(apply).catch(() => apply(null))
+    const t = setInterval(() => fetchUsdRate(displayCode).then(apply).catch(() => undefined), 60 * 60_000)
+    return () => {
+      live = false
+      clearInterval(t)
+    }
+  }, [displayCode])
+
   const refreshPrices = useCallback(async () => {
     const all = [...balances, ...pqBalances]
     if (all.length === 0) return

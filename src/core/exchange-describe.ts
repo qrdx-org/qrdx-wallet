@@ -351,6 +351,18 @@ export function describeExchangeOp(
       }
     }
 
+    case 'NFT_TRANSFER': {
+      warnings.push('A transfer cannot be reversed.')
+      return {
+        headline: `Send NFT #${str(params.token_id)} to ${short(str(params.to))}`,
+        details: [
+          { label: 'Collection', value: str(params.collection) },
+          { label: 'To', value: str(params.to) },
+        ],
+        warnings,
+      }
+    }
+
     // Delegation pools (qrdx-node docs/STAKING.md).
     case 'STAKE_DELEGATE': {
       const validator = str(params.validator)

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Lock, Settings as SettingsIcon, Copy, Check, Eye, EyeOff, Shield, MoreHorizontal, ChevronDown, ScanLine } from 'lucide-react'
+import { Lock, Settings as SettingsIcon, Copy, Check, Eye, EyeOff, Shield, ChevronDown, ScanLine } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { QuickActions } from './QuickActions'
@@ -24,9 +24,22 @@ import { StakeModal } from './StakeModal'
 import { cn, formatAddress } from '@/lib/utils'
 import { mergeCredentialBalances } from '@/src/core/balances'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
+import { formatFiat as formatUsd } from '@/src/core/fiat'
+import { AccountAvatar, AccountSwitcher } from './AccountSwitcher'
+import { NftGallery } from './NftGallery'
+import { TokenDetail } from './TokenDetail'
+import { useWalletNotifications } from './useWalletNotifications'
+import type { Token } from './TokenList'
 
 export function Dashboard() {
-  const { lock, currentWallet, balances, pqBalances, balancesLoading, activeChain, portfolioValue, portfolioChange24h, priceHistory, transactions, pqBalance, combinedNativeBalance } = useWallet()
+  const { lock, currentWallet, balances, pqBalances, balancesLoading, activeChain, portfolioValue, portfolioChange24h, priceHistory, transactions, pqBalance, combinedNativeBalance, prices } = useWallet()
+  useWalletNotifications()
+  const [showAccounts, setShowAccounts] = useState(false)
+  const [settingsPage, setSettingsPage] = useState<'main' | 'wallets'>('main')
+  const [nftCount, setNftCount] = useState(0)
+  const [openToken, setOpenToken] = useState<Token | null>(null)
+  // Send opened from a token's page starts on that token.
+  const [sendToken, setSendToken] = useState<string | undefined>(undefined)
   const nativeSym = activeChain.nativeCurrency?.symbol ?? 'ETH'
   const [copied, setCopied] = useState<'eth' | 'pq' | null>(null)
   // Hidden balances stay hidden across visits (a per-device preference).
@@ -84,15 +97,14 @@ export function Dashboard() {
   const pqNativeWei = pqBalance ?? 0n
   const hasPqFunds = pqNativeWei > 0n
 
-  const totalBalance = balancesLoading
-    ? '...'
-    : portfolioValue > 0
-      // A fiat total only covers priced EVM assets, so it is shown only when
-      // the PQ side holds nothing that it would silently omit.
-      ? hasPqFunds
-        ? `${formatUnits(combinedNativeBalance, nativeDecimals)} ${nativeSym}`
-        : `$${portfolioValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-      : `${formatUnits(combinedNativeBalance, nativeDecimals)} ${nativeSym}`
+  // USD first: the portfolio value covers both credentials (every priced holding on the 0x
+  // and the 0xPQ account). Without a price for the native coin the native amount leads.
+  const nativePriced = prices.has(nativeSym.toUpperCase())
+  const usdFirst = nativePriced || portfolioValue > 0
+  const nativeTotal = `${formatUnits(combinedNativeBalance, nativeDecimals)} ${nativeSym}`
+  const totalBalance = balancesLoading && portfolioValue === 0 ? '...' : usdFirst ? formatUsd(portfolioValue) : nativeTotal
+  const changeUsd = usdFirst && portfolioChange24h ? (portfolioValue * portfolioChange24h) / (100 + portfolioChange24h) : null
+  void hasPqFunds
 
   const handleCopy = (type: 'eth' | 'pq') => {
     const addr = type === 'eth' ? ethAddress : pqAddress
@@ -107,7 +119,7 @@ export function Dashboard() {
 
   // Show settings page
   if (showSettings) {
-    return <Settings onBack={() => setShowSettings(false)} />
+    return <Settings initialPage={settingsPage} onBack={() => { setShowSettings(false); setSettingsPage('main') }} />
   }
 
   // Show action modals
@@ -115,7 +127,7 @@ export function Dashboard() {
     return <ConnectSheet onClose={() => setShowConnect(false)} />
   }
   if (activeModal === 'send') {
-    return <SendModal ethAddress={ethAddress} pqAddress={pqAddress} onClose={() => setActiveModal(null)} />
+    return <SendModal ethAddress={ethAddress} pqAddress={pqAddress} initialToken={sendToken} onClose={() => (setActiveModal(null), setSendToken(undefined))} />
   }
   if (activeModal === 'receive') {
     return <ReceiveModal ethAddress={ethAddress} pqAddress={pqAddress} accountName={accountName} onClose={() => setActiveModal(null)} />
@@ -124,7 +136,7 @@ export function Dashboard() {
     return <SwapModal onClose={() => setActiveModal(null)} />
   }
   if (activeModal === 'buy') {
-    return <BuyModal onClose={() => setActiveModal(null)} />
+    return <BuyModal onClose={() => setActiveModal(null)} onReceive={() => setActiveModal('receive')} onSwap={() => setActiveModal('swap')} />
   }
   if (activeModal === 'shield') {
     return <ShieldModal onClose={() => setActiveModal(null)} onSend={() => setActiveModal('send')} />
@@ -136,6 +148,19 @@ export function Dashboard() {
     return <StakeModal onClose={() => setActiveModal(null)} />
   }
 
+  if (openToken) {
+    return (
+      <TokenDetail
+        token={openToken}
+        onClose={() => setOpenToken(null)}
+        onAction={(action, t) => {
+          if (action === 'send') setSendToken(t.contractAddress || t.symbol)
+          setActiveModal(action)
+        }}
+      />
+    )
+  }
+
   // Show all tokens view
   if (showAllTokens) {
     return (
@@ -145,13 +170,14 @@ export function Dashboard() {
         onPinnedChange={setPinnedSymbols}
         onFavoritedChange={setFavoritedSymbols}
         onClose={() => setShowAllTokens(false)}
+        onSelect={setOpenToken}
       />
     )
   }
 
   const tabs = [
     { key: 'tokens' as const, label: 'Tokens', count: mergeCredentialBalances(balances, pqBalances).length },
-    { key: 'nfts' as const, label: 'NFTs', count: 0 },
+    { key: 'nfts' as const, label: 'NFTs', count: nftCount },
     { key: 'activity' as const, label: 'Activity', count: transactions.length },
   ]
 
@@ -162,19 +188,14 @@ export function Dashboard() {
         <div className="px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="relative">
-                <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-md shadow-primary/20">
-                  <span className="text-primary-foreground font-bold text-xs">
-                    {accountName.slice(0, 2).toUpperCase()}
-                  </span>
-                </div>
-                <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 border-2 border-background" />
-              </div>
+              <button type="button" onClick={() => setShowAccounts(true)} aria-label="Switch account" className="relative rounded-xl">
+                <AccountAvatar name={accountName} active />
+              </button>
               <div>
-                <div className="font-semibold text-sm flex items-center gap-1">
+                <button type="button" onClick={() => setShowAccounts(true)} className="font-semibold text-sm flex items-center gap-1 hover:opacity-80" aria-label={`${accountName}: switch account`}>
                   {accountName}
                   <ChevronDown className="h-3 w-3 text-muted-foreground" />
-                </div>
+                </button>
                 {/* Address type switcher */}
                 <div className="flex items-center gap-1">
                   <button
@@ -277,6 +298,18 @@ export function Dashboard() {
             <div className={cn('text-3xl font-bold tracking-tight mb-1 tabular-nums', !balanceVisible && 'privacy-blur')} aria-hidden={!balanceVisible}>
               {totalBalance}
             </div>
+            {usdFirst && (
+              <div className={cn('flex items-center gap-2 text-xs tabular-nums text-muted-foreground', !balanceVisible && 'privacy-blur')}>
+                <span>{nativeTotal}</span>
+                {changeUsd != null && (
+                  <span className="text-foreground/80">
+                    {changeUsd >= 0 ? '+' : '−'}
+                    {formatUsd(Math.abs(changeUsd))} ({portfolioChange24h >= 0 ? '+' : ''}
+                    {portfolioChange24h.toFixed(2)}%) today
+                  </span>
+                )}
+              </div>
+            )}
             {/* Breakdown of the combined figure. Always shown so the split is
                 visible rather than something the user has to go looking for. */}
             <div className="flex items-center gap-3 mt-1.5">
@@ -353,20 +386,22 @@ export function Dashboard() {
         {/* Tab Content */}
         <Card className="glass border-border/50">
           <CardContent className="p-2">
-            {activeTab === 'tokens' && <TokenList pinnedSymbols={pinnedSymbols} onViewAll={() => setShowAllTokens(true)} />}
-            {activeTab === 'nfts' && (
-              <div className="py-10 text-center">
-                <div className="h-12 w-12 rounded-xl bg-accent/50 flex items-center justify-center mx-auto mb-3">
-                  <MoreHorizontal className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <p className="text-sm text-muted-foreground">No NFTs yet</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">Your collectibles will appear here</p>
-              </div>
-            )}
+            {activeTab === 'tokens' && <TokenList pinnedSymbols={pinnedSymbols} onViewAll={() => setShowAllTokens(true)} onSelect={setOpenToken} />}
+            {activeTab === 'nfts' && <NftGallery onCount={setNftCount} />}
             {activeTab === 'activity' && <ActivityList />}
           </CardContent>
         </Card>
       </div>
+      {showAccounts && (
+        <AccountSwitcher
+          onClose={() => setShowAccounts(false)}
+          onManage={() => {
+            setShowAccounts(false)
+            setSettingsPage('wallets')
+            setShowSettings(true)
+          }}
+        />
+      )}
     </div>
   )
 }
