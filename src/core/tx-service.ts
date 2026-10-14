@@ -38,7 +38,7 @@ import {
   type UnsignedExchangeTx,
 } from './exchange-tx'
 import { ExchangeNonceTracker, isNonceConflict } from './exchange-nonce'
-import { recordPendingTransaction } from './history'
+import { dropPendingTransaction, recordPendingTransaction } from './history'
 import type { SignedTransaction } from './transaction'
 import type { WalletAccount } from './types'
 
@@ -274,6 +274,71 @@ export async function send(
     req.token?.decimals ?? chain.nativeCurrency.decimals
   )
   return { hash, from: from.display, toAccountId: q.toAccountId, credential: req.credential }
+}
+
+// ─── Speed up / cancel ──────────────────────────────────────────────────────
+
+/** A replacement must outbid the queued transaction; EVM nodes ask for at least 10 % more. */
+const REPLACEMENT_BUMP_PCT = 112n
+
+interface RpcTx {
+  from: string
+  to: string | null
+  value: string
+  input: string
+  gas: string
+  gasPrice?: string
+  maxFeePerGas?: string
+  nonce: string
+  blockNumber: string | null
+}
+
+/** Whether a pending transaction can be replaced: EVM networks only, from the account's 0x key. */
+export function canReplace(chain: ChainConfig | string, account: WalletAccount, from: string): boolean {
+  const c = chainOf(chain)
+  return !isQrdxChain(c) && from.toLowerCase() === account.ethAddress.toLowerCase()
+}
+
+/**
+ * Replace a pending EVM transaction with one at the same nonce and a higher gas price:
+ * `speedup` resends it as it was, `cancel` sends nothing to yourself so the original can no
+ * longer confirm. Whichever the network mines first wins. QRDX nodes keep one transaction per
+ * sender and nonce and refuse replacements, so it is not offered there.
+ */
+export async function replaceTransaction(
+  signer: Signer,
+  input: { chain: ChainConfig | string; account: WalletAccount; hash: string; mode: 'speedup' | 'cancel' }
+): Promise<{ hash: string; gasPrice: bigint }> {
+  const chain = chainOf(input.chain)
+  if (isQrdxChain(chain)) throw new TxError('QRDX nodes do not accept a replacement for a queued transaction')
+  const provider = getEvmProvider(chain.id)
+  const tx = await provider.rpc<RpcTx | null>('eth_getTransactionByHash', [input.hash])
+  if (!tx) throw new TxError('The network no longer knows this transaction; it may have been dropped')
+  if (tx.blockNumber) throw new TxError('This transaction is already in a block')
+  if (tx.from.toLowerCase() !== input.account.ethAddress.toLowerCase()) throw new TxError('Only transactions sent from this account can be replaced')
+  if (!tx.to && input.mode === 'speedup') throw new TxError('A contract deployment cannot be sped up from here; cancel it instead')
+
+  const old = fromHex(tx.gasPrice ?? tx.maxFeePerGas ?? '0x0')
+  const current = await provider.getGasPrice()
+  const bumped = (old * REPLACEMENT_BUMP_PCT) / 100n + 1n
+  const gasPrice = bumped > current ? bumped : current
+  const cancel = input.mode === 'cancel'
+  const chainId = await resolveSigningChainId(chain)
+  const replacement: EthTransactionRequest = {
+    from: input.account.ethAddress,
+    to: cancel || !tx.to ? input.account.ethAddress : tx.to,
+    value: cancel ? '0x0' : tx.value,
+    data: cancel ? '0x' : tx.input,
+    nonce: tx.nonce,
+    chainId: toHex(chainId),
+    gas: cancel ? toHex(21_000n) : tx.gas,
+    gasPrice: toHex(gasPrice),
+  }
+  const raw = (await signer.signEvmTransaction(replacement, input.account.id)).rawTransaction
+  const hash = await provider.sendRawTransaction(raw)
+  dropPendingTransaction(input.hash)
+  recordPendingTransaction(chain.id, hash, input.account.ethAddress, replacement.to, replacement.value ?? '0x0', chain.nativeCurrency.symbol, chain.nativeCurrency.decimals)
+  return { hash, gasPrice }
 }
 
 // ─── Exchange operations (swap, stake, token ops) ───────────────────────────

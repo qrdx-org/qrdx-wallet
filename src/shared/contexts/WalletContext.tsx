@@ -40,6 +40,7 @@ import {
   fetchBalances as fetchCredentialBalances,
   quoteSend as quoteSendCore,
   send as sendCore,
+  replaceTransaction as replaceTransactionCore,
   submitExchangeOp as submitExchangeOpCore,
   type Credential,
   type SendQuote,
@@ -51,7 +52,7 @@ import { WatchedTokens } from '../../core/watched-tokens'
 import { exchange } from '../../core/exchange-client'
 import { qrdxPriceHistory, qrdxUsdPrice } from '../../core/trade/prices'
 import { fetchUsdRate, setDisplayCurrency, type FiatCode } from '../../core/fiat'
-import { ActivityLog, fetchQrdxHistory } from '../../core/activity'
+import { ActivityLog, fetchQrdxActivity } from '../../core/activity'
 import { AddressBook, type AddressBookEntry, type AddressBookInput } from '../../core/address-book'
 import { SitePermissions, type SitePermission, type SiteCapability } from '../../core/permissions'
 import { createBackend, createLocalBackend, type WalletBackend } from '../backend'
@@ -188,6 +189,8 @@ export interface WalletContextType {
   // ── Sending & signing ──────────────────────────────────────────────────
   quoteSend: (input: SendInput) => Promise<SendQuote>
   send: (input: SendInput, quote?: SendQuote) => Promise<SendResult>
+  /** Speed up or cancel a pending EVM transaction (same nonce, higher gas price). Not on QRDX. */
+  replaceTransaction: (hash: string, mode: 'speedup' | 'cancel') => Promise<{ hash: string }>
   /** Classic native-send gas estimate (kept for the swap preview). */
   estimateGas: (to: string, amount: string) => Promise<GasEstimate>
   signMessage: (message: string) => Promise<string>
@@ -646,6 +649,12 @@ export function WalletProvider({
     }
   }
 
+  const replaceTransaction = async (hash: string, mode: 'speedup' | 'cancel') => {
+    const result = await replaceTransactionCore(backend, { chain: activeChain, account: requireAccount(), hash, mode })
+    refreshTransactions()
+    return { hash: result.hash }
+  }
+
   const estimateGas = async (to: string, amount: string): Promise<GasEstimate> => {
     const q = await quoteSend({ credential: 'classic', to, amount })
     return {
@@ -752,7 +761,7 @@ export function WalletProvider({
             )
             .catch(() => [])),
         ]
-        setTransactions(await fetchQrdxHistory(activity, activeChain, [currentWallet], tokens))
+        setTransactions(await fetchQrdxActivity(activity, activeChain, [currentWallet], tokens))
       } else {
         setTransactions(await fetchAllTransactionHistory(currentWallet.ethAddress, activeChain.id))
       }
@@ -842,6 +851,7 @@ export function WalletProvider({
     combinedNativeBalance,
     quoteSend,
     send,
+    replaceTransaction,
     estimateGas,
     signMessage,
     signMessagePQ,

@@ -66,6 +66,23 @@ await page.route('https://test.qrdx.org/rpc', async (route) => {
     return reply([{ collection: '0x' + 'ab'.repeat(20), token_id: '7', owner: body.params[0], uri: '', name: 'Lattice #7', symbol: 'LAT', collection_name: 'Lattice', minted_height: 1200 }])
   return route.continue()
 })
+// The node's transaction index: one QRDX transfer in, from an address the wallet does not know.
+const SENDER = '0x' + '9a'.repeat(20)
+await page.route('https://test.qrdx.org/get_address_history**', (route) =>
+  route.fulfill({
+    contentType: 'application/json',
+    headers: { 'access-control-allow-origin': '*' },
+    body: JSON.stringify({
+      ok: true,
+      result: {
+        transactions: [
+          { block_height: 4200, position: 0, tx_hash: '0x' + 'c3'.repeat(32), timestamp: Math.floor(Date.now() / 1000) - 120, kind: 'evm', op: 'TRANSFER', sender: SENDER, target: new URL(route.request().url()).searchParams.get('address'), asset: 'QRDX', amount: '2.5', status: 'success', fee: '0.000021', error: null, detail: { gas_used: 21000, gas_price: '1000000000', token_transfers: [] }, roles: ['to'], cursor: '4200:0' },
+        ],
+        next_cursor: null,
+      },
+    }),
+  })
+)
 
 // ── Import, then testnet ─────────────────────────────────────────────────────
 console.log('Import and switch to testnet')
@@ -118,6 +135,10 @@ await shot('03-token')
 // ── Send is reviewed before signing ──────────────────────────────────────────
 console.log('Send review')
 await page.getByRole('button', { name: /^Send$/ }).click()
+const suggestions = page.getByRole('listbox', { name: 'Suggested recipients' })
+check('recipient suggestions list the other account', await visible(suggestions.getByText('Your accounts')) && await visible(suggestions.getByText('Account 2').first()))
+await page.getByPlaceholder(/0x/).first().fill('acc')
+check('typing filters the suggestions', await visible(suggestions.getByText('Account 2').first()) && !(await suggestions.getByText('Recent').isVisible().catch(() => false)))
 await page.getByPlaceholder(/0x/).first().fill(RECIPIENT)
 await page.locator('input[inputmode="decimal"]').first().fill('1')
 const review = page.getByRole('button', { name: /Review send/ })
@@ -147,6 +168,42 @@ check('NFT detail with send', await visible(page.getByRole('button', { name: /^S
 await shot('05-nft')
 await page.getByRole('button', { name: 'Close' }).first().click()
 
+// ── Activity from the node's index, and its detail ───────────────────────────
+console.log('Activity')
+await page.getByRole('button', { name: /^Activity/ }).click()
+await page.waitForTimeout(1500)
+const received = page.getByRole('button').filter({ hasText: '+2.50 QRDX' })
+check('history comes from the node index', await visible(received))
+await received.first().click()
+const detail = page.getByRole('dialog', { name: 'Transaction' })
+check('a transaction opens its detail', await visible(detail.getByText('Network fee')) && (await detail.innerText()).includes('0.000021'))
+check('an unknown sender can be saved as a contact', await visible(detail.getByRole('button', { name: /Save contact/ })))
+await page.waitForTimeout(600)
+await shot('06-tx-detail')
+await detail.getByRole('button', { name: 'Close' }).first().click().catch(() => page.keyboard.press('Escape'))
+
+// ── Explore ──────────────────────────────────────────────────────────────────
+console.log('Explore')
+await page.getByRole('button', { name: /^Explore/ }).click()
+check('explore lists the network\'s markets', await visible(page.getByText('Markets', { exact: true })))
+await page.waitForTimeout(1500)
+await shot('07-explore')
+const qrdxRow = page.getByRole('button').filter({ hasText: 'QRDX/USDC' }).first()
+if (await qrdxRow.isVisible().catch(() => false)) {
+  await qrdxRow.click()
+  check('a market opens its token page', await visible(page.getByText('Your balance')))
+  await page.getByRole('button', { name: 'Back' }).first().click()
+} else check('a market opens its token page', false, 'no QRDX/USDC market listed')
+
+// ── Swap settings ────────────────────────────────────────────────────────────
+console.log('Swap settings')
+await page.getByRole('button', { name: /^Swap$/ }).first().click()
+await page.getByLabel('Custom max slippage in percent').fill('2.5')
+await page.getByRole('button', { name: '30 min' }).click()
+const saved = await page.evaluate(() => localStorage.getItem('qrdx_swap_settings'))
+check('custom slippage and deadline are kept', saved === JSON.stringify({ slippage: '2.5', deadlineMin: 30 }), saved ?? 'nothing saved')
+await page.getByRole('button', { name: 'Back' }).first().click()
+
 // ── Settings ─────────────────────────────────────────────────────────────────
 console.log('Settings')
 await page.locator('button:has(svg.lucide-settings)').first().click()
@@ -154,7 +211,7 @@ const settingsText = await page.locator('body').innerText()
 check('no Language or Smart Wallet stubs', !/Smart Wallet|Display language/.test(settingsText))
 await page.getByText('Notifications').first().click()
 check('notifications: transactions and price alerts', await visible(page.getByText('Price alerts').first()) && !(await page.getByText('News & Updates').isVisible().catch(() => false)))
-await shot('06-notifications')
+await shot('08-notifications')
 await page.getByRole('button', { name: 'Back' }).first().click()
 await page.getByText('Currency').first().click()
 await page.getByText(/\(EUR\)/).first().click()
@@ -164,7 +221,7 @@ await page.waitForTimeout(4000)
 const inEur = (await page.locator('.text-3xl').first().innerText()).trim()
 // CoinGecko gives the rate; without one the wallet keeps USD rather than guess.
 check('values follow the chosen currency', inEur.startsWith('€') || inEur.startsWith('$'), inEur.startsWith('€') ? inEur : `${inEur} (no EUR rate from CoinGecko: kept USD)`)
-await shot('07-eur')
+await shot('09-eur')
 
 console.log('page errors:', errors.slice(0, 5))
 check('no page errors', errors.length === 0, errors.slice(0, 2).join(' | '))

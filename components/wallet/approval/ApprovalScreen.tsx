@@ -28,6 +28,9 @@ import { approvals, type ApprovalRequest, type ApprovalResult } from '@/src/exte
 import { getChain } from '@/src/core/chains'
 import { weiToEth } from '@/src/core/ethereum'
 import { shortenAddress } from '@/src/core/address'
+import { sourceAddress } from '@/src/core/tx-service'
+import { simulateTransaction, type Simulation } from '@/src/core/simulate'
+import { assessOrigin } from '@/src/core/site-risk'
 import { ErrorBanner, FlowScreen, Notice, PrimaryButton } from '../flow/FlowKit'
 
 const MAX_UINT_HALF = 1n << 255n
@@ -127,6 +130,23 @@ export function ApprovalScreen(
     [request, w.allWallets]
   )
 
+  // A dApp transaction is run against the latest state before it is signed (simulate.ts).
+  const [simulation, setSimulation] = useState<Simulation | null>(null)
+  useEffect(() => {
+    if (request?.kind !== 'transaction' || !account) return
+    const chain = getChain(request.chain)
+    if (!chain) return
+    let live = true
+    simulateTransaction(
+      chain.id,
+      { from: sourceAddress(account, request.credential).accountId, to: request.tx.to, value: request.tx.value, data: request.tx.data },
+      { symbol: chain.nativeCurrency.symbol, decimals: chain.nativeCurrency.decimals, fee: request.tx.fee }
+    ).then((r) => live && setSimulation(r))
+    return () => {
+      live = false
+    }
+  }, [request, account])
+
   const respond = async (approved: boolean) => {
     setBusy(true)
     await finish(
@@ -165,9 +185,7 @@ export function ApprovalScreen(
       return request.origin
     }
   })()
-  const insecure =
-    request.origin.startsWith('http://') &&
-    !/^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(request.origin)
+  const risk = assessOrigin(request.origin)
 
   const titles: Record<
     ApprovalRequest['kind'],
@@ -235,11 +253,12 @@ export function ApprovalScreen(
         </div>
       </div>
 
-      {insecure && (
-        <Notice tone="warning" icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}>
-          This site is not using HTTPS. Anyone on your network could alter what it asks you to sign.
+      {risk.warnings.map((warning) => (
+        <Notice key={warning} tone="warning" icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}>
+          {risk.level === 'danger' && <strong className="block">Possible phishing site</strong>}
+          {warning}
         </Notice>
-      )}
+      ))}
 
       <div className="space-y-3 mt-3 flex-1">
         {request.kind === 'connect' && (
@@ -389,6 +408,23 @@ export function ApprovalScreen(
                     </Notice>
                   </div>
                 )}
+                <div className="mt-2 border-t border-border/60 pt-2" aria-live="polite">
+                  <p className="text-[11px] font-semibold">Simulated against the latest block</p>
+                  {!simulation ? (
+                    <p className="text-[11px] text-muted-foreground">Checking what this transaction does…</p>
+                  ) : (
+                    <>
+                      <p className="text-[11px] text-muted-foreground">
+                        {simulation.ok ? 'The call succeeds.' : `The call fails: ${simulation.reason}. You would still pay the fee.`}
+                      </p>
+                      {simulation.changes.map((c) => (
+                        <Field key={c.symbol + c.amount} label={c.approval ? `Allowance for ${shortenAddress(c.approval.spender, 4)}` : 'Your balance'}>
+                          {c.approval ? `${c.amount} ${c.symbol}` : `${c.amount} ${c.symbol}`}
+                        </Field>
+                      ))}
+                    </>
+                  )}
+                </div>
               </div>
             )
           })()}

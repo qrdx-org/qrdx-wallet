@@ -25,6 +25,7 @@ import { defaultCredential, formatAmount, formatUnitsExact } from '@/src/core/ba
 import { isQrdxChain } from '@/src/core/chains'
 import { formatFiat as formatUsd } from '@/src/core/fiat'
 import { ConfirmSheet } from './flow/ConfirmSheet'
+import { RecipientSuggestions } from './RecipientSuggestions'
 
 interface SendModalProps {
   ethAddress: string
@@ -32,6 +33,8 @@ interface SendModalProps {
   onClose: () => void
   /** Open on this token (contract address, or the native symbol) instead of the token list. */
   initialToken?: string
+  /** Start with this recipient filled in ("Send again"). */
+  initialRecipient?: string
 }
 
 interface TokenOption {
@@ -77,7 +80,7 @@ type TxStatus = 'idle' | 'estimating' | 'sending' | 'success' | 'error'
  * is shown so the user can see exactly where funds go. The fee shown is the
  * quote the transaction is then built with.
  */
-export function SendModal({ ethAddress, pqAddress, onClose, initialToken }: SendModalProps) {
+export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initialRecipient }: SendModalProps) {
   const { balances, pqBalances, activeChain, quoteSend, send, addressBook, networkStatus, prices, currentWallet, transactions } = useWallet()
   // Nothing is signed from the form: Review opens the confirmation, which signs.
   const [reviewing, setReviewing] = useState(false)
@@ -85,7 +88,7 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken }: Send
 
   const [step, setStep] = useState<Step>('select-token')
   const [search, setSearch] = useState('')
-  const [recipient, setRecipient] = useState('')
+  const [recipient, setRecipient] = useState(initialRecipient ?? '')
   const [amount, setAmount] = useState('')
   const [selectedToken, setSelectedToken] = useState<TokenOption | null>(null)
   const [txStatus, setTxStatus] = useState<TxStatus>('idle')
@@ -531,32 +534,10 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken }: Send
               </p>
             )}
 
-            {/* Saved recipients. Picking one removes an opportunity to mistype
-                an address, which is the failure mode with no recovery. */}
-            {addressBook.length > 0 && (
-              <div className="mt-2.5">
-                <div className="text-[9px] uppercase tracking-wider text-muted-foreground/70 mb-1">
-                  Address book
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {addressBook
-                    .filter((c) => qrdx || c.addressType === 'eth')
-                    .slice(0, 6)
-                    .map((c) => (
-                      <button
-                        key={c.id}
-                        onClick={() => setRecipient(c.address)}
-                        className="px-2 py-1 rounded-lg bg-accent/40 hover:bg-accent/70 border border-border/50 text-[10px] transition-colors"
-                        title={c.address}
-                      >
-                        <span className="font-medium">{c.name}</span>
-                        <span className="text-muted-foreground ml-1 font-mono">
-                          {shortenAddress(c.address, 3)}
-                        </span>
-                      </button>
-                    ))}
-                </div>
-              </div>
+            {/* Recent recipients, the other accounts and contacts. Picking one removes an
+                opportunity to mistype an address, which is the failure mode with no recovery. */}
+            {recipientCheck.state !== 'valid' && (
+              <RecipientSuggestions query={recipient} from={{ eth: ethAddress, pq: pqAddress }} onPick={setRecipient} />
             )}
           </CardContent>
         </Card>

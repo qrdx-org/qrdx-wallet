@@ -1,8 +1,10 @@
 'use client'
 
-import { ArrowUpRight, ArrowDownLeft, RefreshCw, FileCode2, Loader2, ExternalLink } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowUpRight, ArrowDownLeft, RefreshCw, FileCode2, Loader2, ChevronRight } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import type { TransactionHistoryItem } from '@/src/core/history'
+import { TransactionDetail } from './TransactionDetail'
 
 function formatTimestamp(timestamp: number): string {
   const now = Date.now()
@@ -30,8 +32,9 @@ function formatValue(value: string): string {
   return `${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })} ${parts[1]}`
 }
 
-export function ActivityList() {
+export function ActivityList({ onSendAgain }: { onSendAgain?: (to: string, token?: string) => void } = {}) {
   const { transactions, transactionsLoading, refreshTransactions } = useWallet()
+  const [open, setOpen] = useState<TransactionHistoryItem | null>(null)
 
   const getIcon = (type: TransactionHistoryItem['type']) => {
     switch (type) {
@@ -142,13 +145,19 @@ export function ActivityList() {
           )}
         </button>
       </div>
+      {open && (
+        <TransactionDetail
+          tx={transactions.find((t) => t.hash === open.hash && t.tokenSymbol === open.tokenSymbol) ?? open}
+          onClose={() => setOpen(null)}
+          onSendAgain={onSendAgain && ((to, token) => (setOpen(null), onSendAgain(to, token)))}
+        />
+      )}
       {transactions.slice(0, 20).map((tx, index) => (
-        <a
+        <button
+          type="button"
           key={`${tx.hash}-${tx.tokenSymbol ?? ''}`}
-          href={tx.explorerUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-between p-3 rounded-xl hover:bg-accent/30 transition-all cursor-pointer group animate-slide-up"
+          onClick={() => setOpen(tx)}
+          className="flex w-full items-center justify-between p-3 rounded-xl text-left hover:bg-accent/30 transition-all cursor-pointer group animate-slide-up"
           style={{ animationDelay: `${index * 50}ms` }}
         >
           <div className="flex items-center gap-3">
@@ -161,7 +170,7 @@ export function ActivityList() {
             </div>
             <div>
               <div className="font-medium text-sm capitalize flex items-center gap-1.5">
-                {tx.type}
+                {tx.label ?? tx.type}
                 {getStatusBadge(tx.status)}
               </div>
               <div className="text-xs text-muted-foreground">
@@ -178,9 +187,9 @@ export function ActivityList() {
                 {tx.hash.slice(0, 8)}...{tx.hash.slice(-4)}
               </div>
             </div>
-            <ExternalLink className="h-3 w-3 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors shrink-0" />
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors shrink-0" />
           </div>
-        </a>
+        </button>
       ))}
     </div>
   )

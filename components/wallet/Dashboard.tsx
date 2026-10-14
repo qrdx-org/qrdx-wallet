@@ -28,6 +28,7 @@ import { formatFiat as formatUsd } from '@/src/core/fiat'
 import { AccountAvatar, AccountSwitcher } from './AccountSwitcher'
 import { NftGallery } from './NftGallery'
 import { TokenDetail } from './TokenDetail'
+import { Explore } from './Explore'
 import { useWalletNotifications } from './useWalletNotifications'
 import type { Token } from './TokenList'
 
@@ -40,6 +41,10 @@ export function Dashboard() {
   const [openToken, setOpenToken] = useState<Token | null>(null)
   // Send opened from a token's page starts on that token.
   const [sendToken, setSendToken] = useState<string | undefined>(undefined)
+  // "Send again" from a transaction starts with its recipient.
+  const [sendTo, setSendTo] = useState<string | undefined>(undefined)
+  // Swap opened from a token's page pays with that token.
+  const [swapFrom, setSwapFrom] = useState<string | undefined>(undefined)
   const nativeSym = activeChain.nativeCurrency?.symbol ?? 'ETH'
   const [copied, setCopied] = useState<'eth' | 'pq' | null>(null)
   // Hidden balances stay hidden across visits (a per-device preference).
@@ -58,7 +63,7 @@ export function Dashboard() {
       /* storage unavailable: this visit only */
     }
   }
-  const [activeTab, setActiveTab] = useState<'tokens' | 'nfts' | 'activity'>('tokens')
+  const [activeTab, setActiveTab] = useState<'tokens' | 'nfts' | 'activity' | 'explore'>('tokens')
   const [showSettings, setShowSettings] = useState(false)
   const [showConnect, setShowConnect] = useState(false)
   const rc = useRemoteConnect()
@@ -127,13 +132,21 @@ export function Dashboard() {
     return <ConnectSheet onClose={() => setShowConnect(false)} />
   }
   if (activeModal === 'send') {
-    return <SendModal ethAddress={ethAddress} pqAddress={pqAddress} initialToken={sendToken} onClose={() => (setActiveModal(null), setSendToken(undefined))} />
+    return (
+      <SendModal
+        ethAddress={ethAddress}
+        pqAddress={pqAddress}
+        initialToken={sendToken}
+        initialRecipient={sendTo}
+        onClose={() => (setActiveModal(null), setSendToken(undefined), setSendTo(undefined))}
+      />
+    )
   }
   if (activeModal === 'receive') {
     return <ReceiveModal ethAddress={ethAddress} pqAddress={pqAddress} accountName={accountName} onClose={() => setActiveModal(null)} />
   }
   if (activeModal === 'swap') {
-    return <SwapModal onClose={() => setActiveModal(null)} />
+    return <SwapModal initialFrom={swapFrom} onClose={() => (setActiveModal(null), setSwapFrom(undefined))} />
   }
   if (activeModal === 'buy') {
     return <BuyModal onClose={() => setActiveModal(null)} onReceive={() => setActiveModal('receive')} onSwap={() => setActiveModal('swap')} />
@@ -155,6 +168,7 @@ export function Dashboard() {
         onClose={() => setOpenToken(null)}
         onAction={(action, t) => {
           if (action === 'send') setSendToken(t.contractAddress || t.symbol)
+          if (action === 'swap') setSwapFrom(t.balanceNum > 0 ? t.contractAddress || 'QRDX' : undefined)
           setActiveModal(action)
         }}
       />
@@ -179,6 +193,7 @@ export function Dashboard() {
     { key: 'tokens' as const, label: 'Tokens', count: mergeCredentialBalances(balances, pqBalances).length },
     { key: 'nfts' as const, label: 'NFTs', count: nftCount },
     { key: 'activity' as const, label: 'Activity', count: transactions.length },
+    { key: 'explore' as const, label: 'Explore', count: 0 },
   ]
 
   return (
@@ -388,7 +403,16 @@ export function Dashboard() {
           <CardContent className="p-2">
             {activeTab === 'tokens' && <TokenList pinnedSymbols={pinnedSymbols} onViewAll={() => setShowAllTokens(true)} onSelect={setOpenToken} />}
             {activeTab === 'nfts' && <NftGallery onCount={setNftCount} />}
-            {activeTab === 'activity' && <ActivityList />}
+            {activeTab === 'activity' && (
+              <ActivityList
+                onSendAgain={(to, token) => {
+                  setSendTo(to)
+                  setSendToken(token)
+                  setActiveModal('send')
+                }}
+              />
+            )}
+            {activeTab === 'explore' && <Explore onOpenToken={setOpenToken} />}
           </CardContent>
         </Card>
       </div>

@@ -17,11 +17,14 @@ import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { isQrdxChain } from '@/src/core/chains'
 import { getEvmProvider } from '@/src/core/ethereum'
 
-/** bridge_getAssets (qrdx-node rpc/modules/bridge_ledger.py). */
+/** bridge_getAssets (qrdx-node rpc/modules/bridge_ledger.py: BridgeAsset.summary() and the supply here). */
 interface BridgeAsset {
   symbol: string
-  address: string
-  chain_id: number
+  /** The source chain's EIP-155 id. */
+  chain: number
+  source_token: string
+  /** The bridged token on QRDX. */
+  token_address: string
   decimals: number
   supply: string
 }
@@ -86,10 +89,10 @@ export function ShieldModal({ onClose, onSend }: ShieldModalProps) {
           {assets && assets.length > 0 && (
             <div className="mt-3 divide-y divide-border/60 rounded-xl border border-border/70 text-left text-xs">
               {assets.map((a) => (
-                <div key={a.address} className="flex items-center justify-between gap-3 px-3 py-2">
+                <div key={a.token_address} className="flex items-center justify-between gap-3 px-3 py-2">
                   <span>
                     <span className="font-semibold">{a.symbol}</span>
-                    <span className="block text-[10px] text-muted-foreground">from chain {a.chain_id}</span>
+                    <span className="block text-[10px] text-muted-foreground">from chain {a.chain}</span>
                   </span>
                   <span className="tabular-nums text-muted-foreground">{Number(a.supply).toLocaleString('en-US')} on QRDX</span>
                 </div>

@@ -30,6 +30,8 @@ import { cn } from '@/lib/utils'
 
 interface SwapModalProps {
   onClose: () => void
+  /** Pay with this token (a token address, or QRDX) instead of QRDX. */
+  initialFrom?: string
 }
 
 interface Asset {
@@ -42,8 +44,29 @@ interface Asset {
 }
 
 const SLIPPAGE = ['0.1', '0.5', '1', '3'] as const
+const DEADLINES = [5, 10, 30] as const
+const SETTINGS_KEY = 'qrdx_swap_settings'
 
-export function SwapModal({ onClose }: SwapModalProps) {
+/** Max slippage (percent, as typed) and how long a signed swap stays valid; kept per device. */
+interface SwapSettings {
+  slippage: string
+  deadlineMin: number
+}
+
+function readSettings(): SwapSettings {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null') as Partial<SwapSettings> | null
+    const slippage = typeof raw?.slippage === 'string' && validSlippage(raw.slippage) ? raw.slippage : '0.5'
+    const deadlineMin = DEADLINES.includes(raw?.deadlineMin as 5) ? (raw!.deadlineMin as number) : 10
+    return { slippage, deadlineMin }
+  } catch {
+    return { slippage: '0.5', deadlineMin: 10 }
+  }
+}
+
+const validSlippage = (v: string) => /^\d*\.?\d+$/.test(v) && Number(v) > 0 && Number(v) <= 50
+
+export function SwapModal({ onClose, initialFrom }: SwapModalProps) {
   const { activeChain, currentWallet, pqBalance, fetchBalances } = useWallet()
   const qrdx = isQrdxChain(activeChain)
   const api = qrdx ? tradeApiBase(activeChain) : null
@@ -51,10 +74,22 @@ export function SwapModal({ onClose }: SwapModalProps) {
   const [balances, setBalances] = useState<Record<string, string>>({})
   const [meta, setMeta] = useState<Record<string, ApiAsset>>({})
   const [usdPrices, setUsdPrices] = useState<Record<string, string>>({})
-  const [fromId, setFromId] = useState(NATIVE_QRDX)
+  const [fromId, setFromId] = useState(initialFrom && initialFrom.toUpperCase() !== 'QRDX' ? initialFrom : NATIVE_QRDX)
   const [toId, setToId] = useState<string>('')
   const [amount, setAmount] = useState('')
-  const [slippage, setSlippage] = useState<(typeof SLIPPAGE)[number]>('0.5')
+  const [settings, setSettingsState] = useState<SwapSettings>(readSettings)
+  const [customSlippage, setCustomSlippage] = useState('')
+  const slippage = settings.slippage
+  const setSettings = (next: Partial<SwapSettings>) =>
+    setSettingsState((prev) => {
+      const merged = { ...prev, ...next }
+      try {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged))
+      } catch {
+        /* storage unavailable: this visit only */
+      }
+      return merged
+    })
   const [quoted, setQuoted] = useState<{ key: string; quote: SwapQuote | null; error: string | null } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [picking, setPicking] = useState<'from' | 'to' | null>(null)
@@ -77,7 +112,10 @@ export function SwapModal({ onClose }: SwapModalProps) {
       .tokens(activeChain)
       .then((list) => {
         setTokens(list)
-        if (!toId && list[0]) setToId(list[0].token_address)
+        if (!toId) {
+          const first = list.find((t) => t.token_address.toLowerCase() !== fromId.toLowerCase())
+          setToId(fromId === NATIVE_QRDX ? (first?.token_address ?? '') : NATIVE_QRDX)
+        }
         return loadBalances(list)
       })
       .catch((e) => setError(e instanceof Error ? `Could not load the token list: ${e.message}` : 'Could not load tokens'))
@@ -167,12 +205,13 @@ export function SwapModal({ onClose }: SwapModalProps) {
         token_out: toId,
         amount_in: amount,
         min_amount_out: min,
-        deadline: Math.floor(Date.now() / 1000) + 600,
+        deadline: Math.floor(Date.now() / 1000) + settings.deadlineMin * 60,
       },
       label: `Swap ${amount} ${from.symbol} → ≥ ${fmtSize(min)} ${to.symbol}`,
       symbols: Object.fromEntries(assets.filter((a) => a.id !== NATIVE_QRDX).map((a) => [a.id, a.symbol])),
       estimates: [
         { k: 'Expected', v: `${fmtSize(quote.amount_out)} ${to.symbol}` },
+        { k: 'Max slippage', v: `${slippage}% · valid for ${settings.deadlineMin} min` },
         { k: 'Route', v: quote.source === 'clob' ? 'Order book' : `Pool ${quote.pool_id?.slice(0, 8) ?? ''}` },
         ...(quote.price_impact ? [{ k: 'Price impact', v: percent(String(Number(quote.price_impact) * 100), false) }] : []),
       ],
@@ -260,12 +299,35 @@ export function SwapModal({ onClose }: SwapModalProps) {
                 <Line k="Price impact" v={quote?.price_impact ? percent(String(Number(quote.price_impact) * 100), false) : quote ? 'n/a (order book)' : '—'} />
                 <Line k="Route" v={quote ? (quote.source === 'clob' ? 'Order book' : `Pool ${quote.pool_id?.slice(0, 8) ?? ''}`) : '—'} />
                 <Line k="Fee" v={quote && from ? `${fmtSize(quote.fee)} ${from.symbol}` : '—'} />
-                <div className="flex items-center justify-between text-[11px]">
+                <div className="flex items-center justify-between gap-2 text-[11px]">
                   <span className="text-muted-foreground">Max slippage</span>
-                  <span className="flex gap-0.5">
+                  <span className="flex items-center gap-0.5">
                     {SLIPPAGE.map((s) => (
-                      <button key={s} type="button" onClick={() => setSlippage(s)} className={cn('rounded-md px-1.5 py-0.5 text-[10px] font-medium', slippage === s ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-accent')}>
+                      <button key={s} type="button" onClick={() => (setSettings({ slippage: s }), setCustomSlippage(''))} className={cn('rounded-md px-1.5 py-0.5 text-[10px] font-medium', slippage === s && !customSlippage ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-accent')}>
                         {s}%
+                      </button>
+                    ))}
+                    <input
+                      inputMode="decimal"
+                      value={customSlippage || (SLIPPAGE.includes(slippage as '0.5') ? '' : slippage)}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(',', '.').replace(/[^0-9.]/g, '')
+                        setCustomSlippage(v)
+                        if (validSlippage(v)) setSettings({ slippage: v })
+                      }}
+                      placeholder="Custom"
+                      aria-label="Custom max slippage in percent"
+                      className={cn('num h-5 w-14 rounded-md border bg-transparent px-1 text-right text-[10px] outline-none', customSlippage && !validSlippage(customSlippage) ? 'border-foreground' : 'border-border')}
+                    />
+                  </span>
+                </div>
+                {Number(slippage) >= 5 && <p className="text-[10px] text-muted-foreground">High slippage: the swap may fill well below the quote.</p>}
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-muted-foreground">Valid for</span>
+                  <span className="flex gap-0.5">
+                    {DEADLINES.map((d) => (
+                      <button key={d} type="button" onClick={() => setSettings({ deadlineMin: d })} className={cn('rounded-md px-1.5 py-0.5 text-[10px] font-medium', settings.deadlineMin === d ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-accent')}>
+                        {d} min
                       </button>
                     ))}
                   </span>

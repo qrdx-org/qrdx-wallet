@@ -36,6 +36,10 @@ export interface TransactionHistoryItem {
   explorerUrl?: string
   /** Chain this tx belongs to */
   chainId: string
+  /** What an exchange operation or contract call did, in words ("Delegate stake"). */
+  label?: string
+  /** Fee paid, in the native coin's units, when the source reports it directly. */
+  fee?: string
 }
 
 // ─── Block explorer API URLs (Etherscan-compatible) ─────────────────────────
@@ -105,6 +109,11 @@ export function updatePendingTransaction(
     tx.gasUsed = receipt.gasUsed
     tx.gasPrice = receipt.effectiveGasPrice
   }
+}
+
+/** Forget a pending transaction another one replaced (same nonce, higher fee). */
+export function dropPendingTransaction(hash: string): void {
+  pendingTxs.delete(hash)
 }
 
 /**
