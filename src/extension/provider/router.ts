@@ -34,7 +34,7 @@ import {
 } from '../../core/chains'
 import { addressesEqual } from '../../core/address'
 import { toAccountId } from '../../core/account-id'
-import { pqIntrinsicGas } from '../../core/pq-tx'
+import { pqGasFromEvmEstimate, pqIntrinsicGas } from '../../core/pq-tx'
 import { ExchangeOp, type ExchangeOpName, type JsonValue } from '../../core/exchange-tx'
 import { parseTypedData, typedDataChainId } from '../../core/eip712'
 import { submitExchangeOp } from '../../core/tx-service'
@@ -595,13 +595,15 @@ export class ProviderRouter {
       this.d.signingChainId(chain),
     ])
     const floor = pqIntrinsicGas(data, recipientId === null)
+    // An ordinary EVM estimate of the call, plus the post-quantum envelope (pq-tx.ts): the
+    // node's 0x51 estimate is the floor alone and would leave a contract call without gas.
     const estimated = req.gas
       ? BigInt(req.gas)
       : await this.d
           .rpc<string>(chain, 'eth_estimateGas', [
-            { from: account.pqAccountId, to: recipientId, value: hex(value), data, type: '0x51' },
+            { from: account.pqAccountId, ...(recipientId ? { to: recipientId } : {}), value: hex(value), data },
           ])
-          .then(BigInt)
+          .then((g) => pqGasFromEvmEstimate(BigInt(g), data, recipientId === null))
           .catch(() => floor + 30_000n)
     const gas = estimated > floor ? estimated : floor + 30_000n
 

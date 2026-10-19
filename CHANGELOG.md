@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Explore**: the network's markets (price, 24 h change, volume; sort by volume, gainers, losers), perpetuals and new launches from the trade API; CoinGecko's most traded coins on other networks. A market opens its token page.
 - **Swap settings**: custom maximum slippage (with a warning from 5 %) and how long a signed swap stays valid, kept per device. Swap from a token's page pays with that token.
 - **Pre-sign checks for dApp transactions**: the call is run against the latest block (`eth_call`) and the approval shows whether it succeeds or why it reverts, and the balance changes and token allowances it carries, with token symbols and decimals read from the contract.
+- **Approvals for the token standard's extensions**: `TOKEN_DEPLOY` states a transfer fee, soulbound, default-frozen accounts, a permanent delegate, pausing, default operators and locked or editable metadata, with warnings for each power over holders' balances.
+- **Approvals for NFT operations**: creating a collection (royalty, supply cap, soulbound), minting, burning, approving one NFT, and letting an operator (a marketplace) move a collection's NFTs.
 - **Look-alike site warnings** on every approval: names resembling well-known wallets, exchanges and QRDX domains, punycode, bare IP addresses and plain HTTP. A heuristic on the name; there is no blocklist service yet.
 
 - **Vault v2** (envelope encryption): a random data key wrapped by the password (PBKDF2-SHA256, 600k) and optionally by passkeys. v1 vaults migrate on first unlock.
@@ -47,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Exchange op codes up to 55 (token extensions, NFTs, governance, bridge withdrawals, delegation).
 
 ### Fixed
+- **Post-quantum EVM transactions ran out of gas.** The node answers `eth_estimateGas` with `type: 0x51` with the envelope floor alone, so a contract call or deployment from the 0xPQ account got the floor plus 30,000 gas. The wallet now estimates the call as an ordinary EVM transaction and adds the envelope (verification and key and signature bytes), with 10 % headroom: in dApp requests (`qrdx_sendPQTransaction`) and in its own sends.
 - Shield read bridged assets' `address` and `chain_id`, which the node does not send (`token_address`, `chain`).
 - **Exchange signatures bound to the chain.** The node now signs exchange transactions over a domain tag and the network's chain id (`QRDX-EXCHANGE-TX-v1\0` ‖ chain id ‖ …) and carries `chain_id` in the envelope; the wallet's older bytes no longer verified, so every swap, order and launch was refused. The wallet signs the new form with the node's chain id; conformance vectors regenerated from the node.
 - Testnet's chain id is `7620` (its chain spec), and QRDX blocks are 250 ms apart: receipts are polled every second, not every 180 s.

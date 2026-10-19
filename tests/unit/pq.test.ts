@@ -261,3 +261,16 @@ describe('restoring from storage', () => {
     )
   })
 })
+
+describe('post-quantum gas from an EVM estimate', () => {
+  it('adds the envelope to an ordinary estimate, with headroom, never below the floor', async () => {
+    const { pqGasFromEvmEstimate, pqIntrinsicGas } = await import('../../src/core/pq-tx')
+    const envelope = 40_000n + BigInt((1952 + 3309) * 16)
+    // A contract call: execution dominates.
+    expect(pqGasFromEvmEstimate(150_000n, '0x12345678')).toBe(((150_000n + envelope) * 110n) / 100n)
+    // A plain transfer: the floor dominates.
+    expect(pqGasFromEvmEstimate(0n, '0x')).toBe(pqIntrinsicGas('0x'))
+    // A deployment the size of the NFT market fits a 1,000,000-gas block.
+    expect(pqGasFromEvmEstimate(580_076n, '0x' + '60'.repeat(2818), true)).toBeLessThan(1_000_000n)
+  })
+})

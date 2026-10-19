@@ -141,6 +141,22 @@ export function pqIntrinsicGas(data?: string | Uint8Array, isCreate = false): bi
 }
 
 /**
+ * The gas a type-0x51 transaction needs, from an ordinary EVM estimate of the same call.
+ *
+ * The node answers `eth_estimateGas` with `type: "0x51"` with the post-quantum floor alone
+ * (envelope and calldata, no execution), so a contract call or deployment priced from it runs
+ * out of gas. An estimate without the type runs the EVM and already counts the 21,000 base,
+ * the calldata and a creation's 32,000; what the PQ envelope adds on top is the signature
+ * verification and the key and signature bytes. 10 % headroom, never below the floor.
+ */
+export function pqGasFromEvmEstimate(evmEstimate: bigint, data?: string | Uint8Array, isCreate = false): bigint {
+  const envelope = BigInt(PQ_TX_VERIFY_GAS + (PQ_SIZES.publicKey + PQ_SIZES.signature) * GAS_PER_ENVELOPE_BYTE)
+  const floor = pqIntrinsicGas(data, isCreate)
+  const needed = ((evmEstimate + envelope) * 110n) / 100n
+  return needed > floor ? needed : floor
+}
+
+/**
  * Sign a PQ transaction with the account's 32-byte ML-DSA seed.
  *
  * @throws {PqTxError} if gasLimit is below the intrinsic floor — the node would

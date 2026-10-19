@@ -256,12 +256,40 @@ export function describeExchangeOp(
       const freeze = str(params.freeze_authority)
       if (mint) warnings.push(`${short(mint)} will be able to mint more ${str(params.symbol)}${params.max_supply ? `, up to ${groupDigits(str(params.max_supply))}` : ''}.`)
       if (freeze) warnings.push(`${short(freeze)} will be able to freeze holders' ${str(params.symbol)}.`)
+      // Token standard extensions (qrdx-node docs/NATIVE_TOKENS.md §7): fixed at creation.
+      const flag = (k: string) => params[k] === true || ['1', 'true', 'yes', 'on'].includes(str(params[k]).toLowerCase())
+      const extras: { label: string; value: string }[] = []
+      if ('transfer_fee_bps' in params) {
+        const bps = Number(str(params.transfer_fee_bps))
+        extras.push({ label: 'Transfer fee', value: `${(bps / 100).toFixed(2)} %${params.max_transfer_fee ? `, at most ${str(params.max_transfer_fee)}` : ''}` })
+        warnings.push(`${(bps / 100).toFixed(2)} % of every transfer of ${str(params.symbol)} is withheld for the fee authority. It cannot be pooled or traded on a book.`)
+      }
+      if (flag('non_transferable')) {
+        extras.push({ label: 'Transfers', value: 'Never (soulbound)' })
+      }
+      if (flag('default_frozen')) {
+        extras.push({ label: 'New accounts', value: 'Start frozen' })
+        warnings.push(`Every account starts frozen: holders cannot move ${str(params.symbol)} until the freeze authority thaws them.`)
+      }
+      if (str(params.permanent_delegate)) {
+        warnings.push(`${short(str(params.permanent_delegate))} will be able to move or burn anyone's ${str(params.symbol)} without permission.`)
+      }
+      if (flag('pausable')) {
+        extras.push({ label: 'Pausable', value: `by ${short(str(params.pause_authority) || 'you')}` })
+      }
+      const ops = Array.isArray(params.default_operators) ? params.default_operators.length : str(params.default_operators).split(',').filter((o) => o.trim()).length
+      if (ops) warnings.push(`${ops} default operator${ops === 1 ? '' : 's'} will be able to move every holder's ${str(params.symbol)} until the holder revokes them.`)
+      if ('uri' in params || 'metadata' in params || 'metadata_authority' in params) {
+        extras.push({ label: 'Metadata', value: `${str(params.uri) || 'fields only'}${params.metadata_authority === '' ? ' (locked)' : ' (editable)'}` })
+      }
+      if (flag('post_doomsday_trade')) extras.push({ label: 'Doomsday trading', value: 'Declared backed by locked classical assets' })
       return {
         headline: `Create token ${str(params.name)} (${str(params.symbol)}) with ${groupDigits(supply)} supply`,
         details: [
           { label: 'Decimals', value: str(params.decimals ?? 18) },
           { label: 'Supply', value: mint ? 'Mintable' : 'Fixed forever' },
           { label: 'Freezing', value: freeze ? 'Possible' : 'Never' },
+          ...extras,
           { label: 'Initial supply goes to', value: 'You' },
         ],
         warnings,
@@ -362,6 +390,65 @@ export function describeExchangeOp(
         warnings,
       }
     }
+
+    case 'NFT_SET_APPROVAL_FOR_ALL': {
+      const approved = params.approved === undefined || params.approved === true || str(params.approved).toLowerCase() === 'true'
+      if (approved) warnings.push(`${short(str(params.operator))} will be able to move every NFT you own in this collection, now and later, until you revoke it.`)
+      return {
+        headline: approved ? `Let ${short(str(params.operator))} move your NFTs in this collection` : `Stop ${short(str(params.operator))} moving your NFTs in this collection`,
+        details: [
+          { label: 'Collection', value: str(params.collection) },
+          { label: 'Operator', value: str(params.operator) },
+        ],
+        warnings,
+      }
+    }
+
+    case 'NFT_APPROVE': {
+      const spender = str(params.spender)
+      if (spender) warnings.push(`${short(spender)} will be able to move NFT #${str(params.token_id)} until it is transferred or you clear the approval.`)
+      return {
+        headline: spender ? `Let ${short(spender)} move NFT #${str(params.token_id)}` : `Clear the approval on NFT #${str(params.token_id)}`,
+        details: [
+          { label: 'Collection', value: str(params.collection) },
+          ...(spender ? [{ label: 'Approved account', value: spender }] : []),
+        ],
+        warnings,
+      }
+    }
+
+    case 'NFT_CREATE_COLLECTION': {
+      const bps = Number(str(params.royalty_bps) || 0)
+      if (params.non_transferable === true) warnings.push('The collection is soulbound: its NFTs can never be transferred or sold.')
+      return {
+        headline: `Create NFT collection ${str(params.name)} (${str(params.symbol)})`,
+        details: [
+          { label: 'Metadata', value: str(params.uri) || 'none' },
+          { label: 'Max supply', value: params.max_supply ? groupDigits(str(params.max_supply)) : 'Unlimited' },
+          { label: 'Royalty', value: bps ? `${(bps / 100).toFixed(2)} % to ${short(str(params.royalty_recipient) || 'you')}` : 'None' },
+          { label: 'Mint authority', value: 'mint_authority' in params ? short(str(params.mint_authority)) || 'nobody' : 'You' },
+        ],
+        warnings,
+      }
+    }
+
+    case 'NFT_MINT':
+      return {
+        headline: `Mint ${str(params.name) || 'an NFT'}${params.token_id ? ` (#${str(params.token_id)})` : ''} to ${params.to ? short(str(params.to)) : 'you'}`,
+        details: [
+          { label: 'Collection', value: str(params.collection) },
+          ...(params.uri ? [{ label: 'Metadata', value: str(params.uri) }] : []),
+        ],
+        warnings,
+      }
+
+    case 'NFT_BURN':
+      warnings.push('Burning destroys the NFT for good.')
+      return {
+        headline: `Burn NFT #${str(params.token_id)}`,
+        details: [{ label: 'Collection', value: str(params.collection) }],
+        warnings,
+      }
 
     // Delegation pools (qrdx-node docs/STAKING.md).
     case 'STAKE_DELEGATE': {

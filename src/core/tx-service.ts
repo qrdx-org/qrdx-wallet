@@ -29,7 +29,7 @@ import {
 import { isQrdxChain, getChain, type ChainConfig, type ChainToken } from './chains'
 import { resolveSigningChainId } from './chain-identity'
 import { toAccountId, isProtocolHolder, addressForm } from './account-id'
-import { pqIntrinsicGas, type PqTxFields, type SignedPqTx } from './pq-tx'
+import { pqGasFromEvmEstimate, pqIntrinsicGas, type PqTxFields, type SignedPqTx } from './pq-tx'
 import {
   buildExchangeTx,
   type ExchangeOpName,
@@ -177,20 +177,19 @@ export async function quoteSend(req: SendRequest): Promise<SendQuote> {
   let gasLimit: bigint
   if (req.credential === 'pq') {
     const floor = pqIntrinsicGas(call.data)
-    const estimated = await provider
+    // The node's estimate for type 0x51 is the envelope floor alone; estimate the call as an
+    // ordinary EVM transaction and add the envelope (pq-tx.ts pqGasFromEvmEstimate).
+    gasLimit = await provider
       .rpc<string>('eth_estimateGas', [
         {
           from: from.accountId,
           to: call.to,
           value: toHex(call.value),
           data: call.data,
-          type: '0x51',
         },
       ])
-      .then(fromHex)
-      .catch(() => 0n)
-    // Execution cost on top of the envelope floor; 10% headroom on whichever is larger.
-    gasLimit = ((estimated > floor ? estimated : floor + 30_000n) * 110n) / 100n
+      .then((g) => pqGasFromEvmEstimate(fromHex(g), call.data))
+      .catch(() => ((floor + 30_000n) * 110n) / 100n)
   } else {
     gasLimit = await provider.estimateGas({
       from: from.accountId,
