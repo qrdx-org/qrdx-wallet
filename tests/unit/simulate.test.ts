@@ -18,3 +18,11 @@ describe('simulation decoding', () => {
     expect(revertReason({ message: 'execution reverted: paused' })).toBe('paused')
   })
 })
+
+describe('QRDX node revert messages', () => {
+  it('reads revert data printed as a Python bytes literal', async () => {
+    const { bytesLiteralHex } = await import('../../src/core/simulate')
+    expect(bytesLiteralHex("Call failed: b'x\\x8aho'")).toBe('0x788a686f')
+    expect(revertReason({ message: "Call failed: b'\\x08\\xc3y\\xa0'" }).length).toBeGreaterThan(0)
+  })
+})

@@ -47,10 +47,21 @@ export async function simulateTransaction(chainId: string, tx: SimulationInput, 
   const token = tx.to ? await tokenEffect(chainId, tx.to, tx.data, tx.from).catch(() => null) : null
   if (token) changes.push(token)
 
+  const provider = getEvmProvider(chainId)
   try {
-    await getEvmProvider(chainId).rpc<string>('eth_call', [{ from: tx.from, to: tx.to ?? undefined, value: toHex(value), data: tx.data || '0x' }, 'latest'])
+    await provider.rpc<string>('eth_call', [{ from: tx.from, to: tx.to ?? undefined, value: toHex(value), data: tx.data || '0x' }, 'latest'])
     return { ok: true, changes }
   } catch (e) {
+    // QRDX nodes run eth_call without the value (qrdx-node main.py eth_call_handler), so a call
+    // that pays can revert there and still succeed. Their gas estimate does carry the value, and
+    // answers at the block limit or above for a call that fails at any gas.
+    if (value > 0n) {
+      const gas = await provider
+        .rpc<string>('eth_estimateGas', [{ from: tx.from, ...(tx.to ? { to: tx.to } : {}), value: toHex(value), data: tx.data || '0x' }])
+        .then((g) => BigInt(g))
+        .catch(() => null)
+      if (gas !== null && gas < 1_000_000n) return { ok: true, changes }
+    }
     return { ok: false, reason: revertReason(e), changes }
   }
 }
@@ -98,7 +109,12 @@ export function decodeString(hex: string): string {
 /** What a failed eth_call says: Error(string), a Panic code, or the node's message. */
 export function revertReason(e: unknown): string {
   const err = e as { message?: string; data?: unknown }
-  const data = typeof err?.data === 'string' ? err.data : typeof (err?.data as { data?: unknown })?.data === 'string' ? ((err.data as { data: string }).data) : null
+  const data =
+    typeof err?.data === 'string'
+      ? err.data
+      : typeof (err?.data as { data?: unknown })?.data === 'string'
+        ? (err.data as { data: string }).data
+        : bytesLiteralHex(err?.message ?? '')
   if (data?.startsWith(ERROR_STRING)) {
     try {
       return decodeString('0x' + data.slice(10))
@@ -109,6 +125,26 @@ export function revertReason(e: unknown): string {
   if (data?.startsWith(PANIC)) return `panic 0x${BigInt('0x' + data.slice(10, 74)).toString(16)}`
   const msg = err?.message ?? String(e)
   return msg.replace(/^.*execution reverted:?\s*/i, '') || 'the call reverted'
+}
+
+/** Revert data a QRDX node prints in its message as a Python bytes literal ("Call failed: b'x\\x8aho'"), as hex. */
+export function bytesLiteralHex(message: string): string | null {
+  const m = /b(['"])((?:\\.|(?!\1).)*)\1/.exec(message)
+  if (!m) return null
+  const out: number[] = []
+  const body = m[2]
+  for (let i = 0; i < body.length; i++) {
+    if (body[i] !== '\\') {
+      out.push(body.charCodeAt(i) & 0xff)
+      continue
+    }
+    const n = body[++i]
+    if (n === 'x') {
+      out.push(parseInt(body.slice(i + 1, i + 3), 16))
+      i += 2
+    } else out.push({ n: 10, r: 13, t: 9, '0': 0, '\\': 92, "'": 39, '"': 34 }[n] ?? n.charCodeAt(0))
+  }
+  return '0x' + out.map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 function bytesToText(hex: string): string {
