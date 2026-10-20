@@ -9,7 +9,10 @@
  * the node; they are described from their parameters instead (exchange-describe.ts).
  */
 
+import { keccak256 } from 'ethereum-cryptography/keccak.js'
 import { getEvmProvider, weiToEth } from './ethereum'
+import { bytesToHex as bytesToHexString } from './crypto'
+import { formatUnitsExact } from './balances'
 
 export interface SimulationInput {
   /** The ledger account that pays (an 0x address or a PQ account id). */
@@ -28,8 +31,19 @@ export interface BalanceChange {
 }
 
 export type Simulation =
-  | { ok: true; changes: BalanceChange[] }
-  | { ok: false; reason: string; changes: BalanceChange[] }
+  | { ok: true; changes: BalanceChange[]; action?: string }
+  | { ok: false; reason: string; changes: BalanceChange[]; action?: string }
+
+/**
+ * The QRDX NFT market (qrdx-trade contracts/QRDXNFTMarket.sol): its calls move tokens through
+ * allowances the buyer gave it, so what they spend is named here rather than read from the
+ * call's value. Selectors of buy, list and delist.
+ */
+const MARKET = {
+  buy: 'buy(address,uint256,address,uint256)',
+  list: 'list(address,uint256,address,uint256)',
+  delist: 'delist(address,uint256)',
+}
 
 const TRANSFER = '0xa9059cbb'
 const TRANSFER_FROM = '0x23b872dd'
@@ -46,11 +60,14 @@ export async function simulateTransaction(chainId: string, tx: SimulationInput, 
   if (value + fee > 0n) changes.push({ symbol: native.symbol, amount: `-${weiToEth(value + fee, native.decimals)}` })
   const token = tx.to ? await tokenEffect(chainId, tx.to, tx.data, tx.from).catch(() => null) : null
   if (token) changes.push(token)
+  const market = tx.to ? await marketEffect(chainId, tx.data).catch(() => null) : null
+  if (market) changes.push(...market.changes)
+  const action = market?.action
 
   const provider = getEvmProvider(chainId)
   try {
     await provider.rpc<string>('eth_call', [{ from: tx.from, to: tx.to ?? undefined, value: toHex(value), data: tx.data || '0x' }, 'latest'])
-    return { ok: true, changes }
+    return { ok: true, changes, action }
   } catch (e) {
     // QRDX nodes run eth_call without the value (qrdx-node main.py eth_call_handler), so a call
     // that pays can revert there and still succeed. Their gas estimate does carry the value, and
@@ -60,9 +77,9 @@ export async function simulateTransaction(chainId: string, tx: SimulationInput, 
         .rpc<string>('eth_estimateGas', [{ from: tx.from, ...(tx.to ? { to: tx.to } : {}), value: toHex(value), data: tx.data || '0x' }])
         .then((g) => BigInt(g))
         .catch(() => null)
-      if (gas !== null && gas < 1_000_000n) return { ok: true, changes }
+      if (gas !== null && gas < 1_000_000n) return { ok: true, changes, action }
     }
-    return { ok: false, reason: revertReason(e), changes }
+    return { ok: false, reason: revertReason(e), changes, action }
   }
 }
 
@@ -81,6 +98,35 @@ async function tokenEffect(chainId: string, token: string, data: string, from: s
   const owner = '0x' + word(0).slice(24)
   if (owner.toLowerCase() !== from.toLowerCase()) return null
   return { symbol, amount: `-${weiToEth(BigInt('0x' + word(2)), decimals)}` }
+}
+
+const selectorOf = (signature: string) => '0x' + bytesToHexString(keccak256(new TextEncoder().encode(signature))).slice(0, 8)
+
+/** A call to the NFT market, in words, with what it spends: a buy pays its price in QRDX or a token, and receives the NFT. */
+async function marketEffect(chainId: string, data: string): Promise<{ action: string; changes: BalanceChange[] } | null> {
+  const sel = (data ?? '').slice(0, 10).toLowerCase()
+  const kind = (Object.keys(MARKET) as (keyof typeof MARKET)[]).find((k) => selectorOf(MARKET[k]) === sel)
+  if (!kind) return null
+  const word = (i: number) => data.slice(10 + i * 64, 10 + (i + 1) * 64)
+  const collection = '0x' + word(0).slice(24)
+  const tokenId = BigInt('0x' + word(1)).toString()
+  const name = await getEvmProvider(chainId)
+    .rpc<{ name?: string } | null>('exchange_getNftCollection', [collection])
+    .then((c) => c?.name ?? null)
+    .catch(() => null)
+  const nft = `${name ?? collection.slice(0, 10) + '…'} #${tokenId}`
+  if (kind === 'delist') return { action: `Cancel the listing of ${nft}`, changes: [] }
+  const currency = '0x' + word(2).slice(24)
+  const native = /^0x0{40}$/.test(currency)
+  const price = BigInt('0x' + word(3))
+  const { symbol, decimals } = native ? { symbol: 'QRDX', decimals: 18 } : await tokenMeta(chainId, currency)
+  const amount = formatUnitsExact(price, decimals)
+  if (kind === 'list') return { action: `List ${nft} for ${amount} ${symbol}`, changes: [] }
+  return {
+    action: `Buy ${nft} for ${amount} ${symbol}`,
+    // A QRDX price travels as the call's value (already counted); a token's through the allowance.
+    changes: [...(native ? [] : [{ symbol, amount: `-${amount}` }]), { symbol: nft, amount: '+1 NFT' }],
+  }
 }
 
 const metaCache = new Map<string, Promise<{ symbol: string; decimals: number }>>()

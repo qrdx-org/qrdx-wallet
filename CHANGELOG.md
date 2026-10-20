@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pre-sign checks for dApp transactions**: the call is run against the latest block (`eth_call`) and the approval shows whether it succeeds or why it reverts, and the balance changes and token allowances it carries, with token symbols and decimals read from the contract.
 - **Approvals for the token standard's extensions**: `TOKEN_DEPLOY` states a transfer fee, soulbound, default-frozen accounts, a permanent delegate, pausing, default operators and locked or editable metadata, with warnings for each power over holders' balances.
 - **Approvals for NFT operations**: creating a collection (royalty, supply cap, soulbound), minting, burning, approving one NFT, and letting an operator (a marketplace) move a collection's NFTs.
+- **`qrdx_sendExchangeBatch`**: several exchange operations (up to 8) with one approval that shows each step, signed with consecutive nonces so a block applies them in order. Used for multi-hop swaps.
+- **Smart routing in Swap**: when the trade API serves the network, swaps go through up to two tokens in between when that delivers more than the direct pair, reviewed and confirmed once.
+- **NFT market calls decoded**: buying, listing and delisting on the QRDX NFT market say what they do ("Buy QRDX Logo #1 for 200.5 USDC"), and a token-priced purchase lists the token it spends and the NFT it receives instead of "0 QRDX".
 - **Look-alike site warnings** on every approval: names resembling well-known wallets, exchanges and QRDX domains, punycode, bare IP addresses and plain HTTP. A heuristic on the name; there is no blocklist service yet.
 
 - **Vault v2** (envelope encryption): a random data key wrapped by the password (PBKDF2-SHA256, 600k) and optionally by passkeys. v1 vaults migrate on first unlock.
@@ -49,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Exchange op codes up to 55 (token extensions, NFTs, governance, bridge withdrawals, delegation).
 
 ### Fixed
+- dApp approvals said a call that sends QRDX would fail: QRDX nodes run `eth_call` without the value. Such calls are now checked by a gas estimate that carries the value, and revert data the node prints as a Python bytes literal is decoded.
 - **Post-quantum EVM transactions ran out of gas.** The node answers `eth_estimateGas` with `type: 0x51` with the envelope floor alone, so a contract call or deployment from the 0xPQ account got the floor plus 30,000 gas. The wallet now estimates the call as an ordinary EVM transaction and adds the envelope (verification and key and signature bytes), with 10 % headroom: in dApp requests (`qrdx_sendPQTransaction`) and in its own sends.
 - Shield read bridged assets' `address` and `chain_id`, which the node does not send (`token_address`, `chain`).
 - **Exchange signatures bound to the chain.** The node now signs exchange transactions over a domain tag and the network's chain id (`QRDX-EXCHANGE-TX-v1\0` ‖ chain id ‖ …) and carries `chain_id` in the envelope; the wallet's older bytes no longer verified, so every swap, order and launch was refused. The wallet signs the new form with the node's chain id; conformance vectors regenerated from the node.

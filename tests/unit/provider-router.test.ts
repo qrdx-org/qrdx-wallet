@@ -268,3 +268,32 @@ describe('networks and assets', () => {
     ])
   })
 })
+
+describe('qrdx_sendExchangeBatch', () => {
+  const swap = (a: string, b: string) => ({ op: 'SWAP', params: { token_in: a, token_out: b, amount_in: '1', min_amount_out: '0.9' } })
+
+  it('asks once for the whole batch, and sends nothing when it is refused', async () => {
+    await connect()
+    decide = (r) => (r.kind === 'exchange-batch' ? { approved: false } : { approved: true })
+    await expect(
+      router.handle(SITE, { method: 'qrdx_sendExchangeBatch', params: [{ ops: [swap('QRDX', '0x' + '11'.repeat(20)), swap('0x' + '11'.repeat(20), '0x' + '22'.repeat(20))], label: 'Swap 1 QRDX through A' }] })
+    ).rejects.toThrow()
+    const batch = approvals.filter((a) => a.kind === 'exchange-batch')
+    expect(batch).toHaveLength(1)
+    expect(batch[0].kind === 'exchange-batch' && batch[0].steps.map((s) => s.op)).toEqual(['SWAP', 'SWAP'])
+    expect(batch[0].kind === 'exchange-batch' && batch[0].label).toBe('Swap 1 QRDX through A')
+    expect(rpcCalls.some((c) => c.method.startsWith('exchange_send'))).toBe(false)
+  })
+
+  it('refuses unknown operations, empty batches and more than eight', async () => {
+    await connect()
+    await expect(router.handle(SITE, { method: 'qrdx_sendExchangeBatch', params: [{ ops: [] }] })).rejects.toThrow(/expects/)
+    await expect(router.handle(SITE, { method: 'qrdx_sendExchangeBatch', params: [{ ops: [{ op: 'STEAL', params: {} }] }] })).rejects.toThrow(/Unknown/)
+    await expect(router.handle(SITE, { method: 'qrdx_sendExchangeBatch', params: [{ ops: Array(9).fill(swap('QRDX', '0x' + '11'.repeat(20))) }] })).rejects.toThrow(/At most 8/)
+    expect(approvals.some((a) => a.kind === 'exchange-batch')).toBe(false)
+  })
+
+  it('needs a connected site', async () => {
+    await expect(router.handle(OTHER, { method: 'qrdx_sendExchangeBatch', params: [{ ops: [swap('QRDX', '0x' + '11'.repeat(20))] }] })).rejects.toThrow()
+  })
+})

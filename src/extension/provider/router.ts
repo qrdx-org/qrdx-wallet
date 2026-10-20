@@ -116,6 +116,16 @@ export type ApprovalRequest =
       /** What the operation does, decoded for the user (exchange-describe.ts). */
       summary?: ExchangeSummary
     }
+  | {
+      /** Several exchange operations approved at once, signed with consecutive nonces. */
+      kind: 'exchange-batch'
+      origin: string
+      account: string
+      chain: string
+      /** What the batch does as a whole ("Swap 100 A for at least 4.2 D through B, C"). */
+      label?: string
+      steps: { op: ExchangeOpName; params: Record<string, JsonValue>; summary?: ExchangeSummary }[]
+    }
   | { kind: 'switch-chain'; origin: string; chain: string }
   | {
       kind: 'watch-asset'
@@ -232,8 +242,12 @@ const ACCOUNT_METHODS = new Set([
   'qrdx_signPQMessage',
   'qrdx_sendPQTransaction',
   'qrdx_sendExchangeTransaction',
+  'qrdx_sendExchangeBatch',
   'qrdx_chainInfo',
 ])
+
+/** The most exchange operations one qrdx_sendExchangeBatch approval may carry. */
+const MAX_BATCH = 8
 
 const hex = (n: bigint | number) => '0x' + BigInt(n).toString(16)
 const asArray = (p: unknown): unknown[] => (Array.isArray(p) ? p : p === undefined ? [] : [p])
@@ -388,6 +402,8 @@ export class ProviderRouter {
         return this.sendPq(origin, params)
       case 'qrdx_sendExchangeTransaction':
         return this.sendExchange(origin, params)
+      case 'qrdx_sendExchangeBatch':
+        return this.sendExchangeBatch(origin, params)
       case 'wallet_switchEthereumChain':
       case 'wallet_addEthereumChain':
         return this.switchChain(origin, method, params)
@@ -696,6 +712,80 @@ export class ProviderRouter {
       })
       .catch(() => undefined)
     return result
+  }
+
+  /**
+   * Several exchange operations with one approval (`qrdx_sendExchangeBatch`, at most
+   * MAX_BATCH): a multi-hop swap, a cancel-all. Each is still its own signed transaction; they
+   * get consecutive nonces, so a block applies them in order, and each succeeds or fails on its
+   * own. When a submission fails part-way, the error names the steps already sent.
+   */
+  private async sendExchangeBatch(
+    origin: string,
+    params: unknown[]
+  ): Promise<{ txHashes: string[]; nonces: number[] }> {
+    const req = params[0] as
+      | { ops?: { op?: string; params?: Record<string, JsonValue>; gasLimit?: number }[]; from?: string; label?: string }
+      | undefined
+    const ops = req?.ops
+    if (!Array.isArray(ops) || ops.length === 0) throw Errors.invalidParams('qrdx_sendExchangeBatch expects { ops: [...] }')
+    if (ops.length > MAX_BATCH) throw Errors.invalidParams(`At most ${MAX_BATCH} operations in one batch`)
+    for (const o of ops) if (!o?.op || !(o.op in ExchangeOp)) throw Errors.invalidParams(`Unknown exchange operation ${String(o?.op)}`)
+    const account = await this.accountFor(origin, req?.from)
+    const chain = await this.activeChain()
+    const steps = await Promise.all(
+      ops.map(async (o) => {
+        const op = o.op as ExchangeOpName
+        const opParams = o.params ?? {}
+        return { op, params: opParams, gasLimit: o.gasLimit, summary: await this.describeExchange(chain, op, opParams) }
+      })
+    )
+    await this.approve(
+      {
+        kind: 'exchange-batch',
+        origin,
+        account: account.id,
+        chain: chain.id,
+        label: typeof req?.label === 'string' ? req.label.slice(0, 200) : undefined,
+        steps: steps.map(({ op, params: p, summary }) => ({ op, params: p, summary })),
+      },
+      'postQuantum'
+    )
+    const signer = {
+      signEvmTransaction: () => Promise.reject(),
+      signPqTransaction: () => Promise.reject(),
+      signExchangeTransaction: (tx: Parameters<WalletManager['signExchangeTransaction']>[0], id: string) => this.d.manager.signExchangeTransaction(tx, id),
+    }
+    const txHashes: string[] = []
+    const nonces: number[] = []
+    for (let i = 0; i < steps.length; i++) {
+      const { op, params: opParams, gasLimit } = steps[i]
+      try {
+        const r = await submitExchangeOp(signer, { chain, account, op, params: opParams, gasLimit })
+        txHashes.push(r.txHash)
+        nonces.push(r.nonce)
+        await this.d
+          .onSubmitted?.({
+            hash: r.txHash,
+            chain: chain.id,
+            kind: op === 'SWAP' ? 'swap' : op.startsWith('STAKE_') ? 'stake' : 'exchange',
+            track: 'exchange',
+            credential: 'pq',
+            from: account.pqAddress,
+            to: '',
+            value: '',
+            label: `${op.replace(/_/g, ' ').toLowerCase()} (${i + 1} of ${steps.length})`,
+            origin,
+          })
+          .catch(() => undefined)
+      } catch (e) {
+        const why = e instanceof Error ? e.message : String(e)
+        throw Errors.invalidParams(
+          i === 0 ? why : `Steps 1–${i} of ${steps.length} were sent (${txHashes.join(', ')}); step ${i + 1} failed: ${why}`
+        )
+      }
+    }
+    return { txHashes, nonces }
   }
 
   /**

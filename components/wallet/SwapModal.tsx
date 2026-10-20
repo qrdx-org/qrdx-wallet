@@ -24,6 +24,7 @@ import { shortenAddress } from '@/src/core/address'
 import { tradeApiBase, tradeGet } from '@/src/core/trade/api'
 import { percent, size as fmtSize, usd } from '@/src/core/trade/format'
 import type { ApiAsset, IndexPrice } from '@/src/core/trade/types'
+import { routeOps, type RoutedQuote } from '@/src/core/trade/routing'
 import { Line, Sheet, TokenBadge, useDebounced } from './trade/kit'
 import { SubmissionList, useTradeSubmit } from './trade/submit'
 import { cn } from '@/lib/utils'
@@ -63,6 +64,9 @@ function readSettings(): SwapSettings {
     return { slippage: '0.5', deadlineMin: 10 }
   }
 }
+
+/** A swap's deadline: `minutes` from now, in seconds (block time). */
+const deadlineIn = (minutes: number) => Math.floor(Date.now() / 1000) + minutes * 60
 
 const validSlippage = (v: string) => /^\d*\.?\d+$/.test(v) && Number(v) > 0 && Number(v) <= 50
 
@@ -184,8 +188,28 @@ export function SwapModal({ onClose, initialFrom }: SwapModalProps) {
       cancelled = true
     }
   }, [quoteKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Smart routing (the trade API's /quote/route): through up to two tokens in between when no
+  // direct market pays as much. Without the API, swaps stay on the direct pair.
+  const [routed, setRouted] = useState<{ key: string; route: RoutedQuote | null } | null>(null)
+  useEffect(() => {
+    if (!quoteKey || !api) return
+    let cancelled = false
+    const seg = (id: string) => (id === NATIVE_QRDX ? 'qrdx' : id.toLowerCase())
+    tradeGet<RoutedQuote>(api, `/quote/route?from=${seg(fromId)}&to=${seg(toId)}&amount=${debounced}&sender=${pq}`)
+      .then((r) => !cancelled && setRouted({ key: quoteKey, route: r }))
+      .catch(() => !cancelled && setRouted({ key: quoteKey, route: null }))
+    return () => {
+      cancelled = true
+    }
+  }, [quoteKey, api]) // eslint-disable-line react-hooks/exhaustive-deps
   const current = quoteKey && debounced === amount && quoted?.key === quoteKey ? quoted : null
-  const quote = current?.quote ?? null
+  const directQuote = current?.quote ?? null
+  const routeNow = quoteKey && debounced === amount && routed?.key === quoteKey ? routed.route : null
+  // The longer route only when it delivers more than the pair itself (or the pair has no market).
+  const route = routeNow && routeNow.hops.length > 1 && (!directQuote || Number(routeNow.amountOut) > Number(directQuote.amount_out)) ? routeNow : null
+  const quote = route
+    ? { ...(directQuote ?? {}), source: 'route', pool_id: null, amount_in: route.amountIn, amount_out: route.amountOut, unfilled_in: '0', fee: '0', execution_price: route.executionPrice, price_impact: route.priceImpact ?? undefined } as NonNullable<typeof directQuote>
+    : directQuote
   const quoting = !!amountOk && !current && !!toId && fromId !== toId
 
   const flip = () => {
@@ -197,6 +221,31 @@ export function SwapModal({ onClose, initialFrom }: SwapModalProps) {
 
   const review = () => {
     if (!quote || !from || !to) return
+    if (route) {
+      const { ops, minOut } = routeOps(route.hops, amount, Number(slippage), deadlineIn(settings.deadlineMin))
+      const symbols = Object.fromEntries(route.hops.flatMap((h) => [h.from, h.to]).filter((a) => a.address && a.address !== NATIVE_QRDX).map((a) => [a.address!, a.symbol]))
+      const label = (i: number) => `Swap ${route.hops[i].from.symbol} → ${route.hops[i].to.symbol} (${i + 1} of ${route.hops.length})`
+      const last = ops[ops.length - 1]
+      ask({
+        op: 'SWAP',
+        params: last.params,
+        before: ops.slice(0, -1).map((o, i) => ({ op: 'SWAP' as const, params: o.params, label: label(i) })),
+        label: `Swap ${amount} ${from.symbol} → ≥ ${fmtSize(minOut)} ${to.symbol} through ${route.hops.slice(0, -1).map((h) => h.to.symbol).join(', ')}`,
+        symbols,
+        estimates: [
+          { k: 'Route', v: [route.hops[0].from.symbol, ...route.hops.map((h) => h.to.symbol)].join(' → ') },
+          { k: 'Expected', v: `${fmtSize(route.amountOut)} ${to.symbol}` },
+          ...(route.directAmountOut ? [{ k: 'Directly', v: `${fmtSize(route.directAmountOut)} ${to.symbol}` }] : []),
+          { k: 'In one approval', v: `${ops.length} swaps, applied in order; each refuses to fill below its own minimum, and if a later one does, you keep what the earlier ones bought` },
+        ],
+        onDone: () => {
+          setAmount('')
+          fetchBalances()
+          loadBalances(tokens)
+        },
+      })
+      return
+    }
     const min = minimumOut(quote.amount_out, Number(slippage))
     ask({
       op: 'SWAP',
@@ -205,7 +254,7 @@ export function SwapModal({ onClose, initialFrom }: SwapModalProps) {
         token_out: toId,
         amount_in: amount,
         min_amount_out: min,
-        deadline: Math.floor(Date.now() / 1000) + settings.deadlineMin * 60,
+        deadline: deadlineIn(settings.deadlineMin),
       },
       label: `Swap ${amount} ${from.symbol} → ≥ ${fmtSize(min)} ${to.symbol}`,
       symbols: Object.fromEntries(assets.filter((a) => a.id !== NATIVE_QRDX).map((a) => [a.id, a.symbol])),
@@ -229,7 +278,7 @@ export function SwapModal({ onClose, initialFrom }: SwapModalProps) {
       ? 'Choose a token'
       : exceeds
         ? `Not enough ${from?.symbol}`
-        : current?.error
+        : current?.error && !route
           ? noRoute(current.error, from, to)
           : !quote
             ? 'Getting a quote…'
@@ -295,10 +344,16 @@ export function SwapModal({ onClose, initialFrom }: SwapModalProps) {
 
               <div className="space-y-1.5 px-2.5 pb-2 pt-3">
                 <Line k="Rate" v={quote && from && to ? `1 ${to.symbol} = ${fmtSize(quote.execution_price)} ${from.symbol}` : '—'} />
-                <Line k="Minimum received" v={quote && to ? `${fmtSize(minimumOut(quote.amount_out, Number(slippage)))} ${to.symbol}` : '—'} />
+                <Line
+                  k="Minimum received"
+                  v={quote && to ? `${fmtSize(route ? routeOps(route.hops, amount, Number(slippage), 0).minOut : minimumOut(quote.amount_out, Number(slippage)))} ${to.symbol}` : '—'}
+                />
                 <Line k="Price impact" v={quote?.price_impact ? percent(String(Number(quote.price_impact) * 100), false) : quote ? 'n/a (order book)' : '—'} />
-                <Line k="Route" v={quote ? (quote.source === 'clob' ? 'Order book' : `Pool ${quote.pool_id?.slice(0, 8) ?? ''}`) : '—'} />
-                <Line k="Fee" v={quote && from ? `${fmtSize(quote.fee)} ${from.symbol}` : '—'} />
+                <Line
+                  k="Route"
+                  v={route ? [route.hops[0].from.symbol, ...route.hops.map((h) => h.to.symbol)].join(' → ') : quote ? (quote.source === 'clob' ? 'Order book' : `Pool ${quote.pool_id?.slice(0, 8) ?? ''}`) : '—'}
+                />
+                <Line k="Fee" v={route ? route.hops.map((h) => `${fmtSize(h.fee)} ${h.from.symbol}`).join(' + ') : quote && from ? `${fmtSize(quote.fee)} ${from.symbol}` : '—'} />
                 <div className="flex items-center justify-between gap-2 text-[11px]">
                   <span className="text-muted-foreground">Max slippage</span>
                   <span className="flex items-center gap-0.5">

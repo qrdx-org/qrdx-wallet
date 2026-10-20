@@ -226,6 +226,11 @@ export function ApprovalScreen(
       icon: <Repeat className="h-5 w-5" />,
       confirm: 'Confirm',
     },
+    'exchange-batch': {
+      title: 'Confirm operations',
+      icon: <Repeat className="h-5 w-5" />,
+      confirm: 'Confirm all',
+    },
     'switch-chain': {
       title: 'Switch network?',
       icon: <Network className="h-5 w-5" />,
@@ -390,8 +395,9 @@ export function ApprovalScreen(
                 {request.tx.toAccountId && (
                   <Field label="Ledger account">{shortenAddress(request.tx.toAccountId, 6)}</Field>
                 )}
-                <Field label="Amount">
-                  {weiToEth(BigInt(request.tx.value), dec)} {sym}
+                {simulation?.action && <p className="mb-1 text-sm font-semibold leading-snug">{simulation.action}</p>}
+                <Field label={`${sym} sent with the call`}>
+                  {BigInt(request.tx.value) === 0n && request.tx.data && request.tx.data !== '0x' ? 'None' : `${weiToEth(BigInt(request.tx.value), dec)} ${sym}`}
                 </Field>
                 <Field label="Network fee (max)">
                   {weiToEth(BigInt(request.tx.fee), dec)} {sym}
@@ -468,6 +474,42 @@ export function ApprovalScreen(
                 A small QRDX fee is burned whether or not the operation succeeds. It executes when the
                 next block includes it.
               </p>
+            </div>
+          </div>
+        )}
+
+        {request.kind === 'exchange-batch' && (
+          <div className="space-y-2">
+            <div className="rounded-xl glass p-3">
+              <p className="text-sm font-semibold leading-snug">{request.label ?? `${request.steps.length} exchange operations`}</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {request.steps.length} operations, signed now and sent in order. A block applies them one after another; each
+                succeeds or fails on its own, so if a later one fails, the ones before it still stand.
+              </p>
+            </div>
+            {request.steps.map((step, i) => (
+              <div key={i} className="rounded-xl glass p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Step {i + 1} of {request.steps.length}
+                </p>
+                <p className="text-sm font-semibold leading-snug">{step.summary?.headline ?? step.op.replace(/_/g, ' ').toLowerCase()}</p>
+                {step.summary?.details.map((d) => (
+                  <Field key={d.label} label={d.label}>
+                    {d.value}
+                  </Field>
+                ))}
+                {step.summary?.warnings.map((w) => (
+                  <div key={w} className="mt-1">
+                    <Notice tone="warning" icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}>
+                      {w}
+                    </Notice>
+                  </div>
+                ))}
+              </div>
+            ))}
+            <div className="rounded-xl glass p-3">
+              <Field label="Signed by">{account ? shortenAddress(account.pqAddress, 5) : ''}</Field>
+              <p className="mt-2 text-[10px] text-muted-foreground">Each operation burns a small QRDX fee, whether or not it succeeds.</p>
             </div>
           </div>
         )}
