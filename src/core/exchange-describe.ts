@@ -35,17 +35,26 @@ export interface DescribeContext {
   liquidityCost?: { amount0: string; amount1: string } | null
 }
 
-const TOKEN_KEYS = ['token_in', 'token_out', 'token_address', 'token0', 'token1'] as const
+const TOKEN_KEYS = ['token_in', 'token_out', 'token_address', 'token0', 'token1', 'asset'] as const
+const isToken = (v: unknown): v is string => typeof v === 'string' && /^0x[0-9a-fA-F]{40}$/.test(v)
 
-/** Every token address an operation's params mention (lower-case). */
+/** Every token address an operation's params mention (lower-case), a batch's actions included. */
 export function tokenAddressesIn(params: Record<string, JsonValue>): string[] {
   const out = new Set<string>()
   for (const k of TOKEN_KEYS) {
     const v = params[k]
-    if (typeof v === 'string' && /^0x[0-9a-fA-F]{40}$/.test(v)) out.add(v.toLowerCase())
+    if (isToken(v)) out.add(v.toLowerCase())
   }
-  if (typeof params.pair === 'string') {
-    for (const part of params.pair.split(':')) if (/^0x[0-9a-fA-F]{40}$/.test(part)) out.add(part.toLowerCase())
+  for (const key of ['pair', 'market'] as const) {
+    const v = params[key]
+    if (typeof v === 'string') for (const part of v.split(':')) if (isToken(part)) out.add(part.toLowerCase())
+  }
+  if (Array.isArray(params.path)) for (const t of params.path) if (isToken(t)) out.add(t.toLowerCase())
+  if (Array.isArray(params.actions)) {
+    for (const a of params.actions) {
+      const inner = a && typeof a === 'object' && !Array.isArray(a) ? (a as Record<string, JsonValue>).params : undefined
+      if (inner && typeof inner === 'object' && !Array.isArray(inner)) for (const t of tokenAddressesIn(inner)) out.add(t)
+    }
   }
   return [...out]
 }
@@ -93,10 +102,15 @@ export function describeExchangeOp(
 
   switch (op) {
     case 'SWAP': {
-      const tin = str(params.token_in)
-      const tout = str(params.token_out)
+      // A multi-hop swap names its route as `path` (up to 4 hops, all or nothing).
+      const path = Array.isArray(params.path) ? params.path.map(String) : null
+      const tin = path ? path[0] ?? '' : str(params.token_in)
+      const tout = path ? path[path.length - 1] ?? '' : str(params.token_out)
       const min = str(params.min_amount_out)
       const details = [tokenDetail('Pay', tin), tokenDetail('Receive', tout)]
+      if (path && path.length > 2) {
+        details.push({ label: 'Route', value: `${path.map((t) => sym(t)).join(' → ')} (all or nothing)` })
+      }
       if (params.venue) details.push({ label: 'Venue', value: str(params.venue) })
       if (params.deadline) {
         details.push({ label: 'Expires', value: new Date(Number(params.deadline) * 1000).toLocaleString() })
@@ -133,6 +147,35 @@ export function describeExchangeOp(
             `${side === 'Buy' ? 'Sell' : 'Buy'} ${groupDigits(trimTo(multiply(amount, price), 8))} ${sym(quote)} ` +
             `at ${groupDigits(trimTo(inverse, 8))} ${sym(base)}`,
         })
+      }
+      const kind = str(params.order_type).toLowerCase()
+      if (kind === 'stop_loss' || kind === 'take_profit' || kind === 'oco') {
+        const trigger = str(params.trigger_price ?? params.stop_price)
+        const word = kind === 'stop_loss' ? 'Stop' : kind === 'take_profit' ? 'Take profit' : 'Stop'
+        details.push({ label: `${word} at`, value: `${groupDigits(trigger)} ${sym(quote)} (last trade price)` })
+        if (kind === 'oco') details.push({ label: 'Take profit at', value: `${groupDigits(str(params.tp_price))} ${sym(quote)}` })
+        details.push({ label: 'Then', value: price ? `a limit order at ${groupDigits(price)} ${sym(quote)}` : 'a market order, at most 10 % through the trigger' })
+        details.push({ label: 'Locks now', value: side === 'Buy' ? `up to ${groupDigits(multiply(amount, price || trigger))} ${sym(quote)} (more without a limit)` : `${groupDigits(amount)} ${sym(base)}` })
+        return {
+          headline: `${kind === 'oco' ? 'Stop / take-profit' : word}: ${side.toLowerCase()} ${groupDigits(amount)} ${sym(base)} when the price reaches ${groupDigits(trigger)} ${sym(quote)}`,
+          details,
+          warnings,
+        }
+      }
+      if (params.tif) details.push({ label: 'Time in force', value: TIF_LABEL[str(params.tif).toLowerCase()] ?? str(params.tif) })
+      details.push(...orderExtras(params))
+      for (const [k, label] of [['tp', 'Take profit'], ['sl', 'Stop loss']] as const) {
+        const leg = params[k]
+        if (leg && typeof leg === 'object' && !Array.isArray(leg)) {
+          details.push({ label, value: `sell what this buys at ${triggerLeg(leg as Record<string, JsonValue>)}` })
+        }
+      }
+      if (kind === 'market') {
+        return {
+          headline: `${side} ${groupDigits(amount)} ${sym(base)} at the market (${sym(quote)})`,
+          details,
+          warnings,
+        }
       }
       details.push({
         label: side === 'Buy' ? 'Locks up to' : 'Locks',
@@ -200,16 +243,25 @@ export function describeExchangeOp(
 
     case 'PERP_ORDER': {
       const side = str(params.side).toLowerCase() === 'sell' ? 'Sell' : 'Buy'
-      const ioc = str(params.tif).toLowerCase() === 'ioc'
+      const tif = str(params.tif).toLowerCase()
+      const ioc = tif === 'ioc' || tif === 'fok'
       const reduce = params.reduce_only === true
+      const details = [
+        { label: 'Time in force', value: TIF_LABEL[tif] ?? TIF_LABEL.gtc },
+        { label: 'Reduce only', value: reduce ? 'Yes' : 'No' },
+        ...orderExtras(params),
+      ]
+      for (const [k, label] of [['tp', 'Take profit'], ['sl', 'Stop loss']] as const) {
+        const leg = params[k]
+        if (leg && typeof leg === 'object' && !Array.isArray(leg)) {
+          details.push({ label, value: triggerLeg(leg as Record<string, JsonValue>) })
+        }
+      }
       return {
         headline:
           `${reduce ? 'Close-only ' : ''}${side.toLowerCase()} ${groupDigits(str(params.size))} ` +
           `${str(params.market_id)} ${ioc ? 'at up to' : '@'} ${groupDigits(str(params.price))}`,
-        details: [
-          { label: 'Time in force', value: ioc ? 'Immediate or cancel' : 'Good till cancelled' },
-          { label: 'Reduce only', value: reduce ? 'Yes' : 'No' },
-        ],
+        details,
         warnings,
       }
     }
@@ -480,10 +532,322 @@ export function describeExchangeOp(
       }
     }
 
+    // ── Trading features (qrdx-node docs/TRADING_FEATURES.md) ──────────────
+    case 'PERP_TRIGGER': {
+      const side = str(params.side).toLowerCase() === 'sell' ? 'sell' : 'buy'
+      const kind = str(params.kind).toLowerCase() === 'tp' ? 'Take profit' : 'Stop loss'
+      const whole = params.position === true
+      const size = whole ? 'the whole position' : `${groupDigits(str(params.size))}`
+      const makers = Number(str(params.max_makers) || 20)
+      return {
+        headline: `${kind} on ${str(params.market_id)}: ${side} ${size} when the mark reaches ${groupDigits(str(params.trigger_price))}`,
+        details: [
+          { label: 'Then', value: params.limit_price ? `a limit order at ${groupDigits(str(params.limit_price))}` : 'a market order, at most 10 % through the mark' },
+          { label: 'Reduce only', value: params.reduce_only === true || whole ? 'Yes' : 'No' },
+          { label: 'Prepaid matching', value: `up to ${makers} resting orders` },
+        ],
+        warnings,
+      }
+    }
+
+    case 'CANCEL_ALL': {
+      const scope = str(params.scope) || 'all'
+      const market = str(params.market)
+      return {
+        headline: market
+          ? `Cancel every order, trigger and TWAP on ${marketName(market, sym)}`
+          : `Cancel every ${scope === 'spot' ? 'spot ' : scope === 'perps' ? 'perps ' : ''}order, trigger and TWAP`,
+        details: [],
+        warnings,
+      }
+    }
+
+    case 'PERP_MODIFY': {
+      const parts: string[] = []
+      if (params.size !== undefined) parts.push(`size ${groupDigits(str(params.size))}`)
+      if (params.price !== undefined) parts.push(`price ${groupDigits(str(params.price))}`)
+      if (params.trigger_price !== undefined) parts.push(`trigger ${groupDigits(str(params.trigger_price))}`)
+      if (params.limit_price !== undefined) parts.push(`limit ${groupDigits(str(params.limit_price))}`)
+      return {
+        headline: `Change ${str(params.market_id)} order ${short(str(params.order_id))}: ${parts.join(', ') || 'no change'}`,
+        details: [{ label: 'Queue', value: 'Kept only when just the size goes down' }],
+        warnings,
+      }
+    }
+
+    case 'MODIFY_ORDER': {
+      const [base, quote] = canonicalPair(str(params.pair))
+      const parts: string[] = []
+      if (params.amount !== undefined) parts.push(`${groupDigits(str(params.amount))} ${sym(base)} left`)
+      if (params.price !== undefined) parts.push(`at ${groupDigits(str(params.price))} ${sym(quote)}`)
+      return {
+        headline: `Change order ${short(str(params.order_id))} on ${sym(base)}/${sym(quote)}: ${parts.join(' ') || 'no change'}`,
+        details: [{ label: 'Queue', value: 'Kept only when just the amount goes down' }],
+        warnings,
+      }
+    }
+
+    case 'BATCH': {
+      const actions = Array.isArray(params.actions) ? params.actions : []
+      const details = actions.map((a, i) => {
+        const action = (a && typeof a === 'object' && !Array.isArray(a) ? a : {}) as Record<string, JsonValue>
+        const inner = (action.params && typeof action.params === 'object' && !Array.isArray(action.params) ? action.params : {}) as Record<string, JsonValue>
+        const name = str(action.op) as ExchangeOpName
+        const d = describeExchangeOp(name, inner, ctx)
+        for (const w of d.warnings) if (!warnings.includes(w)) warnings.push(w)
+        return { label: `${i + 1}`, value: d.headline }
+      })
+      return {
+        headline: `${actions.length} operation${actions.length === 1 ? '' : 's'}, all or nothing`,
+        details,
+        warnings,
+      }
+    }
+
+    case 'TWAP_ORDER': {
+      const mins = Math.round(Number(str(params.duration)) / 60)
+      const slices = str(params.slices)
+      const slip = str(params.max_slippage) || '0.03'
+      const detail = [
+        { label: 'Over', value: `${mins} minute${mins === 1 ? '' : 's'}${slices ? `, ${slices} slices` : ''}` },
+        { label: 'Each slice', value: `at most ${(Number(slip) * 100).toFixed(1)} % from the price` },
+      ]
+      if (params.market_id) {
+        const side = str(params.side).toLowerCase() === 'sell' ? 'Sell' : 'Buy'
+        return {
+          headline: `TWAP: ${side.toLowerCase()} ${groupDigits(str(params.size))} ${str(params.market_id)}${params.reduce_only === true ? ' (reduce only)' : ''}`,
+          details: detail,
+          warnings,
+        }
+      }
+      const tin = str(params.token_in)
+      const tout = str(params.token_out)
+      return {
+        headline: `TWAP: swap ${groupDigits(str(params.amount_in))} ${sym(tin)} into ${sym(tout)}`,
+        details: [...detail, { label: 'Locks now', value: `${groupDigits(str(params.amount_in))} ${sym(tin)}, returned unspent if cancelled` }],
+        warnings,
+      }
+    }
+
+    case 'TWAP_CANCEL':
+      return { headline: `Stop TWAP ${short(str(params.twap_id))}`, details: [], warnings }
+
+    case 'AGENT_APPROVE': {
+      const agent = str(params.agent)
+      const until = Number(str(params.valid_until) || 0)
+      const limit = str(params.max_notional_per_day)
+      warnings.push(
+        'An agent key can trade everything in this account (never withdraw it). A stolen agent key can still lose your funds by trading at bad prices. Approve it as you would an exchange API key.'
+      )
+      if (!until) warnings.push('It never expires: it works until you revoke it.')
+      return {
+        headline: `Let ${params.name ? `"${str(params.name)}" (${short(agent)})` : short(agent)} trade for this account`,
+        details: [
+          { label: 'Agent', value: agent },
+          { label: 'Until', value: until ? new Date(until * 1000).toLocaleString() : 'Revoked' },
+          { label: 'Daily limit', value: limit ? `${groupDigits(limit)} placed a day` : 'None' },
+        ],
+        warnings,
+      }
+    }
+
+    case 'AGENT_REVOKE':
+      return { headline: `Revoke agent ${short(str(params.agent))}`, details: [{ label: 'Agent', value: str(params.agent) }], warnings }
+
+    case 'SUBACCOUNT_CREATE':
+      return { headline: `Create sub-account${params.name ? ` "${str(params.name)}"` : ''}`, details: [], warnings }
+
+    case 'SUBACCOUNT_TRANSFER': {
+      const asset = str(params.asset)
+      const to = str(params.direction) === 'from_sub'
+      return {
+        headline: `Move ${groupDigits(str(params.amount))} ${sym(asset)} ${to ? 'from' : 'to'} sub-account ${short(str(params.subaccount))}`,
+        details: [{ label: 'Sub-account', value: str(params.subaccount) }],
+        warnings,
+      }
+    }
+
+    case 'VAULT_CREATE': {
+      const share = Number(str(params.profit_share) || '0.1') * 100
+      warnings.push('You must keep at least 5 % of the shares while anyone else holds any.')
+      return {
+        headline: `Start the vault "${str(params.name) || 'unnamed'}" with ${groupDigits(str(params.amount))} collateral`,
+        details: [{ label: 'Your profit share', value: `${share.toFixed(0)} % of depositors' gains` }],
+        warnings,
+      }
+    }
+
+    case 'REFERRAL_REGISTER':
+      return { headline: `Take the referral code "${str(params.code)}"`, details: [], warnings }
+    case 'REFERRAL_JOIN':
+      warnings.push('You can join only one code, once.')
+      return { headline: `Use the referral code "${str(params.code)}"`, details: [{ label: 'Discount', value: '4 % off fees on your first 25M of volume' }], warnings }
+
+    case 'ACCOUNT_POLICY': {
+      const action = str(params.action)
+      switch (action) {
+        case 'add_controller':
+          warnings.push(`${short(str(params.controller))} will be able to sign anything for this account, withdrawals included.`)
+          return { headline: `Bind ${short(str(params.controller))} as a controller of this account`, details: [{ label: 'Controller', value: str(params.controller) }], warnings }
+        case 'remove_controller':
+          return { headline: `Unbind controller ${short(str(params.controller))}`, details: [{ label: 'Controller', value: str(params.controller) }], warnings }
+        case 'own_key': {
+          const on = params.enabled === true
+          if (!on) warnings.push("This account's own key will sign nothing: only its controllers can move its funds.")
+          return { headline: on ? "Turn this account's own key back on" : "Turn this account's own key off", details: [], warnings }
+        }
+        case 'delay': {
+          const secs = Number(str(params.seconds))
+          return { headline: `Make changes signed by this key wait ${fmtDuration(secs)}`, details: [], warnings }
+        }
+        case 'guardians': {
+          const g = Array.isArray(params.guardians) ? params.guardians.map(String) : []
+          if (g.length) warnings.push(`${str(params.threshold)} of these guardians together can hand this account to a new controller after ${fmtDuration(Number(str(params.recovery_delay) || 604800))}, unless you cancel.`)
+          return {
+            headline: g.length ? `Name ${g.length} recovery guardian${g.length === 1 ? '' : 's'}` : 'Remove the recovery guardians',
+            details: g.map((a, i) => ({ label: `Guardian ${i + 1}`, value: a })),
+            warnings,
+          }
+        }
+        case 'cancel':
+          return { headline: `Cancel waiting change ${str(params.change_id)}`, details: [], warnings }
+        default:
+          return { headline: `Account policy: ${action}`, details: [], warnings }
+      }
+    }
+
+    case 'ACCOUNT_RECOVER': {
+      const next = str(params.new_controller)
+      if (next) warnings.push(`With enough other guardians, ${short(next)} takes over ${short(str(params.account))} after the recovery delay.`)
+      return {
+        headline: next ? `Back ${short(next)} to recover ${short(str(params.account))}` : `Withdraw your recovery backing for ${short(str(params.account))}`,
+        details: [{ label: 'Account', value: str(params.account) }],
+        warnings,
+      }
+    }
+
+    case 'QNS_REGISTER': {
+      const years = Number(str(params.years) || 1)
+      return {
+        headline: `Register ${qnsName(str(params.name))} for ${years} year${years === 1 ? '' : 's'}`,
+        details: [{ label: 'Resolves to', value: str(params.target) || 'This account' }],
+        warnings,
+      }
+    }
+    case 'QNS_RENEW': {
+      const years = Number(str(params.years) || 1)
+      return { headline: `Renew ${qnsName(str(params.name))} for ${years} year${years === 1 ? '' : 's'}`, details: [], warnings }
+    }
+    case 'QNS_SET_RECORD': {
+      const key = str(params.key)
+      const value = str(params.value)
+      return {
+        headline: key === 'address'
+          ? value ? `Point ${qnsName(str(params.name))} at ${short(value)}` : `Clear where ${qnsName(str(params.name))} points`
+          : `Set ${qnsName(str(params.name))}'s "${key}" record`,
+        details: [{ label: key, value: value || '(cleared)' }],
+        warnings,
+      }
+    }
+    case 'QNS_SET_PRIMARY': {
+      const name = str(params.name)
+      return { headline: name ? `Show this account as ${qnsName(name)}` : 'Clear this account’s primary name', details: [], warnings }
+    }
+
+    case 'PERP_ISOLATED_MARGIN': {
+      const amt = str(params.amount)
+      const remove = amt.startsWith('-')
+      return {
+        headline: `${remove ? 'Remove' : 'Add'} ${groupDigits(remove ? amt.slice(1) : amt)} margin ${remove ? 'from' : 'to'} your isolated ${str(params.market_id)} position`,
+        details: [],
+        warnings,
+      }
+    }
+
+    case 'SCHEDULE_CANCEL': {
+      // No `time` clears it.
+      const t = params.time === undefined || params.time === null ? 0 : Number(str(params.time))
+      return {
+        headline: t ? `Cancel all your orders, triggers and TWAPs at ${new Date(t * 1000).toLocaleString()} unless renewed` : "Turn off the dead man's switch",
+        details: [],
+        warnings,
+      }
+    }
+
+    case 'APPROVE_BUILDER_FEE': {
+      const rate = Number(str(params.max_fee_rate)) * 100
+      if (rate > 0) warnings.push(`${short(str(params.builder))} may add up to ${rate.toFixed(3)} % to orders it sends for you.`)
+      return {
+        headline: rate > 0 ? `Let ${short(str(params.builder))} charge up to ${rate.toFixed(3)} % on your orders` : `Stop ${short(str(params.builder))} charging fees`,
+        details: [{ label: 'Builder', value: str(params.builder) }],
+        warnings,
+      }
+    }
+
+    case 'DEPLOYER_BOND':
+      warnings.push('The bond is slashed if validators find your markets mispriced, and takes a long unbonding to take back.')
+      return { headline: `Bond ${groupDigits(str(params.amount))} QRDX as a market deployer${params.dex ? ` ("${str(params.dex)}")` : ''}`, details: [], warnings }
+    case 'DEPLOYER_UNBOND':
+      return { headline: params.claim === true ? 'Claim your unbonded deployer bond' : `Start unbonding ${groupDigits(str(params.amount))} QRDX of your deployer bond`, details: [], warnings }
+    case 'DEPLOYER_SET_ORACLE':
+      return { headline: `Set ${str(params.market_id)}'s oracle price to ${groupDigits(str(params.price))}`, details: [], warnings }
+    case 'DEPLOYER_HALT':
+      warnings.push('Every position in the market is settled at its oracle price. This cannot be undone.')
+      return { headline: `Halt and settle ${str(params.market_id)}`, details: [], warnings }
+    case 'TICKER_CLAIM': {
+      const t = str(params.token_address)
+      warnings.push('The price is burned.')
+      return {
+        headline: `Claim ${sym(t)} as this token's unique ticker`,
+        details: [tokenDetail('Token', t), ...(params.max_price ? [{ label: 'Pay at most', value: `${groupDigits(str(params.max_price))} QRDX` }] : [])],
+        warnings,
+      }
+    }
+
     default:
       for (const k of TOKEN_KEYS) if (typeof params[k] === 'string') sym(String(params[k]))
       return { headline: op.replace(/_/g, ' ').toLowerCase(), details: [], warnings }
   }
+}
+
+const TIF_LABEL: Record<string, string> = {
+  gtc: 'Good till cancelled',
+  ioc: 'Immediate or cancel',
+  fok: 'Fill or kill',
+  alo: 'Post only',
+}
+
+/** Hidden / iceberg / expiry details an order may carry. */
+function orderExtras(params: Record<string, JsonValue>): { label: string; value: string }[] {
+  const out: { label: string; value: string }[] = []
+  if (params.hidden === true) out.push({ label: 'Book', value: 'Hidden (not in the depth)' })
+  if (params.display_size !== undefined) out.push({ label: 'Iceberg', value: `shows ${groupDigits(str(params.display_size))} at a time` })
+  if (params.expires_at !== undefined) out.push({ label: 'Must land by', value: new Date(Number(str(params.expires_at)) * 1000).toLocaleString() })
+  return out
+}
+
+function triggerLeg(leg: Record<string, JsonValue>): string {
+  const at = groupDigits(str(leg.trigger_price))
+  const limit = leg.limit_price ?? leg.price
+  return limit !== undefined ? `${at}, then a limit at ${groupDigits(str(limit))}` : `${at}, then at the market`
+}
+
+function marketName(market: string, sym: (a: string) => string): string {
+  if (!market.includes(':')) return market
+  const [a, b] = canonicalPair(market)
+  return `${sym(a)}/${sym(b)}`
+}
+
+function qnsName(name: string): string {
+  const n = name.toLowerCase()
+  return n.endsWith('.qrdx') ? n : `${n}.qrdx`
+}
+
+function fmtDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return 'no time'
+  if (seconds % 86400 === 0) return `${seconds / 86400} day${seconds === 86400 ? '' : 's'}`
+  if (seconds % 3600 === 0) return `${seconds / 3600} hour${seconds === 3600 ? '' : 's'}`
+  return `${Math.round(seconds / 60)} minutes`
 }
 
 /** 1 / x to 18 places, or null for zero / unparseable input. */

@@ -35,9 +35,16 @@ import {
 import { addressesEqual } from '../../core/address'
 import { toAccountId } from '../../core/account-id'
 import { pqGasFromEvmEstimate, pqIntrinsicGas } from '../../core/pq-tx'
-import { ExchangeOp, type ExchangeOpName, type JsonValue } from '../../core/exchange-tx'
+import {
+  BATCH_ACTIONS,
+  ExchangeOp,
+  MAX_BATCH_ACTIONS,
+  freeLaneOp,
+  type ExchangeOpName,
+  type JsonValue,
+} from '../../core/exchange-tx'
 import { parseTypedData, typedDataChainId } from '../../core/eip712'
-import { submitExchangeOp } from '../../core/tx-service'
+import { freeActions, nodeFeatures, submitExchangeOp } from '../../core/tx-service'
 import {
   describeExchangeOp,
   tokenAddressesIn,
@@ -125,6 +132,10 @@ export type ApprovalRequest =
       /** What the batch does as a whole ("Swap 100 A for at least 4.2 D through B, C"). */
       label?: string
       steps: { op: ExchangeOpName; params: Record<string, JsonValue>; summary?: ExchangeSummary }[]
+      /** Sent as one BATCH transaction: all of it lands, or none of it. */
+      atomic?: boolean
+      /** That transaction goes in the free trading lane (no fee). */
+      free?: boolean
     }
   | { kind: 'switch-chain'; origin: string; chain: string }
   | {
@@ -247,7 +258,7 @@ const ACCOUNT_METHODS = new Set([
 ])
 
 /** The most exchange operations one qrdx_sendExchangeBatch approval may carry. */
-const MAX_BATCH = 8
+const MAX_BATCH = 20
 
 const hex = (n: bigint | number) => '0x' + BigInt(n).toString(16)
 const asArray = (p: unknown): unknown[] => (Array.isArray(p) ? p : p === undefined ? [] : [p])
@@ -685,6 +696,7 @@ export class ProviderRouter {
     const op = req.op as ExchangeOpName
     const opParams = req.params ?? {}
     const summary = await this.describeExchange(chain, op, opParams)
+    await this.noteFreeLane(chain, account.pqAddress, op, opParams, summary)
     await this.approve(
       { kind: 'exchange', origin, account: account.id, chain: chain.id, op, params: opParams, summary },
       'postQuantum'
@@ -711,12 +723,15 @@ export class ProviderRouter {
         origin,
       })
       .catch(() => undefined)
-    return result
+    // What the page gets: plain JSON (a dApp message cannot carry anything else).
+    return { txHash: result.txHash, nonce: result.nonce }
   }
 
   /**
    * Several exchange operations with one approval (`qrdx_sendExchangeBatch`, at most
-   * MAX_BATCH): a multi-hop swap, a cancel-all. Each is still its own signed transaction; they
+   * MAX_BATCH): a multi-hop swap, a cancel-all. On a node with BATCH (60) they go as one
+   * transaction, all or nothing (one hash comes back). Otherwise each is its own signed
+   * transaction; they
    * get consecutive nonces, so a block applies them in order, and each succeeds or fails on its
    * own. When a submission fails part-way, the error names the steps already sent.
    */
@@ -740,6 +755,11 @@ export class ProviderRouter {
         return { op, params: opParams, gasLimit: o.gasLimit, summary: await this.describeExchange(chain, op, opParams) }
       })
     )
+    const atomic =
+      steps.length > 1 &&
+      steps.length <= MAX_BATCH_ACTIONS &&
+      steps.every((st) => BATCH_ACTIONS.has(st.op)) &&
+      (await nodeFeatures(chain)).trading
     await this.approve(
       {
         kind: 'exchange-batch',
@@ -748,6 +768,11 @@ export class ProviderRouter {
         chain: chain.id,
         label: typeof req?.label === 'string' ? req.label.slice(0, 200) : undefined,
         steps: steps.map(({ op, params: p, summary }) => ({ op, params: p, summary })),
+        atomic,
+        free:
+          atomic &&
+          freeLaneOp('BATCH', { actions: steps.map((st) => ({ op: st.op, params: st.params })) }) &&
+          !!(await freeActions(chain, account.pqAddress))?.free_now,
       },
       'postQuantum'
     )
@@ -755,6 +780,27 @@ export class ProviderRouter {
       signEvmTransaction: () => Promise.reject(),
       signPqTransaction: () => Promise.reject(),
       signExchangeTransaction: (tx: Parameters<WalletManager['signExchangeTransaction']>[0], id: string) => this.d.manager.signExchangeTransaction(tx, id),
+    }
+    if (atomic) {
+      const batch = { actions: steps.map((st) => ({ op: st.op, params: st.params })) }
+      // 10,000 for the batch plus each action's own limit (the node's DEFAULT for those without).
+      const gasLimit = Math.min(10_000 + steps.reduce((n, st) => n + (st.gasLimit ?? 1_000_000), 0), 20_000_000)
+      const r = await submitExchangeOp(signer, { chain, account, op: 'BATCH', params: batch, gasLimit })
+      await this.d
+        .onSubmitted?.({
+          hash: r.txHash,
+          chain: chain.id,
+          kind: steps.every((st) => st.op === 'SWAP') ? 'swap' : 'exchange',
+          track: 'exchange',
+          credential: 'pq',
+          from: account.pqAddress,
+          to: '',
+          value: '',
+          label: typeof req?.label === 'string' ? req.label.slice(0, 200) : `batch of ${steps.length}`,
+          origin,
+        })
+        .catch(() => undefined)
+      return { txHashes: [r.txHash], nonces: [r.nonce] }
     }
     const txHashes: string[] = []
     const nonces: number[] = []
@@ -786,6 +832,27 @@ export class ProviderRouter {
       }
     }
     return { txHashes, nonces }
+  }
+
+  /**
+   * Say in the approval whether a trading operation goes in the free lane
+   * (exchange_getFreeActions; docs/TOKENOMICS.md) or pays gas, and why.
+   */
+  private async noteFreeLane(
+    chain: ChainConfig,
+    sender: string,
+    op: ExchangeOpName,
+    params: Record<string, JsonValue>,
+    summary: ExchangeSummary
+  ): Promise<void> {
+    if (!freeLaneOp(op, params)) return
+    const free = await freeActions(chain, sender)
+    if (!free) return
+    summary.details.push(
+      free.free_now
+        ? { label: 'Network fee', value: `Free (trading lane, ${free.remaining.toLocaleString()} free actions left)` }
+        : { label: 'Network fee', value: `Paid: ${free.why_not ?? 'the free lane is closed'}` }
+    )
   }
 
   /**

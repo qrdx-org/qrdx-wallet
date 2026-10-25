@@ -471,8 +471,9 @@ export function ApprovalScreen(
             <div className="rounded-xl glass p-3">
               <Field label="Signed by">{account ? shortenAddress(account.pqAddress, 5) : ''}</Field>
               <p className="text-[10px] text-muted-foreground mt-2">
-                A small QRDX fee is burned whether or not the operation succeeds. It executes when the
-                next block includes it.
+                {request.summary?.details.some((d) => d.label === 'Network fee' && d.value.startsWith('Free'))
+                  ? 'No fee: it goes in the free trading lane. It executes when the next block includes it.'
+                  : 'A small QRDX fee is burned whether or not the operation succeeds. It executes when the next block includes it.'}
               </p>
             </div>
           </div>
@@ -483,8 +484,9 @@ export function ApprovalScreen(
             <div className="rounded-xl glass p-3">
               <p className="text-sm font-semibold leading-snug">{request.label ?? `${request.steps.length} exchange operations`}</p>
               <p className="mt-1 text-[11px] text-muted-foreground">
-                {request.steps.length} operations, signed now and sent in order. A block applies them one after another; each
-                succeeds or fails on its own, so if a later one fails, the ones before it still stand.
+                {request.atomic
+                  ? `${request.steps.length} operations in one transaction, applied in order: all of them happen, or none do.`
+                  : `${request.steps.length} operations, signed now and sent in order. A block applies them one after another; each succeeds or fails on its own, so if a later one fails, the ones before it still stand.`}
               </p>
             </div>
             {request.steps.map((step, i) => (
@@ -509,7 +511,13 @@ export function ApprovalScreen(
             ))}
             <div className="rounded-xl glass p-3">
               <Field label="Signed by">{account ? shortenAddress(account.pqAddress, 5) : ''}</Field>
-              <p className="mt-2 text-[10px] text-muted-foreground">Each operation burns a small QRDX fee, whether or not it succeeds.</p>
+              <p className="mt-2 text-[10px] text-muted-foreground">
+                {request.free
+                  ? 'No fee: the batch goes in the free trading lane.'
+                  : request.atomic
+                    ? 'The batch burns a small QRDX fee, whether or not it succeeds.'
+                    : 'Each operation burns a small QRDX fee, whether or not it succeeds.'}
+              </p>
             </div>
           </div>
         )}

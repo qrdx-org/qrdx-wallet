@@ -31,7 +31,7 @@ describe('NFT market calls', () => {
   it('names a token-priced purchase and what it spends', async () => {
     const { vi } = await import('vitest')
     const eth = await import('../../src/core/ethereum')
-    const USDC = '0x0886aa41d05c4be1ad6c91b728d104fee55a713a'
+    const USDC = '0x801ae63d236d7a4ea69868a9d7be5d27a09e5580'
     const COLL = '0x1721b12557a6b8ec492e386dd842a4839b3f1b5e'
     const answers: Record<string, unknown> = {
       exchange_getNftCollection: { name: 'QRDX Logo' },

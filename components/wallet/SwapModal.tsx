@@ -24,7 +24,8 @@ import { shortenAddress } from '@/src/core/address'
 import { tradeApiBase, tradeGet } from '@/src/core/trade/api'
 import { percent, size as fmtSize, usd } from '@/src/core/trade/format'
 import type { ApiAsset, IndexPrice } from '@/src/core/trade/types'
-import { routeOps, type RoutedQuote } from '@/src/core/trade/routing'
+import { MAX_PATH_HOPS, routeOps, routePathOp, type RoutedQuote } from '@/src/core/trade/routing'
+import { nodeFeatures } from '@/src/core/tx-service'
 import { Line, Sheet, TokenBadge, useDebounced } from './trade/kit'
 import { SubmissionList, useTradeSubmit } from './trade/submit'
 import { cn } from '@/lib/utils'
@@ -74,6 +75,16 @@ export function SwapModal({ onClose, initialFrom }: SwapModalProps) {
   const { activeChain, currentWallet, pqBalance, fetchBalances } = useWallet()
   const qrdx = isQrdxChain(activeChain)
   const api = qrdx ? tradeApiBase(activeChain) : null
+  // A node with multi-hop swaps takes a route as one SWAP through its path, all or nothing.
+  const [pathSwaps, setPathSwaps] = useState(false)
+  useEffect(() => {
+    if (!qrdx) return
+    let live = true
+    nodeFeatures(activeChain).then((f) => live && setPathSwaps(f.trading))
+    return () => {
+      live = false
+    }
+  }, [qrdx, activeChain])
   const [tokens, setTokens] = useState<ExchangeToken[]>([])
   const [balances, setBalances] = useState<Record<string, string>>({})
   const [meta, setMeta] = useState<Record<string, ApiAsset>>({})
@@ -221,6 +232,27 @@ export function SwapModal({ onClose, initialFrom }: SwapModalProps) {
 
   const review = () => {
     if (!quote || !from || !to) return
+    if (route && pathSwaps && route.hops.length <= MAX_PATH_HOPS) {
+      const { op, minOut } = routePathOp(route.hops, amount, Number(slippage), deadlineIn(settings.deadlineMin))
+      ask({
+        op: 'SWAP',
+        params: op.params,
+        label: `Swap ${amount} ${from.symbol} → ≥ ${fmtSize(minOut)} ${to.symbol} through ${route.hops.slice(0, -1).map((h) => h.to.symbol).join(', ')}`,
+        symbols: Object.fromEntries(route.hops.flatMap((h) => [h.from, h.to]).filter((a) => a.address && a.address !== NATIVE_QRDX).map((a) => [a.address!, a.symbol])),
+        estimates: [
+          { k: 'Route', v: [route.hops[0].from.symbol, ...route.hops.map((h) => h.to.symbol)].join(' → ') },
+          { k: 'Expected', v: `${fmtSize(route.amountOut)} ${to.symbol}` },
+          ...(route.directAmountOut ? [{ k: 'Directly', v: `${fmtSize(route.directAmountOut)} ${to.symbol}` }] : []),
+          { k: 'All or nothing', v: 'One swap through every market: it delivers at least the minimum, or nothing happens' },
+        ],
+        onDone: () => {
+          setAmount('')
+          fetchBalances()
+          loadBalances(tokens)
+        },
+      })
+      return
+    }
     if (route) {
       const { ops, minOut } = routeOps(route.hops, amount, Number(slippage), deadlineIn(settings.deadlineMin))
       const symbols = Object.fromEntries(route.hops.flatMap((h) => [h.from, h.to]).filter((a) => a.address && a.address !== NATIVE_QRDX).map((a) => [a.address!, a.symbol]))
@@ -346,7 +378,7 @@ export function SwapModal({ onClose, initialFrom }: SwapModalProps) {
                 <Line k="Rate" v={quote && from && to ? `1 ${to.symbol} = ${fmtSize(quote.execution_price)} ${from.symbol}` : '—'} />
                 <Line
                   k="Minimum received"
-                  v={quote && to ? `${fmtSize(route ? routeOps(route.hops, amount, Number(slippage), 0).minOut : minimumOut(quote.amount_out, Number(slippage)))} ${to.symbol}` : '—'}
+                  v={quote && to ? `${fmtSize(route ? (pathSwaps && route.hops.length <= MAX_PATH_HOPS ? routePathOp(route.hops, amount, Number(slippage), 0) : routeOps(route.hops, amount, Number(slippage), 0)).minOut : minimumOut(quote.amount_out, Number(slippage)))} ${to.symbol}` : '—'}
                 />
                 <Line k="Price impact" v={quote?.price_impact ? percent(String(Number(quote.price_impact) * 100), false) : quote ? 'n/a (order book)' : '—'} />
                 <Line

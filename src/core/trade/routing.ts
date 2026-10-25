@@ -1,7 +1,9 @@
 /**
  * Smart routing, as the trade API returns it (`/quote/route`, qrdx-trade lib/server/routing.ts):
  * the best path from one token to another through up to three markets, each hop quoted by the
- * node. `routeOps` turns it into the SWAPs to sign (qrdx-trade lib/routing.ts, the same rules).
+ * node. On a node with multi-hop swaps (qrdx-node docs/TRADING_FEATURES.md §6) `routePathOp`
+ * makes it one SWAP through the `path`, all or nothing; otherwise `routeOps` turns it into one
+ * SWAP a hop (qrdx-trade lib/routing.ts, the same rules).
  */
 
 import { dec, div, lessSlippage, mul, round, str } from './decimal'
@@ -48,4 +50,21 @@ export function routeOps(hops: Pick<RouteHop, 'from' | 'to' | 'amountIn' | 'amou
     spend = min
   }
   return { ops, minOut: spend }
+}
+
+export interface RoutePathOp {
+  op: 'SWAP'
+  params: { path: string[]; amount_in: string; min_amount_out: string; venue: 'auto'; deadline: number }
+}
+
+/** The most hops one SWAP `path` takes (qrdx-node MAX_SWAP_HOPS). */
+export const MAX_PATH_HOPS = 4
+
+/** The route as one atomic SWAP: the slippage applies once, to the final output. */
+export function routePathOp(hops: Pick<RouteHop, 'from' | 'to' | 'amountOut'>[], amountIn: string, slippagePct: number, deadline: number): { op: RoutePathOp; minOut: string } {
+  const minOut = round(lessSlippage(hops[hops.length - 1].amountOut, slippagePct), 18, 'down')
+  return {
+    op: { op: 'SWAP', params: { path: [hops[0].from.address!, ...hops.map((h) => h.to.address!)], amount_in: amountIn, min_amount_out: minOut, venue: 'auto', deadline } },
+    minOut,
+  }
 }

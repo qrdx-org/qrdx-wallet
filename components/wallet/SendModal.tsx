@@ -26,6 +26,7 @@ import { isQrdxChain } from '@/src/core/chains'
 import { formatFiat as formatUsd } from '@/src/core/fiat'
 import { ConfirmSheet } from './flow/ConfirmSheet'
 import { RecipientSuggestions } from './RecipientSuggestions'
+import { isQnsName, resolveQnsName, type QnsResolution } from '@/src/core/qns'
 
 interface SendModalProps {
   ethAddress: string
@@ -183,11 +184,36 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
     }
   }
 
+  // ── QNS names (label.qrdx) ──────────────────────────────────────────────
+  // Resolved on the node as typed; the address it points to is what is sent to, and shown.
+  const typedName = qrdx && isQnsName(recipient) ? recipient.trim().toLowerCase() : null
+  const [qns, setQns] = useState<QnsResolution | { state: 'error'; name: string } | null>(null)
+  useEffect(() => {
+    if (!typedName) return
+    let cancelled = false
+    const t = setTimeout(() => {
+      resolveQnsName(activeChain, typedName)
+        .then((r) => !cancelled && setQns(r))
+        .catch(() => !cancelled && setQns({ state: 'error', name: typedName }))
+    }, 300)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [typedName, activeChain])
+  const nameResult = typedName && qns?.name === typedName ? qns : null
+
   // ── Recipient validation ────────────────────────────────────────────────
   // Sending to a wrong address is irreversible, so this gates the Send button.
   const recipientCheck = useMemo(() => {
-    const raw = recipient.trim()
+    let raw = recipient.trim()
     if (raw === '') return { state: 'empty' as const }
+    let viaName: string | undefined
+    if (typedName) {
+      if (!nameResult) return { state: 'resolving' as const }
+      if (nameResult.state === 'unsupported') return { state: 'invalid' as const, message: 'This network does not resolve .qrdx names yet' }
+      if (nameResult.state === 'error') return { state: 'invalid' as const, message: `Could not look up ${typedName}` }
+      if (nameResult.state === 'unregistered') return { state: 'invalid' as const, message: `${typedName} is not registered, or points nowhere` }
+      raw = nameResult.address
+      viaName = typedName
+    }
     const result = validateAddress(raw)
     let resolved: { accountId: string; resolved: boolean }
     try {
@@ -206,10 +232,11 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
     return {
       state: 'valid' as const,
       address: display,
-      contactName: contact?.name,
+      contactName: contact?.name ?? viaName,
+      viaName,
       accountId: resolved.resolved ? resolved.accountId : null,
     }
-  }, [recipient, fromAddress, addressBook, activeChain])
+  }, [recipient, fromAddress, addressBook, activeChain, typedName, nameResult])
 
   const recipientIsValid = recipientCheck.state === 'valid'
 
@@ -266,7 +293,7 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
         .finally(() => !cancelled && setTxStatus('idle'))
     }, 350)
     return () => { cancelled = true; clearTimeout(t) }
-  }, [recipient, amount, selectedToken?.symbol, addressType, recipientIsValid, amountCheck.state]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [recipient, amount, selectedToken?.symbol, addressType, recipientIsValid, amountCheck.state, recipientCheck.state === 'valid' ? recipientCheck.address : '']) // eslint-disable-line react-hooks/exhaustive-deps
 
   const gasEstimate = quote ? Number(quote.feeFormatted).toLocaleString('en-US', { maximumFractionDigits: 6 }) : null
 
@@ -500,7 +527,7 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
             </div>
             <input
               type="text"
-              placeholder={qrdx ? '0x… or 0xPQ… address' : '0x… recipient address'}
+              placeholder={qrdx ? '0x…, 0xPQ… or name.qrdx' : '0x… recipient address'}
               value={recipient}
               spellCheck={false}
               onChange={(e) => setRecipient(e.target.value)}
@@ -513,6 +540,13 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
               }`}
             />
 
+            {recipientCheck.state === 'resolving' && (
+              <p className="flex items-center gap-1.5 mt-1.5 text-[10px] text-muted-foreground">
+                <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+                <span>Looking up {typedName}</span>
+              </p>
+            )}
+
             {recipientCheck.state === 'invalid' && (
               <p className="flex items-start gap-1.5 mt-1.5 text-[10px] text-red-400">
                 <AlertCircle className="h-3 w-3 shrink-0 mt-px" />
@@ -524,9 +558,11 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
               <p className="flex items-center gap-1.5 mt-1.5 text-[10px] text-green-500">
                 <CheckCircle2 className="h-3 w-3 shrink-0" />
                 <span>
-                  {recipientCheck.contactName
-                    ? `Sending to ${recipientCheck.contactName}`
-                    : 'Valid address'}
+                  {recipientCheck.viaName
+                    ? `${recipientCheck.viaName} points to ${shortenAddress(recipientCheck.address, 8)}`
+                    : recipientCheck.contactName
+                      ? `Sending to ${recipientCheck.contactName}`
+                      : 'Valid address'}
                   {recipientCheck.accountId && (
                     <span className="block text-muted-foreground font-mono">ledger account {shortenAddress(recipientCheck.accountId, 6)}</span>
                   )}

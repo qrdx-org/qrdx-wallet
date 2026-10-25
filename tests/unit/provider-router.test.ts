@@ -289,7 +289,7 @@ describe('qrdx_sendExchangeBatch', () => {
     await connect()
     await expect(router.handle(SITE, { method: 'qrdx_sendExchangeBatch', params: [{ ops: [] }] })).rejects.toThrow(/expects/)
     await expect(router.handle(SITE, { method: 'qrdx_sendExchangeBatch', params: [{ ops: [{ op: 'STEAL', params: {} }] }] })).rejects.toThrow(/Unknown/)
-    await expect(router.handle(SITE, { method: 'qrdx_sendExchangeBatch', params: [{ ops: Array(9).fill(swap('QRDX', '0x' + '11'.repeat(20))) }] })).rejects.toThrow(/At most 8/)
+    await expect(router.handle(SITE, { method: 'qrdx_sendExchangeBatch', params: [{ ops: Array(21).fill(swap('QRDX', '0x' + '11'.repeat(20))) }] })).rejects.toThrow(/At most 20/)
     expect(approvals.some((a) => a.kind === 'exchange-batch')).toBe(false)
   })
 

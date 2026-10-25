@@ -32,6 +32,7 @@ import { toAccountId, isProtocolHolder, addressForm } from './account-id'
 import { pqGasFromEvmEstimate, pqIntrinsicGas, type PqTxFields, type SignedPqTx } from './pq-tx'
 import {
   buildExchangeTx,
+  freeLaneOp,
   type ExchangeOpName,
   type JsonValue,
   type SignedExchangeTx,
@@ -350,6 +351,70 @@ async function nodeRpc<T>(chain: ChainConfig, method: string, params: unknown[])
 export const exchangeNonces = new ExchangeNonceTracker()
 const MAX_NONCE_RETRIES = 8
 
+/** What the connected node runs beyond the original exchange (one probe per chain, 5 minutes). */
+export interface NodeFeatures {
+  /**
+   * The trading features of qrdx-node's 2026-10 release (docs/TRADING_FEATURES.md): triggers,
+   * BATCH, modify, TWAP, agents, the free trading lane, QNS, account control.
+   */
+  trading: boolean
+}
+
+const featureCache = new Map<string, { at: number; value: Promise<NodeFeatures> }>()
+
+/** A JSON-RPC "method not found" (-32601), as the node answers a method it predates. */
+export function isMethodMissing(err: unknown): boolean {
+  // EvmProvider.rpc throws "RPC error <code>: <message>".
+  const e = err as { code?: number; message?: string } | undefined
+  return e?.code === -32601 || /RPC error -32601\b|method not found/i.test(e?.message ?? String(err))
+}
+
+export function nodeFeatures(chain: ChainConfig | string): Promise<NodeFeatures> {
+  const c = chainOf(chain)
+  const hit = featureCache.get(c.id)
+  if (hit && Date.now() - hit.at < 5 * 60_000) return hit.value
+  // Anything but an answer counts as "no": a BATCH sent to a node without it would be refused.
+  // Only an answer, or "method not found", is remembered; a failed read is asked again.
+  const value = nodeRpc<unknown>(c, 'perp_getFeeSchedule', [])
+    .then(() => ({ trading: true }))
+    .catch((e) => {
+      if (!isMethodMissing(e)) featureCache.delete(c.id)
+      return { trading: false }
+    })
+  featureCache.set(c.id, { at: Date.now(), value })
+  return value
+}
+
+/** exchange_getFreeActions: an account's free trading actions (docs/TOKENOMICS.md). */
+export interface FreeActions {
+  budget: number
+  used: number
+  remaining: number
+  lane_open: boolean
+  free_now: boolean
+  why_not: string | null
+}
+
+export async function freeActions(chain: ChainConfig | string, sender: string): Promise<FreeActions | null> {
+  return nodeRpc<FreeActions>(chainOf(chain), 'exchange_getFreeActions', [sender]).catch(() => null)
+}
+
+/**
+ * The gas price to sign a trading operation at: 0 (the free lane) while the node says
+ * the account's next one goes free, else `paid`. Anything else always pays.
+ */
+export async function exchangeGasPrice(
+  chain: ChainConfig,
+  sender: string,
+  op: ExchangeOpName,
+  params: Record<string, JsonValue>,
+  paid: bigint | undefined
+): Promise<bigint | undefined> {
+  if (!freeLaneOp(op, params)) return paid
+  const free = await freeActions(chain, sender)
+  return free?.free_now ? 0n : paid
+}
+
 /** Sign and submit a native exchange operation from the account's PQ credential. */
 export async function submitExchangeOp(
   signer: Signer,
@@ -359,17 +424,26 @@ export async function submitExchangeOp(
     op: ExchangeOpName
     params?: Record<string, JsonValue>
     gasLimit?: number
+    /** Wei per gas; default: the free lane when it takes this operation, else exchange_gasPrice. */
+    gasPrice?: bigint
   }
-): Promise<{ txHash: string; nonce: number }> {
+): Promise<{ txHash: string; nonce: number; /** Wei per gas it was signed at ("0": the free lane). */ gasPrice: string }> {
   const chain = chainOf(input.chain)
   if (!isQrdxChain(chain)) throw new TxError('Exchange operations exist only on QRDX networks')
   const sender = input.account.pqAddress
-  const [committed, gasPrice, chainId] = await Promise.all([
+  const params = input.params ?? {}
+  const [committed, nodePrice, chainId] = await Promise.all([
     nodeRpc<number>(chain, 'exchange_getNonce', [sender]),
-    nodeRpc<number | string>(chain, 'exchange_gasPrice', []).catch(() => undefined),
+    input.gasPrice !== undefined
+      ? Promise.resolve(undefined)
+      : nodeRpc<number | string>(chain, 'exchange_gasPrice', []).catch(() => undefined),
     // Exchange signatures are bound to the chain id; sign with the node's, once it matches the registry.
     resolveSigningChainId(chain),
   ])
+  const paid = nodePrice !== undefined ? BigInt(nodePrice) : undefined
+  let gasPrice =
+    input.gasPrice ??
+    (await exchangeGasPrice(chain, sender, input.op, params, paid))
   // Re-sign the same (already approved) operation with the next free nonce when
   // the node says a nonce is taken: an earlier operation is still waiting for a block.
   for (let attempt = 0; ; attempt++) {
@@ -379,18 +453,24 @@ export async function submitExchangeOp(
       chainId,
       sender,
       nonce,
-      params: input.params,
+      params,
       gasLimit: input.gasLimit,
-      gasPrice: gasPrice !== undefined ? BigInt(gasPrice) : undefined,
+      gasPrice,
     })
     const signed = await signer.signExchangeTransaction(tx, input.account.id)
     const { tx_hash: _local, ...wire } = signed
     try {
       const txHash = await nodeRpc<string>(chain, 'exchange_sendTransaction', [wire])
       exchangeNonces.record(chain.id, sender, nonce)
-      return { txHash, nonce }
+      return { txHash, nonce, gasPrice: tx.gas_price }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
+      // The free lane refused it after all (its budget or the block's ran out since we
+      // asked; it consumed nothing): pay instead, as the user approved the operation.
+      if (gasPrice === 0n && input.gasPrice === undefined && /pay gas/i.test(message) && attempt < MAX_NONCE_RETRIES) {
+        gasPrice = paid
+        continue
+      }
       if (!isNonceConflict(message) || attempt >= MAX_NONCE_RETRIES) throw err
       exchangeNonces.record(chain.id, sender, nonce)
     }

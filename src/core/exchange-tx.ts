@@ -89,6 +89,45 @@ export const ExchangeOp = {
   STAKE_UNDELEGATE: 54,
   /** A validator sets its commission on its pool's rewards. */
   STAKE_SET_COMMISSION: 55,
+  // Trading features (qrdx-node docs/TRADING_FEATURES.md). Nodes before them answer
+  // "Unknown operation type"; see tx-service `nodeFeatures`.
+  /** A stop-loss or take-profit on the mark price; `position: true` closes the whole position. */
+  PERP_TRIGGER: 56,
+  /** Every resting order, trigger and TWAP of the sender (`scope` all | spot | perps, `market`). */
+  CANCEL_ALL: 57,
+  PERP_MODIFY: 58,
+  MODIFY_ORDER: 59,
+  /** Up to 20 trading actions, all or nothing, under one nonce. */
+  BATCH: 60,
+  TWAP_ORDER: 61,
+  TWAP_CANCEL: 62,
+  /** Let an agent key sign trading operations (never withdrawals) for the account. */
+  AGENT_APPROVE: 63,
+  AGENT_REVOKE: 64,
+  SUBACCOUNT_CREATE: 65,
+  SUBACCOUNT_TRANSFER: 66,
+  /** A copy-trading vault the sender leads. */
+  VAULT_CREATE: 67,
+  REFERRAL_REGISTER: 68,
+  REFERRAL_JOIN: 69,
+  /** Controllers, the own key on or off, the change delay, guardians (docs/ACCOUNT_CONTROL.md). */
+  ACCOUNT_POLICY: 70,
+  /** QRDX Name Service (docs/QNS.md). */
+  QNS_REGISTER: 71,
+  QNS_RENEW: 72,
+  QNS_SET_RECORD: 73,
+  QNS_SET_PRIMARY: 74,
+  /** A guardian backs a new controller for a lost account. */
+  ACCOUNT_RECOVER: 75,
+  PERP_ISOLATED_MARGIN: 76,
+  /** The dead man's switch: cancel everything at block time `time` (no `time` clears it). */
+  SCHEDULE_CANCEL: 77,
+  APPROVE_BUILDER_FEE: 78,
+  DEPLOYER_BOND: 79,
+  DEPLOYER_UNBOND: 80,
+  DEPLOYER_SET_ORACLE: 81,
+  DEPLOYER_HALT: 82,
+  TICKER_CLAIM: 83,
 } as const
 
 export type ExchangeOpName = keyof typeof ExchangeOp
@@ -98,7 +137,8 @@ export type ExchangeOpCode = (typeof ExchangeOp)[ExchangeOpName]
 const REQUIRED_PARAMS: Partial<Record<ExchangeOpCode, string[]>> = {
   [ExchangeOp.ADD_LIQUIDITY]: ['pool_id', 'tick_lower', 'tick_upper', 'amount'],
   [ExchangeOp.REMOVE_LIQUIDITY]: ['pool_id', 'position_id'],
-  [ExchangeOp.SWAP]: ['token_in', 'token_out', 'amount_in'],
+  // (A multi-hop SWAP names a `path` instead of token_in / token_out: checked in buildExchangeTx.)
+  [ExchangeOp.SWAP]: ['amount_in'],
   [ExchangeOp.PLACE_ORDER]: ['pair', 'side', 'order_type', 'amount'],
   [ExchangeOp.CANCEL_ORDER]: ['order_id'],
   [ExchangeOp.TOKEN_TRANSFER]: ['token_address', 'to', 'amount'],
@@ -125,10 +165,96 @@ const REQUIRED_PARAMS: Partial<Record<ExchangeOpCode, string[]>> = {
   [ExchangeOp.PERP_CANCEL]: ['market_id', 'order_id'],
   [ExchangeOp.VAULT_DEPOSIT]: ['amount'],
   [ExchangeOp.VAULT_WITHDRAW]: ['shares'],
+  [ExchangeOp.PERP_TRIGGER]: ['market_id', 'side', 'kind', 'trigger_price'],
+  [ExchangeOp.PERP_MODIFY]: ['market_id', 'order_id'],
+  [ExchangeOp.MODIFY_ORDER]: ['pair', 'order_id'],
+  [ExchangeOp.BATCH]: ['actions'],
+  [ExchangeOp.TWAP_ORDER]: ['duration'],
+  [ExchangeOp.TWAP_CANCEL]: ['twap_id'],
+  [ExchangeOp.AGENT_APPROVE]: ['agent'],
+  [ExchangeOp.AGENT_REVOKE]: ['agent'],
+  [ExchangeOp.SUBACCOUNT_TRANSFER]: ['subaccount', 'asset', 'amount', 'direction'],
+  [ExchangeOp.VAULT_CREATE]: ['amount'],
+  [ExchangeOp.REFERRAL_REGISTER]: ['code'],
+  [ExchangeOp.REFERRAL_JOIN]: ['code'],
+  [ExchangeOp.ACCOUNT_POLICY]: ['action'],
+  [ExchangeOp.QNS_REGISTER]: ['name'],
+  [ExchangeOp.QNS_RENEW]: ['name'],
+  [ExchangeOp.QNS_SET_RECORD]: ['name', 'key'],
+  [ExchangeOp.QNS_SET_PRIMARY]: ['name'],
+  [ExchangeOp.ACCOUNT_RECOVER]: ['account'],
+  [ExchangeOp.PERP_ISOLATED_MARGIN]: ['market_id', 'amount'],
+  [ExchangeOp.APPROVE_BUILDER_FEE]: ['builder', 'max_fee_rate'],
+  [ExchangeOp.DEPLOYER_BOND]: ['amount'],
+  [ExchangeOp.DEPLOYER_SET_ORACLE]: ['market_id', 'price'],
+  [ExchangeOp.DEPLOYER_HALT]: ['market_id'],
+  [ExchangeOp.TICKER_CLAIM]: ['token_address'],
 }
 
-/** Node floor: `constants.EXCHANGE_MIN_GAS_PRICE_WEI` (1 gwei). Ask `exchange_gasPrice` for the live value. */
-export const EXCHANGE_MIN_GAS_PRICE_WEI = 1_000_000_000n
+/**
+ * What an agent key may sign, and what the free trading lane takes at gas price 0
+ * (qrdx-node `AGENT_SCOPE`, docs/TOKENOMICS.md): orders, cancels, modifies, triggers,
+ * TWAPs, swaps, leverage; a batch only of those.
+ */
+export const TRADING_OPS: ReadonlySet<ExchangeOpName> = new Set<ExchangeOpName>([
+  'PLACE_ORDER',
+  'CANCEL_ORDER',
+  'MODIFY_ORDER',
+  'SWAP',
+  'PERP_SET_LEVERAGE',
+  'PERP_ORDER',
+  'PERP_CANCEL',
+  'PERP_TRIGGER',
+  'PERP_MODIFY',
+  'CANCEL_ALL',
+  'TWAP_ORDER',
+  'TWAP_CANCEL',
+  'PERP_ISOLATED_MARGIN',
+  'SCHEDULE_CANCEL',
+  'DEPLOYER_SET_ORACLE',
+  'BATCH',
+])
+
+/** What a BATCH may hold (qrdx-node `BATCH_ACTIONS`). */
+export const BATCH_ACTIONS: ReadonlySet<ExchangeOpName> = new Set<ExchangeOpName>([
+  'PLACE_ORDER',
+  'CANCEL_ORDER',
+  'MODIFY_ORDER',
+  'SWAP',
+  'PERP_DEPOSIT',
+  'PERP_WITHDRAW',
+  'PERP_SET_LEVERAGE',
+  'PERP_ORDER',
+  'PERP_CANCEL',
+  'PERP_TRIGGER',
+  'PERP_MODIFY',
+  'CANCEL_ALL',
+  'TWAP_ORDER',
+  'TWAP_CANCEL',
+])
+export const MAX_BATCH_ACTIONS = 20
+
+/** Whether the free lane would take this operation: a trading op, or a batch only of them. */
+export function freeLaneOp(op: ExchangeOpName, params: Record<string, JsonValue>): boolean {
+  if (!TRADING_OPS.has(op)) return false
+  if (op !== 'BATCH') return true
+  const actions = params.actions
+  return (
+    Array.isArray(actions) &&
+    actions.length > 0 &&
+    actions.every((a) => {
+      const name = a && typeof a === 'object' && !Array.isArray(a) ? (a as Record<string, JsonValue>).op : undefined
+      return typeof name === 'string' && name !== 'BATCH' && TRADING_OPS.has(name as ExchangeOpName)
+    })
+  )
+}
+
+/**
+ * The lowest exchange gas price any QRDX network accepts outside the free lane:
+ * `EXCHANGE_MIN_GAS_PRICE_WEI`, 0.1 gwei since the tokenomics of 2026-10 (1 gwei before;
+ * the node refuses below its own). Ask `exchange_gasPrice` for the live value.
+ */
+export const EXCHANGE_MIN_GAS_PRICE_WEI = 100_000_000n
 export const DEFAULT_EXCHANGE_GAS_LIMIT = 1_000_000
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue }
@@ -284,16 +410,34 @@ export function buildExchangeTx(input: {
     throw new ExchangeTxError('Exchange transactions must be sent from a 0xPQ address')
   }
   const params = input.params ?? {}
-  const missing = (REQUIRED_PARAMS[op_type] ?? []).filter((k) => !(k in params))
+  const required = [...(REQUIRED_PARAMS[op_type] ?? [])]
+  if (op_type === ExchangeOp.SWAP && !('path' in params)) required.push('token_in', 'token_out')
+  if (op_type === ExchangeOp.BATCH) {
+    const actions = params.actions
+    if (!Array.isArray(actions) || actions.length === 0 || actions.length > MAX_BATCH_ACTIONS) {
+      throw new ExchangeTxError(`A batch holds 1 to ${MAX_BATCH_ACTIONS} actions`)
+    }
+    for (const a of actions) {
+      const name = a && typeof a === 'object' && !Array.isArray(a) ? (a as Record<string, JsonValue>).op : undefined
+      if (typeof name !== 'string' || !BATCH_ACTIONS.has(name as ExchangeOpName)) {
+        throw new ExchangeTxError(`A batch cannot hold ${String(name)}`)
+      }
+    }
+  }
+  const missing = required.filter((k) => !(k in params))
   if (missing.length) {
     throw new ExchangeTxError(
       `Missing parameter${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}`
     )
   }
   const gasPrice = BigInt(input.gasPrice ?? EXCHANGE_MIN_GAS_PRICE_WEI)
-  if (gasPrice < EXCHANGE_MIN_GAS_PRICE_WEI) {
+  const opName = (Object.keys(ExchangeOp) as ExchangeOpName[]).find((k) => ExchangeOp[k] === op_type)!
+  // 0 is the free trading lane, open only to trading operations.
+  if (gasPrice === 0n ? !freeLaneOp(opName, params) : gasPrice < EXCHANGE_MIN_GAS_PRICE_WEI) {
     throw new ExchangeTxError(
-      `Gas price is below the exchange floor of ${EXCHANGE_MIN_GAS_PRICE_WEI} wei`
+      gasPrice === 0n
+        ? 'Only a trading operation can go in the free lane (gas price 0)'
+        : `Gas price is below the exchange floor of ${EXCHANGE_MIN_GAS_PRICE_WEI} wei`
     )
   }
   if (!Number.isSafeInteger(input.chainId) || input.chainId <= 0) {
