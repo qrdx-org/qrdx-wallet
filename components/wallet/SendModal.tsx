@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -13,6 +13,7 @@ import {
   Shield,
   CheckCircle2,
   AlertCircle,
+  ScanLine,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -28,6 +29,11 @@ import { ConfirmSheet } from './flow/ConfirmSheet'
 import { RecipientSuggestions } from './RecipientSuggestions'
 import { isQnsName, resolveQnsName, type QnsResolution } from '@/src/core/qns'
 import { usePrimaryName } from './useQnsName'
+import { QrScanner } from './QrScanner'
+import { parsePaymentQr } from '@/src/core/payment-uri'
+
+/** Whether a scanned code is something the send form can take. */
+const isPaymentCode = (text: string) => parsePaymentQr(text) !== null
 
 interface SendModalProps {
   ethAddress: string
@@ -184,6 +190,21 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
       onClose()
     }
   }
+
+  // ── Scanning a recipient ────────────────────────────────────────────────
+  const [scanning, setScanning] = useState(false)
+  const [scanError, setScanError] = useState<string | null>(null)
+  const onScanned = useCallback(
+    (code: string) => {
+      const p = parsePaymentQr(code)
+      if (!p) return
+      setScanning(false)
+      setRecipient(p.to)
+      // A code's amount is in the network's native currency: only offered when sending it.
+      if (p.amount && !selectedToken?.contractAddress) setAmount(p.amount)
+    },
+    [selectedToken?.contractAddress]
+  )
 
   // ── QNS names (label.qrdx) ──────────────────────────────────────────────
   // Resolved on the node as typed; the address it points to is what is sent to, and shown.
@@ -558,7 +579,33 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
             <div className="flex items-center gap-2 mb-2">
               <Send className="h-3 w-3 text-muted-foreground" />
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">To</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setScanError(null)
+                  setScanning((v) => !v)
+                }}
+                aria-label={scanning ? 'Stop scanning' : 'Scan a QR code'}
+                className="ml-auto flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+              >
+                <ScanLine className="h-3.5 w-3.5" /> {scanning ? 'Cancel' : 'Scan'}
+              </button>
             </div>
+            {scanning && (
+              <div className="mb-2">
+                <QrScanner
+                  accept={isPaymentCode}
+                  onCode={onScanned}
+                  onCancel={() => setScanning(false)}
+                  onError={(m) => {
+                    setScanError(m)
+                    setScanning(false)
+                  }}
+                  hint="Point it at an address, a name.qrdx or a payment QR code"
+                />
+              </div>
+            )}
+            {scanError && <p className="mb-1.5 text-[10px] text-red-400">{scanError}</p>}
             <input
               type="text"
               placeholder={qrdx ? '0x…, 0xPQ… or name.qrdx' : '0x… recipient address'}

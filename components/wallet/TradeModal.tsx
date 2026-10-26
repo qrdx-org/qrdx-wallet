@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, BarChart3, ChevronDown, ExternalLink, Loader2, Search } from 'lucide-react'
+import { ArrowLeft, BarChart3, ChevronDown, ChevronRight, ExternalLink, Layers, Loader2, Search } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { isQrdxChain } from '@/src/core/chains'
 import { tradeApiBase, tradeSiteUrl, verifyTradeApi, type TradeApiStatus } from '@/src/core/trade/api'
@@ -20,6 +20,7 @@ import type { AccountResponse, MarketsResponse, OrderBook, PerpMarket, SpotMarke
 import { AccountTabs } from './trade/AccountTabs'
 import { MiniBook, MiniChart, TradesList } from './trade/MarketData'
 import { PerpForm } from './trade/PerpForm'
+import { AccountsView } from './trade/AccountsView'
 import { SpotForm } from './trade/SpotForm'
 import { Empty, PairBadge, Tabs, TokenBadge, usePriceFlash, useTradeApi } from './trade/kit'
 import { useTradeSubmit } from './trade/submit'
@@ -29,7 +30,7 @@ interface TradeModalProps {
   onClose: () => void
 }
 
-type View = { kind: 'list' } | { kind: 'spot' | 'perp'; base: string; quote: string }
+type View = { kind: 'list' } | { kind: 'accounts' } | { kind: 'spot' | 'perp'; base: string; quote: string }
 
 const LAST_KEY = (chain: string) => `qrdx_trade_last:${chain}`
 
@@ -68,7 +69,7 @@ function TradeScreen({ onClose }: TradeModalProps) {
   const open = (v: View) => {
     setView(v)
     try {
-      if (v.kind !== 'list') localStorage.setItem(LAST_KEY(activeChain.id), JSON.stringify(v))
+      if (v.kind === 'spot' || v.kind === 'perp') localStorage.setItem(LAST_KEY(activeChain.id), JSON.stringify(v))
     } catch {
       /* this visit only */
     }
@@ -84,10 +85,10 @@ function TradeScreen({ onClose }: TradeModalProps) {
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="text-[15px] font-semibold leading-tight">{view.kind === 'list' ? 'Trade' : view.kind === 'perp' ? 'Perpetuals' : 'Spot'}</h1>
+            <h1 className="text-[15px] font-semibold leading-tight">{view.kind === 'list' ? 'Trade' : view.kind === 'accounts' ? 'Accounts' : view.kind === 'perp' ? 'Perpetuals' : 'Spot'}</h1>
             <p className="truncate text-[10px] text-muted-foreground">{activeChain.name} · QRDX exchange</p>
           </div>
-          {status?.ok && view.kind !== 'list' && (
+          {status?.ok && (view.kind === 'spot' || view.kind === 'perp') && (
             <a
               href={tradeSiteUrl(activeChain, `/${view.kind === 'perp' ? 'perps' : 'trade'}/${view.base}/${view.quote}`)}
               target="_blank"
@@ -110,7 +111,23 @@ function TradeScreen({ onClose }: TradeModalProps) {
         ) : !status.ok || !api ? (
           <Centered title="Trading service unavailable" text={status.message ?? 'Try again later.'} />
         ) : !currentWallet ? null : view.kind === 'list' ? (
-          <MarketList api={api} onOpen={open} />
+          <>
+            <button
+              type="button"
+              onClick={() => open({ kind: 'accounts' })}
+              className="mb-3 flex w-full items-center gap-2.5 rounded-2xl border border-border/70 px-3 py-2.5 text-left hover:bg-accent/40"
+            >
+              <Layers className="h-4 w-4 text-muted-foreground" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs font-semibold">Accounts</span>
+                <span className="block text-[10px] text-muted-foreground">Perps collateral and sub-accounts</span>
+              </span>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </button>
+            <MarketList api={api} onOpen={open} />
+          </>
+        ) : view.kind === 'accounts' ? (
+          <AccountsView api={api} trader={currentWallet.pqAddress} />
         ) : (
           <MarketView key={`${view.kind}:${view.base}/${view.quote}`} api={api} view={view} trader={currentWallet.pqAddress} onSwitch={() => setView({ kind: 'list' })} />
         )}

@@ -34,6 +34,8 @@ export interface TradeRequest {
   onDone?: () => void
   /** Operations signed first, in the same block window (e.g. a collateral deposit for the order). */
   before?: { op: ExchangeOpName; params: Record<string, JsonValue>; label: string }[]
+  /** Act for this sub-account (or vault) of the account: the operations' sender (docs/TRADING_FEATURES.md §8). */
+  actAs?: string
 }
 
 export interface Submission {
@@ -77,11 +79,11 @@ export function useTradeSubmit() {
     try {
       // Earlier operations take the earlier nonces, so they execute first in the block.
       for (const b of req.before ?? []) {
-        const { txHash } = await submitExchangeOp(b.op, b.params)
+        const { txHash } = await submitExchangeOp(b.op, b.params, { actAs: req.actAs })
         track(txHash, b.label)
         void follow(txHash)
       }
-      const { txHash } = await submitExchangeOp(req.op, req.params)
+      const { txHash } = await submitExchangeOp(req.op, req.params, { actAs: req.actAs })
       track(txHash, req.label)
       setReview(null)
       void follow(txHash, req.onDone)
@@ -129,6 +131,11 @@ function ReviewSheet({
       <div className="rounded-xl border bg-background p-3">
         {first.length > 0 && <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Then</p>}
         <p className="text-sm font-semibold leading-snug">{summary.headline}</p>
+        {request.actAs && (
+          <div className="mt-2 border-t border-border/60 pt-2">
+            <Line k="Acting for" v={`${request.actAs.slice(0, 10)}…${request.actAs.slice(-6)} (${/^0xUVLT/i.test(request.actAs) ? 'a vault you lead' : 'your sub-account'})`} />
+          </div>
+        )}
         {summary.details.length > 0 && (
           <div className="mt-2 space-y-1 border-t border-border/60 pt-2">
             {summary.details.map((d) => (

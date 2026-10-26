@@ -302,13 +302,16 @@ function LeverageSheet({
   )
 }
 
-function CollateralSheet({
+/** Deposit or withdraw perps collateral: the account's own, or (`actAs`) a sub-account's from its own balance. */
+export function CollateralSheet({
   open,
   onClose,
   account,
   unit,
   ask,
   onDone,
+  actAs,
+  title = 'Perps collateral',
 }: {
   open: boolean
   onClose: () => void
@@ -316,6 +319,8 @@ function CollateralSheet({
   unit: string
   ask: (r: TradeRequest) => void
   onDone: () => void
+  actAs?: string
+  title?: string
 }) {
   const perp = account?.perp
   const [dir, setDir] = useState<'deposit' | 'withdraw'>('deposit')
@@ -323,7 +328,7 @@ function CollateralSheet({
   const valid = isAmount(amount) && dec(amount) > 0n
   const over = valid && dir === 'withdraw' && perp && dec(amount) > dec(perp.withdrawable)
   return (
-    <Sheet open={open} onClose={onClose} title="Perps collateral">
+    <Sheet open={open} onClose={onClose} title={title}>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
           {[
@@ -373,7 +378,8 @@ function CollateralSheet({
             ask({
               op: dir === 'deposit' ? 'PERP_DEPOSIT' : 'PERP_WITHDRAW',
               params: { amount },
-              label: `${dir === 'deposit' ? 'Deposit' : 'Withdraw'} ${amount} ${unit} perps collateral`,
+              label: `${dir === 'deposit' ? 'Deposit' : 'Withdraw'} ${amount} ${unit} perps collateral${actAs ? ' (sub-account)' : ''}`,
+              actAs,
               onDone: () => {
                 setAmount('')
                 onDone()

@@ -80,6 +80,8 @@
 /* Smooth scrolling */
 html {
   scroll-behavior: smooth;
+  /* No double-tap zoom (taps also fire without the 300 ms wait). */
+  touch-action: manipulation;
 }
 
 /* Custom scrollbar */

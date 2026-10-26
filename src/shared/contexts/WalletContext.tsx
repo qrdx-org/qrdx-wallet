@@ -197,7 +197,9 @@ export interface WalletContextType {
   signMessagePQ: (message: string) => Promise<string>
   submitExchangeOp: (
     op: ExchangeOpName,
-    params?: Record<string, JsonValue>
+    params?: Record<string, JsonValue>,
+    /** Act for a sub-account (or vault) of this account: it is the sender, this key the signer. */
+    opts?: { actAs?: string }
   ) => Promise<{ txHash: string }>
 
   // ── Prices / history ───────────────────────────────────────────────────
@@ -669,9 +671,9 @@ export function WalletProvider({
   const signMessagePQ = async (message: string) =>
     (await backend.signPqMessage(message, currentWallet?.id)).signature
 
-  const submitExchangeOp = async (op: ExchangeOpName, params?: Record<string, JsonValue>) => {
+  const submitExchangeOp = async (op: ExchangeOpName, params?: Record<string, JsonValue>, opts?: { actAs?: string }) => {
     const account = requireAccount()
-    const result = await submitExchangeOpCore(backend, { chain: activeChain, account, op, params })
+    const result = await submitExchangeOpCore(backend, { chain: activeChain, account, op, params, actAs: opts?.actAs })
     await activity
       .add({
         hash: result.txHash,

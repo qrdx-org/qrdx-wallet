@@ -18,6 +18,23 @@ let updateRequested = false
 export function PWAProvider({ children }: { children: React.ReactNode }) {
   const [waiting, setWaiting] = useState<ServiceWorker | null>(null)
 
+  // iOS Safari ignores user-scalable=no; its pinch gestures arrive as `gesture*` events (and
+  // multi-touch moves), which are cancelled here so the app never zooms.
+  useEffect(() => {
+    if (typeof window === 'undefined' || isExtensionContext()) return
+    const stop = (e: Event) => e.preventDefault()
+    const pinch = (e: TouchEvent) => {
+      if (e.touches.length > 1) e.preventDefault()
+    }
+    const events = ['gesturestart', 'gesturechange', 'gestureend'] as const
+    for (const ev of events) document.addEventListener(ev, stop, { passive: false })
+    document.addEventListener('touchmove', pinch, { passive: false })
+    return () => {
+      for (const ev of events) document.removeEventListener(ev, stop)
+      document.removeEventListener('touchmove', pinch)
+    }
+  }, [])
+
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator) || isExtensionContext())
       return
