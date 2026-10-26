@@ -61,7 +61,8 @@ Events: `connect`, `disconnect`, `accountsChanged`, `chainChanged`.
 |---|---|
 | `eth_sendTransaction(tx)` | From the account's classic `0x` key. On QRDX, EIP-1559 fields are folded into a legacy `gasPrice`, because the node accepts only legacy envelopes. Contract deployment from dApps is not supported. |
 | `qrdx_sendPQTransaction({ to, value, data?, gas? })` | From the account's **post-quantum** credential, as a type-`0x51` transaction. `to` may be any address form (`0x`, `0xPQ`, `0xPQMS`); the wallet resolves it to the 20-byte account ID. Gas is at least the PQ floor (≈145k for a transfer). QRDX networks only. |
-| `qrdx_sendExchangeTransaction({ op, params, gasLimit? })` | A native exchange operation (`SWAP`, `PLACE_ORDER`, `PERP_ORDER`, `TOKEN_TRANSFER`, `STAKE_DEPOSIT`, …; see `ExchangeOp` in `src/core/exchange-tx.ts`), signed with the account's PQ key and its exchange nonce. Returns `{ txHash, nonce }`; poll `exchange_getTransactionReceipt`. Several operations may be sent before a block includes the first (see below). |
+| `qrdx_sendExchangeTransaction({ op, params, gasLimit?, sender? })` | A native exchange operation (`SWAP`, `PLACE_ORDER`, `PERP_ORDER`, `TOKEN_TRANSFER`, `STAKE_DEPOSIT`, …; see `ExchangeOp` in `src/core/exchange-tx.ts`), signed with the account's PQ key and its exchange nonce. Returns `{ txHash, nonce }`; poll `exchange_getTransactionReceipt`. Several operations may be sent before a block includes the first (see below). With `sender` (a sub-account, a vault the account leads, an account it controls) the operation acts for that account: the wallet signs as its `signer`, takes the nonce of their `sender\|signer` lane, and the approval says whom it acts for; the node refuses it without that authority. |
+| `qrdx_sendExchangeBatch({ ops: [{ op, params, gasLimit? }], label?, sender? })` | Up to 20 operations with one approval. On a node with `BATCH` (qrdx-node's 2026-10 release) and ops it can batch, they go as **one** transaction, all or nothing; otherwise each is its own, in order. Returns `{ txHashes, nonces }` (one hash when batched). |
 | `wallet_watchAsset({ type: 'ERC20', options: { address, symbol, decimals } })` | Adds a token after the user approves. |
 
 Every transaction and signature opens an approval window that shows the site's
@@ -75,6 +76,11 @@ names from the node and shows its address next to its symbol; a token the node
 does not know, a swap with no `min_amount_out`, and a `TOKEN_APPROVE` are
 warnings. For `ADD_LIQUIDITY` it shows the deposit the pool will take. The raw
 parameters stay visible below the summary.
+
+On a node with the free trading lane (qrdx-node docs/TOKENOMICS.md), a trading operation (an order,
+cancel, modify, trigger, TWAP, swap, leverage change, or a batch only of those) is signed at gas price 0
+while the account has free actions (`exchange_getFreeActions`); the approval shows **Network fee: Free**
+or why it pays. One the lane refuses after all is re-signed at the paid price.
 
 ### Exchange nonces and block time
 

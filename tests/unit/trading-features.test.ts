@@ -85,3 +85,27 @@ describe('trading operations (qrdx-node docs/TRADING_FEATURES.md)', () => {
     )
   })
 })
+
+describe('acting for another account', () => {
+  it('appends the signer to the signed bytes, as the node does', async () => {
+    const { exchangeTxHash } = await import('../../src/core/exchange-tx')
+    const tx = buildExchangeTx({
+      op: 'PERP_CANCEL',
+      chainId: 7620,
+      sender: '0xSUBA' + '12'.repeat(20),
+      signer: '0xPQ' + 'ab'.repeat(32),
+      nonce: 2,
+      gasPrice: 0n,
+      gasLimit: 100000,
+      params: { market_id: 'BTC-USD-PERP', order_id: 'ab' },
+    })
+    // qrdx-node 321da74: ExchangeTransaction(..., signer=...).tx_hash()
+    expect(exchangeTxHash(tx)).toBe('e75436990e055090aebad98a032a59e3aa71510f1ac5f059f9dca8269d274578')
+  })
+
+  it('drops a signer equal to the sender, and wants a 0xPQ signer', () => {
+    const own = '0xPQ' + 'ab'.repeat(32)
+    expect(buildExchangeTx({ op: 'PERP_CANCEL', chainId: 7620, sender: own, signer: own, nonce: 0, params: { market_id: 'M', order_id: 'x' } }).signer).toBeUndefined()
+    expect(() => buildExchangeTx({ op: 'PERP_CANCEL', chainId: 7620, sender: '0xSUBA' + '12'.repeat(20), signer: '0x' + '11'.repeat(20), nonce: 0, params: { market_id: 'M', order_id: 'x' } })).toThrow(/signer/)
+  })
+})

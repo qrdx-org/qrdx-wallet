@@ -257,6 +257,22 @@ const ACCOUNT_METHODS = new Set([
   'qrdx_chainInfo',
 ])
 
+/**
+ * `sender` in an exchange request: act for another account this key may sign for (a
+ * sub-account, a vault it leads, an account it controls). The node refuses it unless the key
+ * has that authority; the approval names the account.
+ */
+function actingFor(sender: unknown, own: string): string | undefined {
+  if (sender === undefined || sender === null || sender === '') return undefined
+  if (typeof sender !== 'string' || !/^0x[0-9a-zA-Z]{8,80}$/.test(sender)) throw Errors.invalidParams('`sender` must be an address')
+  return sender.toLowerCase() === own.toLowerCase() ? undefined : sender
+}
+
+function noteActingFor(summary: ExchangeSummary, account: string): void {
+  const kind = /^0xSUBA/i.test(account) ? 'your sub-account' : /^0xUVLT/i.test(account) ? 'a vault you lead' : 'another account'
+  summary.details.unshift({ label: 'Acting for', value: `${account} (${kind})` })
+}
+
 /** The most exchange operations one qrdx_sendExchangeBatch approval may carry. */
 const MAX_BATCH = 20
 
@@ -687,7 +703,7 @@ export class ProviderRouter {
     params: unknown[]
   ): Promise<{ txHash: string; nonce: number }> {
     const req = params[0] as
-      | { op?: string; params?: Record<string, JsonValue>; gasLimit?: number; from?: string }
+      | { op?: string; params?: Record<string, JsonValue>; gasLimit?: number; from?: string; sender?: string }
       | undefined
     if (!req?.op || !(req.op in ExchangeOp))
       throw Errors.invalidParams(`Unknown exchange operation ${String(req?.op)}`)
@@ -695,8 +711,10 @@ export class ProviderRouter {
     const chain = await this.activeChain()
     const op = req.op as ExchangeOpName
     const opParams = req.params ?? {}
+    const actAs = actingFor(req.sender, account.pqAddress)
     const summary = await this.describeExchange(chain, op, opParams)
-    await this.noteFreeLane(chain, account.pqAddress, op, opParams, summary)
+    if (actAs) noteActingFor(summary, actAs)
+    await this.noteFreeLane(chain, actAs ?? account.pqAddress, op, opParams, summary)
     await this.approve(
       { kind: 'exchange', origin, account: account.id, chain: chain.id, op, params: opParams, summary },
       'postQuantum'
@@ -707,7 +725,7 @@ export class ProviderRouter {
         signPqTransaction: () => Promise.reject(),
         signExchangeTransaction: (tx, id) => this.d.manager.signExchangeTransaction(tx, id),
       },
-      { chain, account, op, params: opParams, gasLimit: req.gasLimit }
+      { chain, account, op, params: opParams, gasLimit: req.gasLimit, actAs }
     )
     await this.d
       .onSubmitted?.({
@@ -740,7 +758,7 @@ export class ProviderRouter {
     params: unknown[]
   ): Promise<{ txHashes: string[]; nonces: number[] }> {
     const req = params[0] as
-      | { ops?: { op?: string; params?: Record<string, JsonValue>; gasLimit?: number }[]; from?: string; label?: string }
+      | { ops?: { op?: string; params?: Record<string, JsonValue>; gasLimit?: number }[]; from?: string; label?: string; sender?: string }
       | undefined
     const ops = req?.ops
     if (!Array.isArray(ops) || ops.length === 0) throw Errors.invalidParams('qrdx_sendExchangeBatch expects { ops: [...] }')
@@ -748,11 +766,14 @@ export class ProviderRouter {
     for (const o of ops) if (!o?.op || !(o.op in ExchangeOp)) throw Errors.invalidParams(`Unknown exchange operation ${String(o?.op)}`)
     const account = await this.accountFor(origin, req?.from)
     const chain = await this.activeChain()
+    const actAs = actingFor(req?.sender, account.pqAddress)
     const steps = await Promise.all(
       ops.map(async (o) => {
         const op = o.op as ExchangeOpName
         const opParams = o.params ?? {}
-        return { op, params: opParams, gasLimit: o.gasLimit, summary: await this.describeExchange(chain, op, opParams) }
+        const summary = await this.describeExchange(chain, op, opParams)
+        if (actAs) noteActingFor(summary, actAs)
+        return { op, params: opParams, gasLimit: o.gasLimit, summary }
       })
     )
     const atomic =
@@ -772,7 +793,7 @@ export class ProviderRouter {
         free:
           atomic &&
           freeLaneOp('BATCH', { actions: steps.map((st) => ({ op: st.op, params: st.params })) }) &&
-          !!(await freeActions(chain, account.pqAddress))?.free_now,
+          !!(await freeActions(chain, actAs ?? account.pqAddress))?.free_now,
       },
       'postQuantum'
     )
@@ -785,7 +806,7 @@ export class ProviderRouter {
       const batch = { actions: steps.map((st) => ({ op: st.op, params: st.params })) }
       // 10,000 for the batch plus each action's own limit (the node's DEFAULT for those without).
       const gasLimit = Math.min(10_000 + steps.reduce((n, st) => n + (st.gasLimit ?? 1_000_000), 0), 20_000_000)
-      const r = await submitExchangeOp(signer, { chain, account, op: 'BATCH', params: batch, gasLimit })
+      const r = await submitExchangeOp(signer, { chain, account, op: 'BATCH', params: batch, gasLimit, actAs })
       await this.d
         .onSubmitted?.({
           hash: r.txHash,
@@ -807,7 +828,7 @@ export class ProviderRouter {
     for (let i = 0; i < steps.length; i++) {
       const { op, params: opParams, gasLimit } = steps[i]
       try {
-        const r = await submitExchangeOp(signer, { chain, account, op, params: opParams, gasLimit })
+        const r = await submitExchangeOp(signer, { chain, account, op, params: opParams, gasLimit, actAs })
         txHashes.push(r.txHash)
         nonces.push(r.nonce)
         await this.d

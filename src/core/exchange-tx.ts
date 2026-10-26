@@ -18,6 +18,8 @@
  *    params    json.dumps(params, sort_keys=True, default=str), UTF-8
  *    gas_limit 8 bytes, big-endian
  *    gas_price decimal string of wei, UTF-8
+ *    [signer]  "\0signer:" + the signer's address, UTF-8 — only when a key signs for another
+ *              account (an agent, a controller, a sub-account's master, a vault's leader)
  *
  *  The signature covers those bytes directly (not a digest). The transaction
  *  hash is BLAKE2b-256 of the same bytes, hex without `0x`. The chain id binds
@@ -263,8 +265,13 @@ export interface UnsignedExchangeTx {
   op_type: ExchangeOpCode
   /** The network's chain id; part of the signed bytes. */
   chain_id: number
-  /** The signer's `0xPQ` address. */
+  /** The account it acts for: the signer's own `0xPQ` address, or one it may sign for. */
   sender: string
+  /**
+   * The key that signs when it is not `sender` (docs/TRADING_FEATURES.md §8): a sub-account's
+   * master, a vault's leader, an agent, a controller. The node checks its authority.
+   */
+  signer?: string
   nonce: number
   params: Record<string, JsonValue>
   gas_limit: number
@@ -383,6 +390,8 @@ export function exchangeSigningBytes(tx: UnsignedExchangeTx): Uint8Array {
     utf8.encode(pythonJson(tx.params)),
     u64be(tx.gas_limit),
     utf8.encode(BigInt(tx.gas_price).toString()),
+    // Only with a signer: every other transaction keeps its bytes and hash.
+    ...(tx.signer ? [utf8.encode('\0signer:' + tx.signer)] : []),
   ])
 }
 
@@ -397,6 +406,8 @@ export function buildExchangeTx(input: {
   /** The chain id the node reports (resolveSigningChainId): signatures are bound to it. */
   chainId: number
   sender: string
+  /** The signing key's 0xPQ address, when it acts for `sender` (omitted when they are equal). */
+  signer?: string
   nonce: number
   params?: Record<string, JsonValue>
   gasLimit?: number
@@ -406,7 +417,12 @@ export function buildExchangeTx(input: {
   if (!Object.values(ExchangeOp).includes(op_type)) {
     throw new ExchangeTxError(`Unknown exchange operation ${input.op}`)
   }
-  if (!/^0xPQ[0-9a-fA-F]{64}$/.test(input.sender)) {
+  const signer = input.signer && input.signer.toLowerCase() !== input.sender.toLowerCase() ? input.signer : undefined
+  if (signer) {
+    if (!/^0xPQ[0-9a-fA-F]{64}$/.test(signer)) throw new ExchangeTxError('The signer must be a 0xPQ address')
+    // A sub-account (0xSUBA…), a vault (0xUVLT…) or another account it may sign for.
+    if (!/^0x[0-9a-zA-Z]{8,80}$/.test(input.sender)) throw new ExchangeTxError('Invalid account to act for')
+  } else if (!/^0xPQ[0-9a-fA-F]{64}$/.test(input.sender)) {
     throw new ExchangeTxError('Exchange transactions must be sent from a 0xPQ address')
   }
   const params = input.params ?? {}
@@ -447,6 +463,7 @@ export function buildExchangeTx(input: {
     op_type,
     chain_id: input.chainId,
     sender: input.sender,
+    ...(signer ? { signer } : {}),
     nonce: input.nonce,
     params,
     gas_limit: input.gasLimit ?? DEFAULT_EXCHANGE_GAS_LIMIT,
@@ -463,7 +480,7 @@ export async function signExchangeTx(
   pqSeedHex: string
 ): Promise<SignedExchangeTx & { tx_hash: string }> {
   const pair = await pqKeyPairFromSeed(hexToBytes(pqSeedHex.replace(/^0x/, '')))
-  if (pair.address.toLowerCase() !== tx.sender.toLowerCase()) {
+  if (pair.address.toLowerCase() !== (tx.signer ?? tx.sender).toLowerCase()) {
     throw new ExchangeTxError('This key does not control the sender address')
   }
   const signature = await pqSign(exchangeSigningBytes(tx), pqSeedHex)

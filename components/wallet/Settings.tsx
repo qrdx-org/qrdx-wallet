@@ -28,7 +28,9 @@ import {
   BookUser,
   UserPlus,
   Star,
-  Users } from 'lucide-react'
+  Users,
+  AtSign,
+  UserCog } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useTheme } from 'next-themes'
@@ -142,10 +144,14 @@ type SettingsPage =
   | 'address-book'
   | 'about'
   | 'developer'
+  | 'names'
+  | 'account-control'
 
 // ─── Component ──────────────────────────────────────────────────────────────
 import { useConfirm } from './flow/ConfirmSheet'
 import { NotificationsPage } from './settings/NotificationsPage'
+import { NamesPage } from './settings/NamesPage'
+import { AccountControlPage } from './settings/AccountControlPage'
 
 export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
   const [page, setPage] = useState<SettingsPage>(initialPage)
@@ -408,6 +414,13 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
                   onClick={() => setPage('address-book')}
                   gradient="from-primary to-primary/70"
                 />
+                <MenuItem
+                  icon={AtSign}
+                  label="Names"
+                  description="Your name.qrdx: register, renew, show it"
+                  onClick={() => setPage('names')}
+                  gradient="from-primary to-primary/70"
+                />
               </CardContent>
             </Card>
           </div>
@@ -426,6 +439,13 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
                   label="Security"
                   description="Auto-lock, biometrics & backup"
                   onClick={() => setPage('security')}
+                  gradient="from-primary to-primary/70"
+                />
+                <MenuItem
+                  icon={UserCog}
+                  label="Account control"
+                  description="Controllers, key off, delay, recovery, agents"
+                  onClick={() => setPage('account-control')}
                   gradient="from-primary to-primary/70"
                 />
                 <MenuItem
@@ -654,6 +674,8 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
 
   // ── Security ──────────────────────────────────────────────────────────────
   if (page === 'security') return <SecurityPage onBack={goBack} />
+  if (page === 'names') return <NamesPage onBack={goBack} />
+  if (page === 'account-control') return <AccountControlPage onBack={goBack} />
 
   // ── Notifications ─────────────────────────────────────────────────────────
   if (page === 'notifications') {

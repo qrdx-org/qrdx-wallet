@@ -426,14 +426,24 @@ export async function submitExchangeOp(
     gasLimit?: number
     /** Wei per gas; default: the free lane when it takes this operation, else exchange_gasPrice. */
     gasPrice?: bigint
+    /**
+     * Act for this account (a sub-account, a vault it leads, an account it controls): it is the
+     * transaction's sender, this account's key its `signer`, and the nonce comes from their lane.
+     */
+    actAs?: string
   }
 ): Promise<{ txHash: string; nonce: number; /** Wei per gas it was signed at ("0": the free lane). */ gasPrice: string }> {
   const chain = chainOf(input.chain)
   if (!isQrdxChain(chain)) throw new TxError('Exchange operations exist only on QRDX networks')
-  const sender = input.account.pqAddress
+  const own = input.account.pqAddress
+  const actAs = input.actAs && input.actAs.toLowerCase() !== own.toLowerCase() ? input.actAs : undefined
+  const sender = actAs ?? own
+  const signerAddress = actAs ? own : undefined
+  // A signer's transactions take their nonces from the `sender|signer` lane.
+  const lane = signerAddress ? `${sender}|${signerAddress}` : sender
   const params = input.params ?? {}
   const [committed, nodePrice, chainId] = await Promise.all([
-    nodeRpc<number>(chain, 'exchange_getNonce', [sender]),
+    nodeRpc<number>(chain, 'exchange_getNonce', signerAddress ? [sender, signerAddress] : [sender]),
     input.gasPrice !== undefined
       ? Promise.resolve(undefined)
       : nodeRpc<number | string>(chain, 'exchange_gasPrice', []).catch(() => undefined),
@@ -447,11 +457,12 @@ export async function submitExchangeOp(
   // Re-sign the same (already approved) operation with the next free nonce when
   // the node says a nonce is taken: an earlier operation is still waiting for a block.
   for (let attempt = 0; ; attempt++) {
-    const nonce = exchangeNonces.next(chain.id, sender, Number(committed))
+    const nonce = exchangeNonces.next(chain.id, lane, Number(committed))
     const tx = buildExchangeTx({
       op: input.op,
       chainId,
       sender,
+      signer: signerAddress,
       nonce,
       params,
       gasLimit: input.gasLimit,
@@ -461,7 +472,7 @@ export async function submitExchangeOp(
     const { tx_hash: _local, ...wire } = signed
     try {
       const txHash = await nodeRpc<string>(chain, 'exchange_sendTransaction', [wire])
-      exchangeNonces.record(chain.id, sender, nonce)
+      exchangeNonces.record(chain.id, lane, nonce)
       return { txHash, nonce, gasPrice: tx.gas_price }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -472,7 +483,7 @@ export async function submitExchangeOp(
         continue
       }
       if (!isNonceConflict(message) || attempt >= MAX_NONCE_RETRIES) throw err
-      exchangeNonces.record(chain.id, sender, nonce)
+      exchangeNonces.record(chain.id, lane, nonce)
     }
   }
 }

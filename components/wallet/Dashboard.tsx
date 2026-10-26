@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Lock, Settings as SettingsIcon, Copy, Check, Eye, EyeOff, Shield, ChevronDown, ScanLine } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,7 @@ import { StakeModal } from './StakeModal'
 import { cn, formatAddress } from '@/lib/utils'
 import { mergeCredentialBalances } from '@/src/core/balances'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
+import { reverseQns } from '@/src/core/qns'
 import { formatFiat as formatUsd } from '@/src/core/fiat'
 import { AccountAvatar, AccountSwitcher } from './AccountSwitcher'
 import { NftGallery } from './NftGallery'
@@ -82,6 +83,18 @@ export function Dashboard() {
   const ethAddress = currentWallet?.ethAddress ?? currentWallet?.address ?? ''
   const pqAddress = currentWallet?.pqAddress ?? ''
   const activeAddress = addressMode === 'eth' ? ethAddress : pqAddress
+  // Its primary QRDX name, where the network has names (shown beside the account's own label).
+  const [primaryName, setPrimaryName] = useState<{ key: string; name: string | null } | null>(null)
+  const nameKey = `${activeChain.id}:${pqAddress}`
+  useEffect(() => {
+    if (!pqAddress) return
+    let live = true
+    reverseQns(activeChain, pqAddress).then((name) => live && setPrimaryName({ key: nameKey, name }))
+    return () => {
+      live = false
+    }
+  }, [activeChain, pqAddress, nameKey])
+  const qnsName = primaryName?.key === nameKey ? primaryName.name : null
 
   // The wallet issues the EVM and post-quantum addresses as a pair, so the
   // headline figure is the combined native holding across both. The per-identity
@@ -209,6 +222,7 @@ export function Dashboard() {
               <div>
                 <button type="button" onClick={() => setShowAccounts(true)} className="font-semibold text-sm flex items-center gap-1 hover:opacity-80" aria-label={`${accountName}: switch account`}>
                   {accountName}
+                  {qnsName && <span className="font-normal text-muted-foreground">· {qnsName}</span>}
                   <ChevronDown className="h-3 w-3 text-muted-foreground" />
                 </button>
                 {/* Address type switcher */}
