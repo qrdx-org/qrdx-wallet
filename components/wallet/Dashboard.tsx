@@ -24,7 +24,8 @@ import { StakeModal } from './StakeModal'
 import { cn, formatAddress } from '@/lib/utils'
 import { mergeCredentialBalances } from '@/src/core/balances'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
-import { reverseQns } from '@/src/core/qns'
+import { qnsGetName, qnsNamesOf, reverseQns } from '@/src/core/qns'
+import { sameAccount } from '@/src/core/account-id'
 import { formatFiat as formatUsd } from '@/src/core/fiat'
 import { AccountAvatar, AccountSwitcher } from './AccountSwitcher'
 import { NftGallery } from './NftGallery'
@@ -83,18 +84,29 @@ export function Dashboard() {
   const ethAddress = currentWallet?.ethAddress ?? currentWallet?.address ?? ''
   const pqAddress = currentWallet?.pqAddress ?? ''
   const activeAddress = addressMode === 'eth' ? ethAddress : pqAddress
-  // Its primary QRDX name, where the network has names (shown beside the account's own label).
-  const [primaryName, setPrimaryName] = useState<{ key: string; name: string | null } | null>(null)
+  // Its QRDX name, where the network has names (shown beside the account's own label): its
+  // primary name, or else a name it holds that points to it, which others do not see yet.
+  const [primaryName, setPrimaryName] = useState<{ key: string; name: string | null; primary: boolean } | null>(null)
   const nameKey = `${activeChain.id}:${pqAddress}`
   useEffect(() => {
     if (!pqAddress) return
     let live = true
-    reverseQns(activeChain, pqAddress).then((name) => live && setPrimaryName({ key: nameKey, name }))
+    ;(async () => {
+      const primary = await reverseQns(activeChain, pqAddress)
+      if (primary) return live && setPrimaryName({ key: nameKey, name: primary, primary: true })
+      const held = (await qnsNamesOf(activeChain, pqAddress).catch(() => null)) ?? []
+      for (const n of held) {
+        const info = await qnsGetName(activeChain, n).catch(() => null)
+        if (info && !info.expired && info.address && sameAccount(info.address, pqAddress)) return live && setPrimaryName({ key: nameKey, name: n, primary: false })
+      }
+      if (live) setPrimaryName({ key: nameKey, name: null, primary: false })
+    })()
     return () => {
       live = false
     }
   }, [activeChain, pqAddress, nameKey])
   const qnsName = primaryName?.key === nameKey ? primaryName.name : null
+  const qnsIsPrimary = primaryName?.key === nameKey && primaryName.primary
 
   // The wallet issues the EVM and post-quantum addresses as a pair, so the
   // headline figure is the combined native holding across both. The per-identity
@@ -222,7 +234,15 @@ export function Dashboard() {
               <div>
                 <button type="button" onClick={() => setShowAccounts(true)} className="font-semibold text-sm flex items-center gap-1 hover:opacity-80" aria-label={`${accountName}: switch account`}>
                   {accountName}
-                  {qnsName && <span className="font-normal text-muted-foreground">· {qnsName}</span>}
+                  {qnsName && (
+                    <span
+                      className="font-normal text-muted-foreground"
+                      title={qnsIsPrimary ? 'Your primary QRDX name' : 'A name you hold. Make it your primary name (Settings → Names) so others see it for this account.'}
+                    >
+                      · {qnsName}
+                      {!qnsIsPrimary && <span className="text-[10px]"> (not primary)</span>}
+                    </span>
+                  )}
                   <ChevronDown className="h-3 w-3 text-muted-foreground" />
                 </button>
                 {/* Address type switcher */}

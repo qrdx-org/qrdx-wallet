@@ -1,7 +1,7 @@
 'use client'
 
 import { QrdxMark } from '@/components/QrdxMark'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ArrowLeft,
   ChevronRight,
@@ -39,7 +39,8 @@ import { CHAIN_LIST } from '@/src/core/chains'
 import { CAPABILITY_LABELS } from '@/src/core/permissions'
 import type { AddressBookEntry } from '@/src/core/address-book'
 import { validateAddress } from '@/src/core/address'
-import { getChain } from '@/src/core/chains'
+import { getChain, isQrdxChain } from '@/src/core/chains'
+import { isQnsName, resolveQnsName } from '@/src/core/qns'
 import { AccountsPage } from './settings/AccountsPage'
 import { SecurityPage } from './settings/SecurityPage'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -206,6 +207,24 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
   const [contactChainId, setContactChainId] = useState<string>('')
   const [contactError, setContactError] = useState<string | null>(null)
   const [contactSaving, setContactSaving] = useState(false)
+  // A contact may be added by its QRDX name: resolved as typed, saved with the address it
+  // points to now (and the name, shown beside it).
+  const typedContactName = isQrdxChain(activeChain) && isQnsName(contactAddress) ? contactAddress.trim().toLowerCase() : null
+  const [contactQns, setContactQns] = useState<{ name: string; address: string | null; error?: string } | null>(null)
+  useEffect(() => {
+    if (!typedContactName) return
+    let live = true
+    const t = setTimeout(() => {
+      resolveQnsName(activeChain, typedContactName)
+        .then((r) => live && setContactQns({ name: typedContactName, address: r.state === 'resolved' ? r.address : null, error: r.state === 'unsupported' ? 'This network has no QRDX names yet' : r.state === 'unregistered' ? `${typedContactName} is not registered, or points nowhere` : undefined }))
+        .catch(() => live && setContactQns({ name: typedContactName, address: null, error: `Could not look up ${typedContactName}` }))
+    }, 300)
+    return () => {
+      live = false
+      clearTimeout(t)
+    }
+  }, [typedContactName, activeChain])
+  const contactByName = typedContactName && contactQns?.name === typedContactName ? contactQns : null
 
   // Developer settings
   const [developerMode, setDeveloperMode] = useState(savedSettings?.developerMode ?? false)
@@ -1101,7 +1120,8 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
   if (page === 'address-book') {
     const favorites = addressBook.filter((c) => c.isFavorite)
     const others = addressBook.filter((c) => !c.isFavorite)
-    const addressPreview = validateAddress(contactAddress)
+    // A typed name previews (and saves) the address it points to.
+    const addressPreview = validateAddress(typedContactName ? (contactByName?.address ?? '') : contactAddress)
 
     // Both persist through the address-book store, so the list re-reads from
     // storage rather than diverging into local component state.
@@ -1119,6 +1139,7 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
       setShowAddContact(false)
       setContactName('')
       setContactAddress('')
+      setContactQns(null)
       setContactChainId('')
       setContactError(null)
     }
@@ -1129,8 +1150,9 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
       try {
         await addContact({
           name: contactName,
-          address: contactAddress,
+          address: typedContactName ? (contactByName?.address ?? '') : contactAddress,
           chainId: contactChainId || undefined,
+          qnsName: typedContactName ?? undefined,
         })
         resetContactForm()
       } catch (err) {
@@ -1163,6 +1185,7 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
               </span>
             )}
           </div>
+          {contact.qnsName && <div className="text-[10px] font-medium text-muted-foreground">{contact.qnsName}</div>}
           <div className="text-[10px] text-muted-foreground font-mono truncate">
             {contact.address}
           </div>
@@ -1269,19 +1292,33 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
                   <input
                     value={contactAddress}
                     onChange={(e) => setContactAddress(e.target.value)}
-                    placeholder="0x… or 0xPQ…"
+                    placeholder={isQrdxChain(activeChain) ? '0x…, 0xPQ… or name.qrdx' : '0x… or 0xPQ…'}
                     spellCheck={false}
                     className="w-full h-9 px-2.5 rounded-lg bg-accent/30 border border-border/50 text-xs font-mono outline-none focus:border-primary/50"
                   />
                   {/* Validate as the user types, but stay quiet while the field
                       is still obviously incomplete. */}
-                  {contactAddress.trim().length > 6 && !addressPreview.valid && (
-                    <p className="text-[10px] text-red-400">{addressPreview.error}</p>
-                  )}
-                  {addressPreview.valid && (
-                    <p className="text-[10px] text-green-500">
-                      Valid {addressPreview.kind === 'pq' ? 'post-quantum' : 'EVM'} address
-                    </p>
+                  {typedContactName ? (
+                    !contactByName ? (
+                      <p className="text-[10px] text-muted-foreground">Looking up {typedContactName}…</p>
+                    ) : contactByName.error ? (
+                      <p className="text-[10px] text-red-400">{contactByName.error}</p>
+                    ) : (
+                      <p className="text-[10px] text-green-500 break-all">
+                        {typedContactName} points to {contactByName.address}: the contact saves this address
+                      </p>
+                    )
+                  ) : (
+                    <>
+                      {contactAddress.trim().length > 6 && !addressPreview.valid && (
+                        <p className="text-[10px] text-red-400">{addressPreview.error}</p>
+                      )}
+                      {addressPreview.valid && (
+                        <p className="text-[10px] text-green-500">
+                          Valid {addressPreview.kind === 'pq' ? 'post-quantum' : 'EVM'} address
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
 

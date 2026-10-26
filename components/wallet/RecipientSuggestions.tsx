@@ -5,6 +5,7 @@ import { BookUser, Clock, Wallet } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { isQrdxChain } from '@/src/core/chains'
 import { shortenAddress } from '@/src/core/address'
+import { usePrimaryName } from './useQnsName'
 import { matchRecipients, recipientSuggestions, type RecipientKind, type RecipientSuggestion } from '@/src/core/recipients'
 
 const HEADINGS: Record<RecipientKind, string> = { recent: 'Recent', account: 'Your accounts', contact: 'Address book' }
@@ -49,6 +50,9 @@ export function RecipientSuggestions({ query, from, onPick }: { query: string; f
 
 function Row({ s, onPick }: { s: RecipientSuggestion; onPick: (address: string) => void }) {
   const Icon = ICONS[s.kind]
+  // A recent recipient with no label shows its primary QRDX name, when it has one.
+  const named = usePrimaryName(s.label ? null : s.address)
+  const label = s.label ?? named
   return (
     <button
       type="button"
@@ -62,10 +66,10 @@ function Row({ s, onPick }: { s: RecipientSuggestion; onPick: (address: string) 
         <Icon className="h-3.5 w-3.5 text-muted-foreground" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-xs font-medium">{s.label ?? shortenAddress(s.address, 6)}</span>
+        <span className="block truncate text-xs font-medium">{label ?? shortenAddress(s.address, 6)}</span>
         <span className="block truncate font-mono text-[10px] text-muted-foreground">
-          {s.label ? shortenAddress(s.address, 6) : ''}
-          {s.lastSentAt ? `${s.label ? ' · ' : ''}${s.sends && s.sends > 1 ? `${s.sends} sends, ` : ''}last ${ago(s.lastSentAt)}` : ''}
+          {label ? shortenAddress(s.address, 6) : ''}
+          {s.lastSentAt ? `${label ? ' · ' : ''}${s.sends && s.sends > 1 ? `${s.sends} sends, ` : ''}last ${ago(s.lastSentAt)}` : ''}
         </span>
       </span>
     </button>

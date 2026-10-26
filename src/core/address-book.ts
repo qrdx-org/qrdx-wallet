@@ -38,6 +38,12 @@ export interface AddressBookEntry {
   isFavorite: boolean
   /** Free-text note. */
   notes?: string
+  /**
+   * The QRDX name (label.qrdx) the contact was added by. `address` is what it pointed to
+   * then, and is what sends go to: a name its owner re-points never redirects a saved
+   * contact without the user seeing it (the send form warns when they differ).
+   */
+  qnsName?: string
   createdAt: number
   updatedAt: number
 }
@@ -49,6 +55,8 @@ export interface AddressBookInput {
   chainId?: string
   isFavorite?: boolean
   notes?: string
+  /** The name.qrdx `address` was resolved from, if any. */
+  qnsName?: string
 }
 
 const STORAGE_KEY = 'qrdx_address_book'
@@ -61,6 +69,12 @@ export class AddressBookError extends Error {
     super(message)
     this.name = 'AddressBookError'
   }
+}
+
+/** A well-formed name.qrdx, lower-cased; anything else is dropped. */
+function qnsLabel(name: string | undefined): string | undefined {
+  const n = name?.trim().toLowerCase()
+  return n && /^[a-z0-9](?:[a-z0-9-]{1,57}[a-z0-9])\.qrdx$/.test(n) ? n : undefined
 }
 
 // ─── Store ──────────────────────────────────────────────────────────────────
@@ -123,6 +137,7 @@ export class AddressBook {
       chainId: input.chainId,
       isFavorite: input.isFavorite ?? false,
       notes: notes || undefined,
+      qnsName: qnsLabel(input.qnsName),
       createdAt: now,
       updatedAt: now,
     }
@@ -175,6 +190,7 @@ export class AddressBook {
     }
 
     if (changes.chainId !== undefined) next.chainId = changes.chainId
+    if (changes.qnsName !== undefined) next.qnsName = qnsLabel(changes.qnsName)
     if (changes.isFavorite !== undefined) next.isFavorite = changes.isFavorite
 
     if (changes.notes !== undefined) {

@@ -11,6 +11,7 @@ import { sameAccount } from '@/src/core/account-id'
 import { weiToEth } from '@/src/core/ethereum'
 import { formatFiat } from '@/src/core/fiat'
 import { cn } from '@/lib/utils'
+import { usePrimaryName } from './useQnsName'
 import { Sheet } from './flow/FlowKit'
 import { ConfirmSheet } from './flow/ConfirmSheet'
 
@@ -39,6 +40,10 @@ export function TransactionDetail({ tx, onClose, onSendAgain }: { tx: Transactio
   }
 
   const counterparty = tx.type === 'receive' ? tx.from : tx.to
+  // Primary QRDX names of the two sides, shown where no contact or own account names them.
+  const fromName = usePrimaryName(tx.from)
+  const toName = usePrimaryName(tx.to)
+  const counterpartyName = tx.type === 'receive' ? fromName : toName
   const known = nameOf(counterparty)
   const symbol = tx.tokenSymbol ?? activeChain.nativeCurrency.symbol
   const amount = tx.tokenAmount ? `${tx.tokenAmount} ${tx.tokenSymbol}` : tx.value
@@ -58,7 +63,7 @@ export function TransactionDetail({ tx, onClose, onSendAgain }: { tx: Transactio
   const save = async () => {
     setSaveError(null)
     try {
-      await addContact({ name: name.trim(), address: counterparty })
+      await addContact({ name: name.trim(), address: counterparty, qnsName: counterpartyName ?? undefined })
       setSaving(false)
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Could not save the contact')
@@ -124,12 +129,12 @@ export function TransactionDetail({ tx, onClose, onSendAgain }: { tx: Transactio
             {tx.status === 'confirmed' ? 'Confirmed' : tx.status === 'failed' ? 'Failed' : 'Pending'}
           </span>
         </Row>
-        <Row k="From" sub={nameOf(tx.from) ? shortenAddress(tx.from, 6) : undefined}>
-          {nameOf(tx.from) ?? shortenAddress(tx.from, 6)}
+        <Row k="From" sub={nameOf(tx.from) || fromName ? shortenAddress(tx.from, 6) : undefined}>
+          {nameOf(tx.from) ?? fromName ?? shortenAddress(tx.from, 6)}
         </Row>
         {tx.to && (
-          <Row k="To" sub={nameOf(tx.to) ? shortenAddress(tx.to, 6) : undefined}>
-            {nameOf(tx.to) ?? shortenAddress(tx.to, 6)}
+          <Row k="To" sub={nameOf(tx.to) || toName ? shortenAddress(tx.to, 6) : undefined}>
+            {nameOf(tx.to) ?? toName ?? shortenAddress(tx.to, 6)}
           </Row>
         )}
         <Row k="Network">{activeChain.name}</Row>
@@ -190,7 +195,11 @@ export function TransactionDetail({ tx, onClose, onSendAgain }: { tx: Transactio
             </button>
           )}
           {counterparty && !known && (
-            <button type="button" onClick={() => setSaving(true)} className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-border text-xs font-medium hover:bg-accent/50">
+            <button type="button" onClick={() => {
+              setSaving(true)
+              // A named account starts with its name as the contact's.
+              if (!name && counterpartyName) setName(counterpartyName.replace(/\.qrdx$/, ''))
+            }} className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-border text-xs font-medium hover:bg-accent/50">
               <UserPlus className="h-3.5 w-3.5" /> Save contact
             </button>
           )}

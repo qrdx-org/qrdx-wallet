@@ -12,6 +12,7 @@ import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { isQrdxChain } from '@/src/core/chains'
 import { QNS_NAME, qnsGetName, qnsLengthFactor, qnsNamesOf, qnsPrice, reverseQns, type QnsNameInfo } from '@/src/core/qns'
 import { nodeFeatures } from '@/src/core/tx-service'
+import { sameAccount } from '@/src/core/account-id'
 import { useTradeSubmit, SubmissionList } from '../trade/submit'
 import { Notice, PrimaryButton, TextField } from '../flow/FlowKit'
 import { Row, Section, Segmented, SettingsPage } from './shared'
@@ -35,6 +36,7 @@ export function NamesPage({ onBack }: { onBack: () => void }) {
   const [names, setNames] = useState<QnsNameInfo[] | null>(null)
   const [label, setLabel] = useState('')
   const [years, setYears] = useState<string>('1')
+  const [makePrimary, setMakePrimary] = useState(true)
   const [checked, setCheck] = useState<{ name: string; years: string; taken: QnsNameInfo | null; price: string | null } | null>(null)
 
   const [tick, setTick] = useState(0)
@@ -105,15 +107,18 @@ export function NamesPage({ onBack }: { onBack: () => void }) {
               <p className="p-3 text-xs text-muted-foreground">None yet.</p>
             ) : (
               names.map((n) => {
-                const pointsHere = (n.records.address ?? '').toLowerCase() === me.toLowerCase()
+                const pointsHere = !!n.address && sameAccount(n.address, me)
                 return (
                   <div key={n.name} className="rounded-xl p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium">{n.name}</span>
-                      <span className="text-[11px] text-muted-foreground">until {fmt(n.expires)}</span>
+                      <span className="text-sm font-medium">
+                        {n.name}
+                        {primary === n.name && <span className="ml-1.5 rounded bg-primary/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-primary">Your name</span>}
+                      </span>
+                      <span className={`text-[11px] ${n.expired ? 'text-red-500' : 'text-muted-foreground'}`}>{n.expired ? `expired · renew by ${fmt(n.available_from)}` : `until ${fmt(n.expires)}`}</span>
                     </div>
                     <p className="mt-0.5 break-all text-[11px] text-muted-foreground">
-                      {n.records.address ? `Points to ${pointsHere ? 'this account' : n.records.address}` : 'Points nowhere'}
+                      {n.address ? `Points to ${pointsHere ? 'this account' : n.address}` : 'Points nowhere'}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {!pointsHere && (
@@ -150,20 +155,23 @@ export function NamesPage({ onBack }: { onBack: () => void }) {
                         ? `${name} is taken (until ${fmt(check.taken.expires)}).`
                         : `${name} is free: ${check.price ?? '?'} QRDX for ${years} year${years === '1' ? '' : 's'}, paid to the treasury.`}
               </p>
+              <label className="flex items-center gap-2 text-[11px]">
+                <input type="checkbox" checked={makePrimary} onChange={(e) => setMakePrimary(e.target.checked)} />
+                Show it as this account&apos;s name
+              </label>
               <PrimaryButton
                 disabled={!valid || !check || check.name !== name || !!check.taken}
-                onClick={() =>
-                  ask({
-                    op: 'QNS_REGISTER',
-                    params: { name, years: Number(years) },
-                    label: `Register ${name}`,
-                    estimates: check?.price ? [{ k: 'Price', v: `${check.price} QRDX` }] : undefined,
-                    onDone: () => {
-                      setLabel('')
-                      refreshSoon()
-                    },
-                  })
-                }
+                onClick={() => {
+                  const register = { op: 'QNS_REGISTER' as const, params: { name, years: Number(years) }, label: `Register ${name}` }
+                  const done = () => {
+                    setLabel('')
+                    refreshSoon()
+                  }
+                  const estimates = check?.price ? [{ k: 'Price', v: `${check.price} QRDX` }] : undefined
+                  // Registered then made primary, in that order in one block window.
+                  if (makePrimary) ask({ op: 'QNS_SET_PRIMARY', params: { name }, label: `Show this account as ${name}`, before: [register], estimates, onDone: done })
+                  else ask({ ...register, estimates, onDone: done })
+                }}
               >
                 Register {valid ? name : ''}
               </PrimaryButton>

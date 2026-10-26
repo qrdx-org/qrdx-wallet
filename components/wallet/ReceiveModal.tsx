@@ -6,6 +6,8 @@ import { QRCodeSVG } from 'qrcode.react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
+import { usePrimaryName } from './useQnsName'
+
 interface ReceiveModalProps {
   ethAddress: string
   pqAddress: string
@@ -14,6 +16,8 @@ interface ReceiveModalProps {
 }
 
 export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: ReceiveModalProps) {
+  // The account's primary QRDX name: senders on QRDX can type it instead of an address.
+  const qnsName = usePrimaryName(pqAddress)
   const [addressType, setAddressType] = useState<'eth' | 'pq'>('eth')
   const [copied, setCopied] = useState(false)
 
@@ -90,7 +94,14 @@ export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: Re
         {/* QR Code */}
         <Card className="glass border-border/50">
           <CardContent className="p-5 flex flex-col items-center">
-            <div className="text-xs text-muted-foreground mb-3 font-medium">{accountName}</div>
+            <div className="text-xs text-muted-foreground mb-3 font-medium">
+              {accountName}
+              {qnsName && (
+                <span className="block mt-0.5 text-sm font-semibold text-foreground" title="Your QRDX name: anyone on QRDX can send to it">
+                  {qnsName}
+                </span>
+              )}
+            </div>
             <div className="relative p-3 bg-white rounded-2xl shadow-lg">
               <QRCodeSVG
                 value={activeAddress}

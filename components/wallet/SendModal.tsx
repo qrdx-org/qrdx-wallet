@@ -27,6 +27,7 @@ import { formatFiat as formatUsd } from '@/src/core/fiat'
 import { ConfirmSheet } from './flow/ConfirmSheet'
 import { RecipientSuggestions } from './RecipientSuggestions'
 import { isQnsName, resolveQnsName, type QnsResolution } from '@/src/core/qns'
+import { usePrimaryName } from './useQnsName'
 
 interface SendModalProps {
   ethAddress: string
@@ -82,7 +83,7 @@ type TxStatus = 'idle' | 'estimating' | 'sending' | 'success' | 'error'
  * quote the transaction is then built with.
  */
 export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initialRecipient }: SendModalProps) {
-  const { balances, pqBalances, activeChain, quoteSend, send, addressBook, networkStatus, prices, currentWallet, transactions } = useWallet()
+  const { balances, pqBalances, activeChain, quoteSend, send, addressBook, addContact, networkStatus, prices, currentWallet, transactions } = useWallet()
   // Nothing is signed from the form: Review opens the confirmation, which signs.
   const [reviewing, setReviewing] = useState(false)
   const qrdx = isQrdxChain(activeChain)
@@ -234,11 +235,44 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
       address: display,
       contactName: contact?.name ?? viaName,
       viaName,
+      isContact: !!contact,
+      /** The name a saved contact was added by: checked against where it points now. */
+      contactQns: contact?.qnsName,
       accountId: resolved.resolved ? resolved.accountId : null,
     }
   }, [recipient, fromAddress, addressBook, activeChain, typedName, nameResult])
 
   const recipientIsValid = recipientCheck.state === 'valid'
+
+  // ── Names beside the recipient ─────────────────────────────────────────
+  // A plain address shows its primary name; a contact added by name is checked against where
+  // that name points now (its owner may have re-pointed it since it was saved).
+  const validAddress = recipientCheck.state === 'valid' ? recipientCheck.address : null
+  const primaryOfRecipient = usePrimaryName(recipientCheck.state === 'valid' && !recipientCheck.viaName && !recipientCheck.isContact ? validAddress : null)
+  const contactQns = recipientCheck.state === 'valid' && !recipientCheck.viaName ? recipientCheck.contactQns : undefined
+  const [contactNow, setContactNow] = useState<{ name: string; address: string | null } | null>(null)
+  useEffect(() => {
+    if (!contactQns) return
+    let live = true
+    resolveQnsName(activeChain, contactQns)
+      .then((r) => live && r.state !== 'unsupported' && setContactNow({ name: contactQns, address: r.state === 'resolved' ? r.address : null }))
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [contactQns, activeChain])
+  const contactMoved = !!contactQns && contactNow?.name === contactQns && !!validAddress && !(contactNow.address && sameAccount(contactNow.address, validAddress))
+  const [savedContact, setSavedContact] = useState<string | null>(null)
+  const saveNameAsContact = async () => {
+    if (recipientCheck.state !== 'valid' || !recipientCheck.viaName) return
+    const n = recipientCheck.viaName
+    try {
+      await addContact({ name: n.replace(/\.qrdx$/, ''), address: recipientCheck.address, qnsName: n })
+      setSavedContact(n)
+    } catch (e) {
+      setSavedContact(e instanceof Error ? e.message : 'Could not save the contact')
+    }
+  }
 
   // ── Amount validation ───────────────────────────────────────────────────
   const amountCheck = useMemo(() => {
@@ -561,11 +595,29 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
                   {recipientCheck.viaName
                     ? `${recipientCheck.viaName} points to ${shortenAddress(recipientCheck.address, 8)}`
                     : recipientCheck.contactName
-                      ? `Sending to ${recipientCheck.contactName}`
-                      : 'Valid address'}
+                      ? `Sending to ${recipientCheck.contactName}${recipientCheck.contactQns ? ` (${recipientCheck.contactQns})` : ''}`
+                      : primaryOfRecipient
+                        ? `Valid address: ${primaryOfRecipient}`
+                        : 'Valid address'}
                   {recipientCheck.accountId && (
                     <span className="block text-muted-foreground font-mono">ledger account {shortenAddress(recipientCheck.accountId, 6)}</span>
                   )}
+                </span>
+              </p>
+            )}
+
+            {recipientCheck.state === 'valid' && recipientCheck.viaName && !recipientCheck.isContact && (
+              <button type="button" onClick={() => void saveNameAsContact()} disabled={!!savedContact} className="mt-1.5 text-[10px] font-medium text-primary hover:underline disabled:text-muted-foreground disabled:no-underline">
+                {savedContact ? (savedContact === recipientCheck.viaName ? 'Saved to contacts' : savedContact) : `Save ${recipientCheck.viaName} to contacts`}
+              </button>
+            )}
+            {contactMoved && contactNow && (
+              <p className="flex items-start gap-1.5 mt-1.5 text-[10px] text-amber-500">
+                <AlertTriangle className="h-3 w-3 shrink-0 mt-px" />
+                <span>
+                  {contactNow.address
+                    ? `${contactNow.name} now points to ${shortenAddress(contactNow.address, 6)}, not the address saved with this contact. This sends to the saved address.`
+                    : `${contactNow.name} no longer points anywhere. This sends to the address saved with this contact.`}
                 </span>
               </p>
             )}

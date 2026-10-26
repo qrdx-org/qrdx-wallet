@@ -138,3 +138,18 @@ describe('persistence', () => {
     expect((await reopened.list()).map(e => e.name)).toEqual(['Faucet'])
   })
 })
+
+describe('contacts added by QRDX name', () => {
+  const PQ = '0xPQ' + 'ab'.repeat(32)
+
+  it('keeps the name beside the address it resolved to', async () => {
+    const e = await book.add({ name: 'Alice', address: PQ, qnsName: 'Alice.QRDX' })
+    expect(e.qnsName).toBe('alice.qrdx')
+    expect(e.address.toLowerCase()).toBe(PQ.toLowerCase())
+  })
+
+  it('drops a malformed name rather than storing it', async () => {
+    const e = await book.add({ name: 'Bob', address: PQ, qnsName: 'not a name' })
+    expect(e.qnsName).toBeUndefined()
+  })
+})

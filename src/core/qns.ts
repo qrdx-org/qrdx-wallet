@@ -56,14 +56,23 @@ export function qnsLengthFactor(name: string): number {
   return label.length <= 3 ? 128 : label.length === 4 ? 32 : 1
 }
 
+/** qns_getName (qrdx-node qrdx/exchange/qns.py `summary`). */
 export interface QnsNameInfo {
   name: string
+  /** Who holds the name's NFT. */
   owner: string
   token_id: string
+  /** Block time it expires; `expired` once it has (it resolves to nothing then). */
   expires: string
-  grace_ends?: string
-  records: Record<string, string>
-  [k: string]: unknown
+  expired: boolean
+  /** When anyone else may register it, after the grace period. */
+  available_from: string
+  /** Its address record (where it points), or null. */
+  address: string | null
+  /** What it resolves to now: `address` while unexpired, else null. */
+  resolves_to: string | null
+  /** Text records. */
+  texts: Record<string, string>
 }
 
 async function qnsRead<T>(chain: ChainConfig, method: string, params: unknown[]): Promise<T | null> {

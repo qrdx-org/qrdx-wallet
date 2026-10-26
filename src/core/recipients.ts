@@ -19,7 +19,7 @@ export interface RecipientSuggestion {
 }
 
 export interface RecipientSources {
-  contacts: { name: string; address: string; addressType: string; isFavorite?: boolean }[]
+  contacts: { name: string; address: string; addressType: string; isFavorite?: boolean; qnsName?: string }[]
   accounts: { id: string; name: string; ethAddress?: string; address?: string; pqAddress?: string; hidden?: boolean }[]
   transactions: { type: string; to: string; timestamp: number; status: string }[]
   /** The sending account; it is never suggested. */
@@ -58,7 +58,8 @@ export function recipientSuggestions(src: RecipientSources): RecipientSuggestion
   const contacts = src.contacts
     .filter((c) => usable(c.address))
     .sort((a, b) => Number(!!b.isFavorite) - Number(!!a.isFavorite) || a.name.localeCompare(b.name))
-    .map((c): RecipientSuggestion => ({ kind: 'contact', address: c.address, label: c.name }))
+    // A contact added by its QRDX name shows it, so typing the name finds it.
+    .map((c): RecipientSuggestion => ({ kind: 'contact', address: c.address, label: c.qnsName ? `${c.name} · ${c.qnsName}` : c.name }))
 
   return [...[...recent.values()].slice(0, RECENT), ...accounts, ...contacts]
 }
