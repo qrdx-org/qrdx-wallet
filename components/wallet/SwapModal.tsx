@@ -21,6 +21,7 @@ import { isQrdxChain } from '@/src/core/chains'
 import { weiToEth } from '@/src/core/ethereum'
 import { exchange, minimumOut, NATIVE_QRDX, type ExchangeToken, type SwapQuote } from '@/src/core/exchange-client'
 import { shortenAddress } from '@/src/core/address'
+import { spendable } from '@/src/core/fee-reserve'
 import { tradeApiBase, tradeGet } from '@/src/core/trade/api'
 import { percent, size as fmtSize, usd } from '@/src/core/trade/format'
 import type { ApiAsset, IndexPrice } from '@/src/core/trade/types'
@@ -346,7 +347,7 @@ export function SwapModal({ onClose, initialFrom }: SwapModalProps) {
                 label="You pay"
                 asset={from}
                 onPick={() => setPicking('from')}
-                onMax={from?.balance ? () => setAmount(from.balance!) : undefined}
+                onMax={from?.balance ? () => setAmount(spendable(from.balance!, from.id)) : undefined}
                 usdLine={usdOf(fromId, amount)}
               >
                 <input

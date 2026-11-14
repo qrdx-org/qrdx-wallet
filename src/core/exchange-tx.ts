@@ -125,11 +125,14 @@ export const ExchangeOp = {
   /** The dead man's switch: cancel everything at block time `time` (no `time` clears it). */
   SCHEDULE_CANCEL: 77,
   APPROVE_BUILDER_FEE: 78,
-  DEPLOYER_BOND: 79,
-  DEPLOYER_UNBOND: 80,
-  DEPLOYER_SET_ORACLE: 81,
-  DEPLOYER_HALT: 82,
+  // 79–82 are retired with node 3.0.0: deployer markets, whose deployer set their oracle price.
   TICKER_CLAIM: 83,
+  /** Mint a bridge deposit on a storage proof against an attested head (docs/BRIDGE.md). */
+  BRIDGE_PROVE_DEPOSIT: 84,
+  /** Bind a 0x account's post-quantum successor, proven from another chain (docs/QUANTUM_MIGRATION.md). */
+  MIGRATION_CLAIM: 85,
+  /** Trigger the Doomsday Protocol: proof that a canary's key has signed. */
+  DOOMSDAY_PROVE: 86,
 } as const
 
 export type ExchangeOpName = keyof typeof ExchangeOp
@@ -160,7 +163,8 @@ const REQUIRED_PARAMS: Partial<Record<ExchangeOpCode, string[]>> = {
   [ExchangeOp.STAKE_UNDELEGATE]: ['validator'],
   [ExchangeOp.STAKE_SET_COMMISSION]: ['commission_bps'],
   [ExchangeOp.PERP_DEPOSIT]: ['amount'],
-  [ExchangeOp.CREATE_MARKET]: ['base_token'],
+  // A token perp, by the token's address; validator-priced markets come from genesis or governance.
+  [ExchangeOp.CREATE_MARKET]: ['token'],
   [ExchangeOp.PERP_WITHDRAW]: ['amount'],
   [ExchangeOp.PERP_SET_LEVERAGE]: ['market_id', 'leverage'],
   [ExchangeOp.PERP_ORDER]: ['market_id', 'side', 'size', 'price'],
@@ -187,10 +191,10 @@ const REQUIRED_PARAMS: Partial<Record<ExchangeOpCode, string[]>> = {
   [ExchangeOp.ACCOUNT_RECOVER]: ['account'],
   [ExchangeOp.PERP_ISOLATED_MARGIN]: ['market_id', 'amount'],
   [ExchangeOp.APPROVE_BUILDER_FEE]: ['builder', 'max_fee_rate'],
-  [ExchangeOp.DEPLOYER_BOND]: ['amount'],
-  [ExchangeOp.DEPLOYER_SET_ORACLE]: ['market_id', 'price'],
-  [ExchangeOp.DEPLOYER_HALT]: ['market_id'],
   [ExchangeOp.TICKER_CLAIM]: ['token_address'],
+  [ExchangeOp.BRIDGE_PROVE_DEPOSIT]: ['deposit', 'height', 'account_proof', 'storage_proof'],
+  [ExchangeOp.MIGRATION_CLAIM]: ['chain', 'account', 'successor', 'time', 'height', 'account_proof', 'successor_proof', 'time_proof'],
+  [ExchangeOp.DOOMSDAY_PROVE]: ['chain', 'height', 'account_proof'],
 }
 
 /**
@@ -213,7 +217,6 @@ export const TRADING_OPS: ReadonlySet<ExchangeOpName> = new Set<ExchangeOpName>(
   'TWAP_CANCEL',
   'PERP_ISOLATED_MARGIN',
   'SCHEDULE_CANCEL',
-  'DEPLOYER_SET_ORACLE',
   'BATCH',
 ])
 
@@ -308,9 +311,8 @@ function pyString(s: string): string {
     else if (c < 0x20 || c > 0x7e) {
       // ensure_ascii: every non-ASCII UTF-16 unit as \uXXXX (lowercase hex);
       // astral characters therefore come out as their surrogate pair, as Python does.
-      // 0x7f (DEL) is ASCII and Python leaves it unescaped.
-      if (c === 0x7f) out += ch
-      else out += '\\u' + c.toString(16).padStart(4, '0')
+      // 0x7f (DEL) too: Python escapes everything outside 0x20–0x7e.
+      out += '\\u' + c.toString(16).padStart(4, '0')
     } else out += ch
   }
   return out + '"'

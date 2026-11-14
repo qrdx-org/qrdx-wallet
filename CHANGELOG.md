@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Node 3.0.0 (the testnet's regenesis)**: `CREATE_MARKET` lists a token perpetual and is approved by its `token` (address or `QRDX`), with the market, margins and seeded liquidity shown; the retired deployer-market operations (79–82) are gone; `BRIDGE_PROVE_DEPOSIT` (84), `MIGRATION_CLAIM` (85) and `DOOMSDAY_PROVE` (86) are known, described and labelled in activity.
+- **Fee reserve**: "Max" in swap, spot, perps deposits, sub-account transfers and staking leaves the account's fee reserve (1 QRDX) behind, as the node requires of exchange operations, and the node's refusal is explained in plain words. The wallet never signs `spend_reserve` on its own.
+
+### Fixed
+- Signed parameters containing the DEL character (0x7f) were serialized differently from the node; the wallet's signing bytes are now tested against the node's own vectors (`tests/fixtures/node-vectors.json`).
+
 ### Added
 - **Confirmations before anything is signed or removed**: sending opens a review (recipient and contact name, amount and its fiat value, from-account and address, network, fee, total, a warning for an address never sent to); every staking operation and NFT transfer is reviewed; removing a contact and disconnecting sites ask first.
 - **Account switcher**: the account name in the header opens every account with its value, switches on tap, and adds or manages accounts.

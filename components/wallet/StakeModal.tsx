@@ -23,6 +23,7 @@ import { ArrowLeft, ChevronDown, Clock, Coins, Hourglass, Landmark, Server, Shie
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { isQrdxChain } from '@/src/core/chains'
 import { ethToWei } from '@/src/core/ethereum'
+import { FEE_RESERVE_QRDX, explainNodeError } from '@/src/core/fee-reserve'
 import { formatAmount, formatUnitsExact } from '@/src/core/balances'
 import {
   staking,
@@ -50,8 +51,8 @@ const SLASHING = [
 
 const AMOUNT_RE = /^\d+(\.\d{1,18})?$/
 const WEI = 10n ** 18n
-/** Kept back on "Max" so the delegation can still pay its gas. */
-const GAS_RESERVE = 10n ** 16n // 0.01 QRDX
+/** Kept back on "Max": the account's fee reserve, which no staking operation may spend (src/core/fee-reserve.ts). */
+const GAS_RESERVE = ethToWei(FEE_RESERVE_QRDX)
 
 interface Snapshot {
   validators: StakingValidator[]
@@ -163,7 +164,7 @@ export function StakeModal({ onClose }: StakeModalProps) {
       fetchBalances()
       void load()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Staking operation failed')
+      setError(e instanceof Error ? explainNodeError(e.message) : 'Staking operation failed')
     } finally {
       setBusy(null)
     }

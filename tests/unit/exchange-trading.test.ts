@@ -4,6 +4,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { ExchangeNonceTracker, isNonceConflict } from '../../src/core/exchange-nonce'
+import { ExchangeOp, buildExchangeTx } from '../../src/core/exchange-tx'
 import {
   canonicalPair,
   describeExchangeOp,
@@ -141,12 +142,22 @@ describe('describeExchangeOp', () => {
     expect(s.warnings).toEqual([])
   })
 
-  it('describes creating a perp market with its margins and the oracle caveat', () => {
-    const s = describeExchangeOp('CREATE_MARKET', { base_token: 'SOL', max_leverage: '10' }, { tokens: {} })
-    expect(s.headline).toBe('Create the SOL-USD perpetual market, up to 10× leverage')
-    expect(s.details).toContainEqual({ label: 'Market', value: 'SOL-USD-PERP' })
+  it('describes listing a token perpetual with its margins, seed liquidity and the lock caveat', () => {
+    const TOKEN = '0xa0ad4f35bf2d518a62ebb7e39a32a8f791703362'
+    const s = describeExchangeOp('CREATE_MARKET', { token: TOKEN, max_leverage: '10', liquidity: '10000' }, { tokens: { [TOKEN]: { symbol: 'USDC' } } })
+    expect(s.headline).toBe('List a USDC perpetual, up to 10× leverage')
     expect(s.details).toContainEqual({ label: 'Initial / maintenance margin', value: '10% / 5%' })
-    expect(s.warnings.join(' ')).toMatch(/validators publish a SOL price/)
+    expect(s.details).toContainEqual({ label: 'Seed liquidity', value: '10,000 perps collateral' })
+    expect(s.warnings.join(' ')).toMatch(/priced from the token's own pools/)
+  })
+
+  it('requires the token of a perp listing and no longer knows the retired deployer operations', () => {
+    expect(() => buildExchangeTx({ op: 'CREATE_MARKET', chainId: 7620, sender: SENDER, nonce: 0, params: { base_token: 'SOL' } })).toThrow(/token/)
+    expect(buildExchangeTx({ op: 'CREATE_MARKET', chainId: 7620, sender: SENDER, nonce: 0, params: { token: 'QRDX', liquidity: '10000' } }).op_type).toBe(12)
+    expect(ExchangeOp).not.toHaveProperty('DEPLOYER_BOND')
+    expect(ExchangeOp.BRIDGE_PROVE_DEPOSIT).toBe(84)
+    expect(ExchangeOp.MIGRATION_CLAIM).toBe(85)
+    expect(ExchangeOp.DOOMSDAY_PROVE).toBe(86)
   })
 
   it('describes a token launch: deploy with fixed supply, and its pool before the token exists', () => {
@@ -190,5 +201,16 @@ describe('describeExchangeOp', () => {
     expect(groupDigits('1234567.891')).toBe('1,234,567.891')
     expect(groupDigits('1000.000000000000000000')).toBe('1,000')
     expect(groupDigits('100')).toBe('100')
+  })
+})
+
+describe('fee reserve', () => {
+  it('keeps the reserve back from native QRDX only, and explains the node refusing', async () => {
+    const { spendable, explainNodeError } = await import('../../src/core/fee-reserve')
+    expect(spendable('12.5', 'QRDX')).toBe('11.5')
+    expect(spendable('0.4', 'qrdx')).toBe('0')
+    expect(spendable('12.5', '0xa0ad4f35bf2d518a62ebb7e39a32a8f791703362')).toBe('12.5')
+    expect(explainNodeError('0xPQab… would keep less than its fee reserve (1 QRDX): its own transaction may spend it')).toMatch(/less than 1 QRDX/)
+    expect(explainNodeError('nonce too low')).toBe('nonce too low')
   })
 })

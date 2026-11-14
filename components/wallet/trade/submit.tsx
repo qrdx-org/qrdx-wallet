@@ -16,6 +16,7 @@ import { describeExchangeOp, type DescribeContext } from '@/src/core/exchange-de
 import type { ExchangeOpName, JsonValue } from '@/src/core/exchange-tx'
 import { waitForExchangeReceipt } from '@/src/core/exchange-client'
 import type { ApiAsset } from '@/src/core/trade/types'
+import { explainNodeError } from '@/src/core/fee-reserve'
 import { Line, Sheet } from './kit'
 import { cn } from '@/lib/utils'
 
@@ -73,7 +74,7 @@ export function useTradeSubmit() {
           )
           if (r.success) onSuccess?.()
         })
-        .catch((e) => setSubmissions((s) => s.map((x) => (x.id === txHash ? { ...x, error: (e as Error).message } : x))))
+        .catch((e) => setSubmissions((s) => s.map((x) => (x.id === txHash ? { ...x, error: explainNodeError((e as Error).message) } : x))))
     const track = (txHash: string, label: string) =>
       setSubmissions((s) => [{ id: txHash, label, status: 'pending' as const, txHash, at: Date.now() / 1000 }, ...s].slice(0, 30))
     try {
@@ -88,7 +89,7 @@ export function useTradeSubmit() {
       setReview(null)
       void follow(txHash, req.onDone)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not sign the operation')
+      setError(e instanceof Error ? explainNodeError(e.message) : 'Could not sign the operation')
     } finally {
       setBusy(false)
     }

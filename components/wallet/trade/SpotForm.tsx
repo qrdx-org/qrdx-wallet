@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { spendable } from '@/src/core/fee-reserve'
 import { S, dec, div, isAmount, lessSlippage, mul, round, str } from '@/src/core/trade/decimal'
 import { fixed, percent, price as fmtPrice, size as fmtSize } from '@/src/core/trade/format'
 import { spotLimitParams, type Side } from '@/src/core/trade/orders'
@@ -89,7 +90,8 @@ export function SpotForm({
   })()
 
   const setPct = (pct: number) => {
-    const part = (dec(avail) * BigInt(pct)) / 100n
+    // Native QRDX keeps the account's fee reserve back.
+    const part = (dec(spendable(avail, side === 'buy' ? quote.address : base.address)) * BigInt(pct)) / 100n
     if (kind === 'market') return setAmountIn(round(str(part), side === 'buy' ? quote.decimals : base.decimals, 'down'))
     if (side === 'sell') return setSize(round(str(part), base.decimals, 'down'))
     if (isAmount(price) && dec(price) > 0n) setSize(round(str(div(part, dec(price))), base.decimals, 'down'))

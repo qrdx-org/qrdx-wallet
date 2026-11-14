@@ -10,6 +10,7 @@
 import { useState } from 'react'
 import { Layers, Plus, Wallet } from 'lucide-react'
 import { dec, isAmount } from '@/src/core/trade/decimal'
+import { spendable } from '@/src/core/fee-reserve'
 import { fixed, size as fmtSize } from '@/src/core/trade/format'
 import type { AccountResponse } from '@/src/core/trade/types'
 import { CollateralSheet, collateralLabel, walletCollateral } from './PerpForm'
@@ -267,7 +268,7 @@ function MoveSheet({
                 placeholder="Amount"
                 className="num h-10 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-base sm:text-sm"
               />
-              <button type="button" onClick={() => chosen && setAmount(chosen.balance)} className="rounded-xl border px-3 text-[11px] font-medium hover:bg-accent/50">
+              <button type="button" onClick={() => chosen && setAmount(dir === 'to_sub' ? spendable(chosen.balance, chosen.asset.address) : chosen.balance)} className="rounded-xl border px-3 text-[11px] font-medium hover:bg-accent/50">
                 Max
               </button>
             </div>

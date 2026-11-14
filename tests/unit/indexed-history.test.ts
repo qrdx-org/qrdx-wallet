@@ -3,7 +3,7 @@ import { indexedToItem, type IndexedTx } from '../../src/core/activity'
 import { getChain } from '../../src/core/chains'
 
 const chain = getChain('qrdx-testnet')!
-const USDC = '0x801ae63d236d7a4ea69868a9d7be5d27a09e5580'
+const USDC = '0xa0ad4f35bf2d518a62ebb7e39a32a8f791703362'
 const tokens = new Map([[USDC, { symbol: 'USDC', decimals: 6 }]])
 const row = (over: Partial<IndexedTx>): IndexedTx => ({
   block_height: 10,

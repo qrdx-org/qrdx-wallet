@@ -35,7 +35,7 @@ export interface DescribeContext {
   liquidityCost?: { amount0: string; amount1: string } | null
 }
 
-const TOKEN_KEYS = ['token_in', 'token_out', 'token_address', 'token0', 'token1', 'asset'] as const
+const TOKEN_KEYS = ['token_in', 'token_out', 'token_address', 'token0', 'token1', 'asset', 'token'] as const
 const isToken = (v: unknown): v is string => typeof v === 'string' && /^0x[0-9a-fA-F]{40}$/.test(v)
 
 /** Every token address an operation's params mention (lower-case), a batch's actions included. */
@@ -278,16 +278,23 @@ export function describeExchangeOp(
       }
 
     case 'CREATE_MARKET': {
-      const base = str(params.base_token)
-      const quote = str(params.quote_token) || 'USD'
-      const lev = str(params.max_leverage) || '20'
-      warnings.push(`Anyone can create a market. It trades only once validators publish a ${base} price.`)
+      // A token perpetual (node 3.0.0): named by the token's address, priced from its own pools.
+      const token = str(params.token)
+      const lev = str(params.max_leverage)
+      const liquidity = str(params.liquidity)
+      warnings.push("The market is priced from the token's own pools. The listing fee is not refunded, and the liquidity you seed is locked.")
       return {
-        headline: `Create the ${base}-${quote} perpetual market, up to ${lev}× leverage`,
+        headline: `List a ${sym(token)} perpetual${lev ? `, up to ${lev}× leverage` : ''}`,
         details: [
-          { label: 'Market', value: `${base}-${quote}-PERP` },
-          { label: 'Max leverage', value: `${lev}×` },
-          { label: 'Initial / maintenance margin', value: `${trimTo(String(100 / Number(lev)), 2)}% / ${trimTo(String(50 / Number(lev)), 2)}%` },
+          tokenDetail('Token', token),
+          { label: 'Market', value: `${token.toLowerCase() === 'qrdx' ? 'QRDX' : short(token.toLowerCase())}-USD-PERP` },
+          ...(lev
+            ? [
+                { label: 'Max leverage', value: `${lev}×` },
+                { label: 'Initial / maintenance margin', value: `${trimTo(String(100 / Number(lev)), 2)}% / ${trimTo(String(50 / Number(lev)), 2)}%` },
+              ]
+            : []),
+          ...(liquidity ? [{ label: 'Seed liquidity', value: `${groupDigits(liquidity)} perps collateral` }] : []),
         ],
         warnings,
       }
@@ -784,16 +791,6 @@ export function describeExchangeOp(
       }
     }
 
-    case 'DEPLOYER_BOND':
-      warnings.push('The bond is slashed if validators find your markets mispriced, and takes a long unbonding to take back.')
-      return { headline: `Bond ${groupDigits(str(params.amount))} QRDX as a market deployer${params.dex ? ` ("${str(params.dex)}")` : ''}`, details: [], warnings }
-    case 'DEPLOYER_UNBOND':
-      return { headline: params.claim === true ? 'Claim your unbonded deployer bond' : `Start unbonding ${groupDigits(str(params.amount))} QRDX of your deployer bond`, details: [], warnings }
-    case 'DEPLOYER_SET_ORACLE':
-      return { headline: `Set ${str(params.market_id)}'s oracle price to ${groupDigits(str(params.price))}`, details: [], warnings }
-    case 'DEPLOYER_HALT':
-      warnings.push('Every position in the market is settled at its oracle price. This cannot be undone.')
-      return { headline: `Halt and settle ${str(params.market_id)}`, details: [], warnings }
     case 'TICKER_CLAIM': {
       const t = str(params.token_address)
       warnings.push('The price is burned.')
@@ -803,6 +800,34 @@ export function describeExchangeOp(
         warnings,
       }
     }
+
+    case 'BRIDGE_PROVE_DEPOSIT':
+      return {
+        headline: 'Prove a bridge deposit and mint it',
+        details: [
+          { label: 'Deposit', value: short(str(params.deposit)) },
+          { label: 'Proven at height', value: groupDigits(str(params.height)) },
+        ],
+        warnings,
+      }
+    case 'MIGRATION_CLAIM':
+      warnings.push(`After this, ${short(str(params.account))} on QRDX is controlled by ${short(str(params.successor))}. Check both addresses.`)
+      return {
+        headline: `Bind ${short(str(params.account))} to its post-quantum successor`,
+        details: [
+          { label: 'Account', value: str(params.account) },
+          { label: 'Successor', value: str(params.successor) },
+          { label: 'Proven on', value: `${str(params.chain)} at height ${groupDigits(str(params.height))}` },
+        ],
+        warnings,
+      }
+    case 'DOOMSDAY_PROVE':
+      warnings.push('This triggers the Doomsday Protocol for the whole network if the proof holds. It cannot be undone.')
+      return {
+        headline: 'Prove that a quantum canary key has signed',
+        details: [{ label: 'Proven on', value: `${str(params.chain)} at height ${groupDigits(str(params.height))}` }],
+        warnings,
+      }
 
     default:
       for (const k of TOKEN_KEYS) if (typeof params[k] === 'string') sym(String(params[k]))

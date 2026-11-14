@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { spendable } from '@/src/core/fee-reserve'
 import { dec, div, isAmount, mul, round, str } from '@/src/core/trade/decimal'
 import { fixed, price as fmtPrice } from '@/src/core/trade/format'
 import { perpMarketPrice, type Side } from '@/src/core/trade/orders'
@@ -361,7 +362,8 @@ export function CollateralSheet({
               type="button"
               onClick={(e) => {
                 e.preventDefault()
-                const max = dir === 'deposit' ? walletCollateral(account) : perp?.withdrawable
+                const inWallet = walletCollateral(account)
+                const max = dir === 'deposit' ? inWallet && spendable(inWallet, account?.perp?.collateral_token) : perp?.withdrawable
                 if (max) setAmount(round(max, 2, 'down'))
               }}
               className="rounded px-1 text-[9px] font-semibold uppercase tracking-wide hover:bg-accent hover:text-foreground"
