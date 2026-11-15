@@ -9,6 +9,9 @@ recovery phrase.
 - **Web** — runs in any browser tab at `/wallet`.
 - **iPhone app** — the same web app installed to the home screen, with Face ID unlock.
 - **Browser extension** — Chrome and Firefox, with a dApp provider (`window.ethereum`, `window.qrdx`, EIP-6963).
+  Every push to `main` builds both and publishes them to the [`extension` release](https://github.com/qrdx-org/qrdx-wallet/releases/tag/extension)
+  (`qrdx-wallet-chrome.zip`, `qrdx-wallet-firefox.zip`), which [wallet.qrdx.org](https://wallet.qrdx.org/#download) links to;
+  each CI run also keeps them as the `qrdx-wallet-chrome` and `qrdx-wallet-firefox` artifacts.
 
 Each target has its own feature set; see [docs/PLATFORMS.md](docs/PLATFORMS.md).
 

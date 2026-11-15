@@ -19,7 +19,7 @@ tab and as the iPhone app when launched from the home screen.
 | Lock when hidden | off (configurable) | 30 s (configurable) | n/a (popup closes) |
 | dApp provider (`window.ethereum`, `window.qrdx`, EIP-6963) | — | — | ✓ |
 | Connect to sites by QR code (QRDX Connect) | ✓ | ✓ | — (uses the provider) |
-| Install | browser install prompt | Share → Add to Home Screen | Chrome Web Store / Firefox Add-ons |
+| Install | browser install prompt | Share → Add to Home Screen | the zips on wallet.qrdx.org (CI's `extension` release): Load unpacked / Load Temporary Add-on |
 | Storage eviction risk | yes (Safari deletes after 7 days unused) | no (installed apps are exempt) | no |
 | Offline | app shell cached | app shell cached | bundled |
 
