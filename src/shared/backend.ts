@@ -60,6 +60,7 @@ export const BACKEND_METHODS = [
   'signEvmTransaction',
   'signPqTransaction',
   'signExchangeTransaction',
+  'signMultisigPartial',
 ] as const
 
 export type BackendMethod = (typeof BACKEND_METHODS)[number]

@@ -2,18 +2,62 @@
 
 import { useEffect } from 'react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
-import { crossedAlerts, notify, readNotifyPrefs, writeNotifyPrefs } from '@/src/core/notify'
+import { crossedAlerts, notify, readNotifyPrefs, securityEvents, snapshotOf, writeNotifyPrefs, type AuthoritySnapshot } from '@/src/core/notify'
 import { formatFiat } from '@/src/core/fiat'
+import { isQrdxChain } from '@/src/core/chains'
+import { accountAuthority } from '@/src/core/qns'
 
 const seenKey = (accountId: string) => `qrdx_notify_seen:${accountId}`
+const authorityKey = (chainId: string, address: string) => `qrdx_notify_authority:${chainId}:${address.toLowerCase()}`
+/** How often the open wallet looks at who may sign for the account. */
+const AUTHORITY_POLL_MS = 60_000
 
 /**
  * Notifications while the wallet is open (src/core/notify.ts): a received transfer, a send
- * that confirmed, a price alert that crossed. The first look at an account only records what
- * is there, so opening the wallet does not replay its history.
+ * that confirmed, a price alert that crossed, a change to who may sign for the account. The
+ * first look at an account only records what is there, so opening the wallet does not replay
+ * its history.
  */
 export function useWalletNotifications() {
   const { transactions, prices, currentWallet, activeChain } = useWallet()
+
+  // Both of the account's addresses: a waiting change or a recovery is the moment to act.
+  useEffect(() => {
+    if (!currentWallet || !isQrdxChain(activeChain)) return
+    const watched = [
+      { address: currentWallet.pqAddress, label: currentWallet.name },
+      { address: currentWallet.ethAddress, label: `${currentWallet.name}'s classic address` },
+    ]
+    let live = true
+    const look = async () => {
+      if (!readNotifyPrefs().security) return
+      for (const w of watched) {
+        const auth = await accountAuthority(activeChain, w.address).catch(() => null)
+        if (!live || !auth) continue
+        const key = authorityKey(activeChain.id, w.address)
+        let before: AuthoritySnapshot | null = null
+        try {
+          before = JSON.parse(localStorage.getItem(key) ?? 'null')
+        } catch {
+          before = null
+        }
+        if (before && Array.isArray(before.controllers) && Array.isArray(before.pending)) {
+          for (const e of securityEvents(w.label, before, auth)) void notify(e.title, e.body, e.tag)
+        }
+        try {
+          localStorage.setItem(key, JSON.stringify(snapshotOf(auth)))
+        } catch {
+          /* storage unavailable */
+        }
+      }
+    }
+    void look()
+    const t = setInterval(look, AUTHORITY_POLL_MS)
+    return () => {
+      live = false
+      clearInterval(t)
+    }
+  }, [currentWallet?.id, activeChain.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!currentWallet || !transactions.length) return

@@ -58,11 +58,12 @@ import {
   hexToBytes,
   decrypt,
 } from './crypto'
-import { pqSignWithPrefix } from './pq'
+import { pqSign, pqSignWithPrefix } from './pq'
+import { createKeyset, multisigTaggedMessage, type PartialSignature } from './multisig'
 import { decryptKeystore, encryptKeystore, type KeystoreV3 } from './keystore'
 import { signTransaction, type SignedTransaction } from './transaction'
 import { signPqTransaction, type PqTxFields, type SignedPqTx } from './pq-tx'
-import { signExchangeTx, type UnsignedExchangeTx, type SignedExchangeTx } from './exchange-tx'
+import { exchangeSigningBytes, signExchangeTx, type UnsignedExchangeTx, type SignedExchangeTx } from './exchange-tx'
 import { typedDataDigest } from './eip712'
 import type { EthTransactionRequest } from './ethereum'
 import type { IStorage } from './storage'
@@ -1165,6 +1166,27 @@ export class WalletManager {
   ): Promise<SignedExchangeTx & { tx_hash: string }> {
     const { keys } = await this.keysFor(accountId)
     return signExchangeTx(tx, keys.pqSeed)
+  }
+
+  /**
+   * This account's partial signature, as a member of the multisig `keyset`, on an exchange
+   * transaction that multisig signs (src/core/multisig.ts). Only such a transaction: the bytes
+   * signed are always an exchange transaction's, tagged with the multisig's address.
+   */
+  async signMultisigPartial(
+    keyset: { m: number; publicKeys: string[] },
+    tx: UnsignedExchangeTx,
+    accountId?: string
+  ): Promise<PartialSignature> {
+    const { keys } = await this.keysFor(accountId)
+    const set = createKeyset(keyset.publicKeys, keyset.m)
+    if (set.address.toLowerCase() !== (tx.signer ?? tx.sender).toLowerCase()) {
+      throw new WalletError('This transaction is not signed by that multisig')
+    }
+    const index = set.publicKeys.indexOf(keys.pqPublicKey.replace(/^0x/, '').toLowerCase())
+    if (index < 0) throw new WalletError('This account is not a member of that multisig')
+    const tagged = multisigTaggedMessage(set.address, exchangeSigningBytes(tx))
+    return { signer_index: index, public_key: set.publicKeys[index], signature: await pqSign(tagged, keys.pqSeed) }
   }
 
   // ─── v1 → v2 migration ──────────────────────────────────────────────────

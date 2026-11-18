@@ -402,6 +402,9 @@ export function exchangeTxHash(tx: UnsignedExchangeTx): string {
   return bytesToHex(blake2b(exchangeSigningBytes(tx), { dkLen: 32 }))
 }
 
+/** What may sign an exchange transaction: a key's 0xPQ address, or an m-of-n multisig (src/core/multisig.ts). */
+const PQ_SIGNER = /^0xPQ([0-9a-fA-F]{64}|MS[0-9a-fA-F]{38})$/
+
 /** Assemble and validate an unsigned exchange transaction. */
 export function buildExchangeTx(input: {
   op: ExchangeOpName | ExchangeOpCode
@@ -421,11 +424,11 @@ export function buildExchangeTx(input: {
   }
   const signer = input.signer && input.signer.toLowerCase() !== input.sender.toLowerCase() ? input.signer : undefined
   if (signer) {
-    if (!/^0xPQ[0-9a-fA-F]{64}$/.test(signer)) throw new ExchangeTxError('The signer must be a 0xPQ address')
+    if (!PQ_SIGNER.test(signer)) throw new ExchangeTxError('The signer must be a 0xPQ address or a 0xPQMS multisig')
     // A sub-account (0xSUBA…), a vault (0xUVLT…) or another account it may sign for.
     if (!/^0x[0-9a-zA-Z]{8,80}$/.test(input.sender)) throw new ExchangeTxError('Invalid account to act for')
-  } else if (!/^0xPQ[0-9a-fA-F]{64}$/.test(input.sender)) {
-    throw new ExchangeTxError('Exchange transactions must be sent from a 0xPQ address')
+  } else if (!PQ_SIGNER.test(input.sender)) {
+    throw new ExchangeTxError('Exchange transactions must be sent from a 0xPQ address or a 0xPQMS multisig')
   }
   const params = input.params ?? {}
   const required = [...(REQUIRED_PARAMS[op_type] ?? [])]

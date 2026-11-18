@@ -102,6 +102,25 @@ export interface Authority {
   agents: { agent: string; name: string; valid_until: string; max_notional_per_day?: string; placed_today?: string }[]
   subaccount_of?: string
   multisig?: { threshold: number; members: string[] }
+  /** A successor proven from another chain's migration registry (docs/QUANTUM_MIGRATION.md). */
+  migration?: { successor: string; chain: string; registered_at: number }
 }
 
 export const accountAuthority = (chain: ChainConfig, address: string) => qnsRead<Authority>(chain, 'account_getAuthority', [address])
+
+/** account_getControlled: what an address may sign for or has a part in. */
+export interface Controlled {
+  address: string
+  /** Accounts that bound it as a controller. */
+  controls: string[]
+  subaccounts: string[]
+  vaults_led: string[]
+  agent_for: string[]
+  /** Multisigs it is a member of (known once they have signed). */
+  multisigs: string[]
+  /** Accounts that named it a recovery guardian. */
+  guardian_of: string[]
+  names?: string[]
+}
+
+export const accountControlled = (chain: ChainConfig, address: string) => qnsRead<Controlled>(chain, 'account_getControlled', [address])

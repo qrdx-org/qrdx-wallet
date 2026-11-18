@@ -22,6 +22,7 @@ Each target has its own feature set; see [docs/PLATFORMS.md](docs/PLATFORMS.md).
 - **Unlocking:** password or biometrics (passkey PRF; Face ID on iPhone), with auto-lock, lock-when-hidden, and unlock throttling.
 - **Sending:** from either credential. Type-`0x51` post-quantum transactions on QRDX; any recipient form (`0x`, `0xPQ`, `0xPQMS`) resolved to its ledger account.
 - **QRDX native:** swap on the built-in exchange; stake by running a validator; token discovery; read-only perps overview.
+- **Account security:** quantum safety (bind the account's `0xPQ` address as its classic address's successor, then turn the classic key off); account control (controllers, delay, guardians, trading keys); m-of-n multisigs set up, signed and submitted from the wallet; acting as a recovery guardian; notifications when who may sign for the account changes.
 - **dApps (extension):** EIP-1193, EIP-6963, EIP-712, EIP-2255, a `qrdx_*` namespace, and an approval window with decoded calls.
 
 ## Development

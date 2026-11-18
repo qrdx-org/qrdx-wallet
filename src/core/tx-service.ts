@@ -30,8 +30,10 @@ import { isQrdxChain, getChain, type ChainConfig, type ChainToken } from './chai
 import { resolveSigningChainId } from './chain-identity'
 import { toAccountId, isProtocolHolder, addressForm } from './account-id'
 import { pqGasFromEvmEstimate, pqIntrinsicGas, type PqTxFields, type SignedPqTx } from './pq-tx'
+import { multisigGasLimit, type MultisigKeyset } from './multisig'
 import {
   buildExchangeTx,
+  DEFAULT_EXCHANGE_GAS_LIMIT,
   freeLaneOp,
   type ExchangeOpName,
   type JsonValue,
@@ -276,6 +278,51 @@ export async function send(
   return { hash, from: from.display, toAccountId: q.toAccountId, credential: req.credential }
 }
 
+/**
+ * Call a contract from the account's classic (0x, ECDSA) key on QRDX, with no value: how a
+ * classic account reaches the exchange write precompile (src/core/migration.ts).
+ * Returns the fee it may cost with `quoteOnly`.
+ */
+export async function callFromClassic(
+  signer: Signer,
+  input: { chain: ChainConfig | string; account: WalletAccount; to: string; data: string; fallbackGas: bigint },
+  quoteOnly?: false
+): Promise<{ hash: string }>
+export async function callFromClassic(
+  signer: Signer,
+  input: { chain: ChainConfig | string; account: WalletAccount; to: string; data: string; fallbackGas: bigint },
+  quoteOnly: true
+): Promise<{ fee: bigint }>
+export async function callFromClassic(
+  signer: Signer,
+  input: { chain: ChainConfig | string; account: WalletAccount; to: string; data: string; fallbackGas: bigint },
+  quoteOnly = false
+): Promise<{ hash: string } | { fee: bigint }> {
+  const chain = chainOf(input.chain)
+  if (!isQrdxChain(chain)) throw new TxError('This call exists only on QRDX networks')
+  const provider = getEvmProvider(chain.id)
+  const from = input.account.ethAddress
+  const call = { from, to: input.to, value: '0x0', data: input.data }
+  const [gasPrice, estimate] = await Promise.all([
+    provider.getGasPrice(),
+    provider.estimateGas(call).catch(() => input.fallbackGas),
+  ])
+  const gasLimit = (estimate * 120n) / 100n
+  if (quoteOnly) return { fee: gasLimit * gasPrice }
+  const [nonce, chainId] = await Promise.all([provider.getTransactionCount(from), resolveSigningChainId(chain)])
+  const tx: EthTransactionRequest = {
+    ...call,
+    nonce: toHex(nonce),
+    chainId: toHex(chainId),
+    gas: toHex(gasLimit),
+    gasPrice: toHex(gasPrice),
+  }
+  const raw = (await signer.signEvmTransaction(tx, input.account.id)).rawTransaction
+  const hash = await provider.sendRawTransaction(raw)
+  recordPendingTransaction(chain.id, hash, from, input.to, '0x0', chain.nativeCurrency.symbol, chain.nativeCurrency.decimals)
+  return { hash }
+}
+
 // ─── Speed up / cancel ──────────────────────────────────────────────────────
 
 /** A replacement must outbid the queued transaction; EVM nodes ask for at least 10 % more. */
@@ -488,6 +535,46 @@ export async function submitExchangeOp(
   }
 }
 
+
+/**
+ * The unsigned transaction a multisig signs (src/core/multisig.ts): as its own sender, or as the
+ * signer for `actFor`, an account that bound it as a controller (or that it guards). The nonce and
+ * gas price are fixed now; members sign exactly this.
+ */
+export async function prepareMultisigTx(input: {
+  chain: ChainConfig | string
+  keyset: MultisigKeyset
+  /** The account it acts for; the multisig itself when omitted. */
+  actFor?: string
+  op: ExchangeOpName
+  params: Record<string, JsonValue>
+}): Promise<UnsignedExchangeTx> {
+  const chain = chainOf(input.chain)
+  if (!isQrdxChain(chain)) throw new TxError('Multisigs exist only on QRDX networks')
+  const sender = input.actFor && input.actFor.toLowerCase() !== input.keyset.address.toLowerCase() ? input.actFor : input.keyset.address
+  const signer = sender === input.keyset.address ? undefined : input.keyset.address
+  const [nonce, price, chainId] = await Promise.all([
+    nodeRpc<number>(chain, 'exchange_getNonce', signer ? [sender, signer] : [sender]),
+    nodeRpc<number | string>(chain, 'exchange_gasPrice', []).catch(() => undefined),
+    resolveSigningChainId(chain),
+  ])
+  return buildExchangeTx({
+    op: input.op,
+    chainId,
+    sender,
+    signer,
+    nonce: Number(nonce),
+    params: input.params,
+    // Each member's signature is verified, and paid for, on top of the operation itself.
+    gasLimit: multisigGasLimit(DEFAULT_EXCHANGE_GAS_LIMIT, input.keyset.m),
+    gasPrice: price !== undefined ? BigInt(price) : undefined,
+  })
+}
+
+/** Submit a multisig-signed transaction: the request's transaction with the aggregate signature. */
+export async function submitMultisigTx(chain: ChainConfig | string, tx: UnsignedExchangeTx, signed: { public_key: string; signature: string }): Promise<string> {
+  return nodeRpc<string>(chainOf(chain), 'exchange_sendTransaction', [{ ...tx, ...signed }])
+}
 
 /** Poll an exchange receipt. `null` = still pending. */
 export async function exchangeReceipt(

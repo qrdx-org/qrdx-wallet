@@ -33,7 +33,7 @@ export function NotificationsPage({ header }: { header: ReactNode }) {
     writeNotifyPrefs(next)
   }
 
-  const toggle = async (key: 'transactions' | 'priceAlerts', on: boolean) => {
+  const toggle = async (key: 'transactions' | 'priceAlerts' | 'security', on: boolean) => {
     if (on) setPermission(await requestNotificationPermission())
     setPrefs({ ...prefs, [key]: on })
   }
@@ -72,6 +72,12 @@ export function NotificationsPage({ header }: { header: ReactNode }) {
         <div className="rounded-xl glass p-1.5">
           <Toggle label="Transactions" description="Funds received, and your sends when they confirm or fail" checked={prefs.transactions} onChange={(v) => void toggle('transactions', v)} />
           <Toggle label="Price alerts" description="When a token crosses a price you set below" checked={prefs.priceAlerts} onChange={(v) => void toggle('priceAlerts', v)} />
+          <Toggle
+            label="Account security"
+            description="A waiting change to who may sign for your account, a recovery by your guardians, a new controller"
+            checked={prefs.security && permission === 'granted'}
+            onChange={(v) => void toggle('security', v)}
+          />
         </div>
 
         <section className="rounded-xl glass p-3">

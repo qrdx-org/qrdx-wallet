@@ -30,7 +30,9 @@ import {
   Star,
   Users,
   AtSign,
-  UserCog } from 'lucide-react'
+  UserCog,
+  ShieldCheck,
+  KeySquare } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useTheme } from 'next-themes'
@@ -147,12 +149,16 @@ type SettingsPage =
   | 'developer'
   | 'names'
   | 'account-control'
+  | 'quantum-safety'
+  | 'multisig'
 
 // ─── Component ──────────────────────────────────────────────────────────────
 import { useConfirm } from './flow/ConfirmSheet'
 import { NotificationsPage } from './settings/NotificationsPage'
 import { NamesPage } from './settings/NamesPage'
 import { AccountControlPage } from './settings/AccountControlPage'
+import { QuantumSafetyPage } from './settings/QuantumSafetyPage'
+import { MultisigPage } from './settings/MultisigPage'
 
 export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
   const [page, setPage] = useState<SettingsPage>(initialPage)
@@ -461,6 +467,13 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
                   gradient="from-primary to-primary/70"
                 />
                 <MenuItem
+                  icon={ShieldCheck}
+                  label="Quantum safety"
+                  description="Protect your classic 0x address"
+                  onClick={() => setPage('quantum-safety')}
+                  gradient="from-primary to-primary/70"
+                />
+                <MenuItem
                   icon={UserCog}
                   label="Account control"
                   description="Controllers, key off, delay, recovery, agents"
@@ -468,9 +481,16 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
                   gradient="from-primary to-primary/70"
                 />
                 <MenuItem
+                  icon={KeySquare}
+                  label="Multisig"
+                  description="Set up, sign and submit m-of-n transactions"
+                  onClick={() => setPage('multisig')}
+                  gradient="from-primary to-primary/70"
+                />
+                <MenuItem
                   icon={Bell}
                   label="Notifications"
-                  description="Transaction & price alerts"
+                  description="Transactions, prices, account security"
                   onClick={() => setPage('notifications')}
                   gradient="from-primary to-primary/70"
                 />
@@ -695,6 +715,8 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
   if (page === 'security') return <SecurityPage onBack={goBack} />
   if (page === 'names') return <NamesPage onBack={goBack} />
   if (page === 'account-control') return <AccountControlPage onBack={goBack} />
+  if (page === 'quantum-safety') return <QuantumSafetyPage onBack={goBack} />
+  if (page === 'multisig') return <MultisigPage onBack={goBack} />
 
   // ── Notifications ─────────────────────────────────────────────────────────
   if (page === 'notifications') {

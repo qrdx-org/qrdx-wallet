@@ -134,7 +134,18 @@ function ReviewSheet({
         <p className="text-sm font-semibold leading-snug">{summary.headline}</p>
         {request.actAs && (
           <div className="mt-2 border-t border-border/60 pt-2">
-            <Line k="Acting for" v={`${request.actAs.slice(0, 10)}…${request.actAs.slice(-6)} (${/^0xUVLT/i.test(request.actAs) ? 'a vault you lead' : 'your sub-account'})`} />
+            <Line
+              k="Acting for"
+              v={`${request.actAs.slice(0, 10)}…${request.actAs.slice(-6)} (${
+                /^0xUVLT/i.test(request.actAs)
+                  ? 'a vault you lead'
+                  : /^0xSUBA/i.test(request.actAs)
+                    ? 'your sub-account'
+                    : request.actAs.toLowerCase() === currentWallet?.ethAddress.toLowerCase()
+                      ? 'your classic address'
+                      : 'an account you control'
+              })`}
+            />
           </div>
         )}
         {summary.details.length > 0 && (

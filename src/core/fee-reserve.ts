@@ -22,8 +22,11 @@ export function spendable(balance: string, asset: string | null | undefined, res
   return left > 0n ? str(left) : '0'
 }
 
-/** The node's refusal for touching the reserve, said for a person; any other error unchanged. */
+/** The node's refusal for touching the reserve, or for a payer short of gas, said for a person; any other error unchanged. */
 export function explainNodeError(error: string): string {
   const m = /would keep less than its fee reserve \(([\d.]+) QRDX\)/.exec(error)
-  return m ? `This would leave less than ${m[1]} QRDX in the account. The network keeps that much back so the account can always pay its fees.` : error
+  if (m) return `This would leave less than ${m[1]} QRDX in the account. The network keeps that much back so the account can always pay its fees.`
+  const gas = /insufficient QRDX for gas: (\S+?)… holds ([\d.]+); the transaction may cost ([\d.]+)/.exec(error)
+  if (gas) return `${gas[1]}… pays this transaction's fee and holds ${gas[2]} QRDX; it may cost ${gas[3]}. Send it some QRDX first.`
+  return error
 }
