@@ -454,7 +454,7 @@ function RequestView({
   const [busy, setBusy] = useState<'sign' | 'submit' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [merge, setMerge] = useState('')
-  const [submitted, setSubmitted] = useState<{ hash: string; status: 'pending' | 'done' | 'failed'; error?: string } | null>(null)
+  const [submitted, setSubmitted] = useState<{ hash: string; status: 'pending' | 'done' | 'failed'; error?: string; block?: number } | null>(null)
 
   const parsed = useMemo(() => {
     try {
@@ -506,10 +506,7 @@ function RequestView({
       const hash = await submitMultisigTx(activeChain, request.tx, signed)
       setSubmitted({ hash, status: 'pending' })
       waitForExchangeReceipt(activeChain, hash)
-        .then((r) => {
-          setSubmitted({ hash, status: r.success ? 'done' : 'failed', error: r.error || undefined })
-          if (r.success) setTimeout(onDone, 2500)
-        })
+        .then((r) => setSubmitted({ hash, status: r.success ? 'done' : 'failed', error: r.error || undefined, block: r.block_height }))
         .catch((e) => setSubmitted({ hash, status: 'pending', error: explainNodeError((e as Error).message) }))
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Could not submit'
@@ -600,10 +597,11 @@ function RequestView({
             {submitted.status === 'pending'
               ? (submitted.error ?? `Submitted (${submitted.hash.slice(0, 10)}…). Waiting for the next block.`)
               : submitted.status === 'done'
-                ? 'Executed.'
+                ? `Executed in block ${submitted.block}.`
                 : `Failed: ${submitted.error ?? 'the node refused it'}`}
           </Notice>
         )}
+        {submitted?.status === 'done' && <PrimaryButton onClick={onDone}>Done</PrimaryButton>}
         <ErrorBanner error={error} />
         {!enough && (
           <p className="px-1 text-[11px] text-muted-foreground">
