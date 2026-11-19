@@ -45,6 +45,7 @@
   "license": "ISC",
   "packageManager": "pnpm@10.6.4",
   "dependencies": {
+    "@noble/curves": "2.4.0",
     "@noble/hashes": "^2.4.0",
     "@noble/post-quantum": "^0.7.1",
     "@radix-ui/react-avatar": "^1.1.11",
@@ -59,6 +60,8 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.1.15",
+    "@scure/base": "2.4.0",
+    "@scure/btc-signer": "2.4.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "ethereum-cryptography": "^3.2.0",

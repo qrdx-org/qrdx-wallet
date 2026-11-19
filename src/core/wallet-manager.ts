@@ -65,6 +65,9 @@ import { signTransaction, type SignedTransaction } from './transaction'
 import { signPqTransaction, type PqTxFields, type SignedPqTx } from './pq-tx'
 import { exchangeSigningBytes, signExchangeTx, type UnsignedExchangeTx, type SignedExchangeTx } from './exchange-tx'
 import { typedDataDigest } from './eip712'
+import { btcPayment, btcPrivateKey, signBtcPsbt, type BtcNetwork } from './bitcoin'
+import { signSolMessage, solAddressOf, solPrivateKey } from './solana'
+import { base64 } from '@scure/base'
 import type { EthTransactionRequest } from './ethereum'
 import type { IStorage } from './storage'
 import type {
@@ -1173,6 +1176,54 @@ export class WalletManager {
    * transaction that multisig signs (src/core/multisig.ts). Only such a transaction: the bytes
    * signed are always an exchange transaction's, tagged with the multisig's address.
    */
+  private async secretFor(accountId?: string): Promise<{ account: AccountRecord; secret: KeyringSecret }> {
+    const vault = await this.readVault()
+    const account = await this.accountOrSelected(vault, accountId)
+    const secret = await this.openKeyring(vault, account.keyringId)
+    await this.touch()
+    return { account, secret }
+  }
+
+  /**
+   * The account's addresses on Bitcoin and Solana (./bitcoin.ts, ./solana.ts). Solana is null
+   * for an imported key: it has no recovery phrase to derive an ed25519 key from.
+   */
+  async chainAddresses(accountId?: string): Promise<{ bitcoin: Record<BtcNetwork, string>; solana: string | null }> {
+    const { account, secret } = await this.secretFor(accountId)
+    const index = account.hdIndex ?? 0
+    const sol = solPrivateKey(secret, index)
+    return {
+      bitcoin: {
+        mainnet: btcPayment(btcPrivateKey(secret, index, 'mainnet'), 'mainnet').address,
+        testnet: btcPayment(btcPrivateKey(secret, index, 'testnet'), 'testnet').address,
+      },
+      solana: sol ? solAddressOf(sol) : null,
+    }
+  }
+
+  /** Sign and finalize a PSBT that spends only this account's Bitcoin. */
+  async signBitcoinPsbt(psbt: string, network: BtcNetwork, accountId?: string): Promise<{ hex: string; txid: string }> {
+    const { account, secret } = await this.secretFor(accountId)
+    const key = btcPrivateKey(secret, account.hdIndex ?? 0, network)
+    try {
+      return signBtcPsbt(psbt, key, network)
+    } finally {
+      key.fill(0)
+    }
+  }
+
+  /** Sign a compiled Solana message (base64) whose fee payer is this account; the signature, base64. */
+  async signSolanaMessage(message: string, accountId?: string): Promise<string> {
+    const { account, secret } = await this.secretFor(accountId)
+    const key = solPrivateKey(secret, account.hdIndex ?? 0)
+    if (!key) throw new WalletError('This account was imported from a key and has no Solana address', 'INVALID')
+    try {
+      return base64.encode(signSolMessage(base64.decode(message), key))
+    } finally {
+      key.fill(0)
+    }
+  }
+
   async signMultisigPartial(
     keyset: { m: number; publicKeys: string[] },
     tx: UnsignedExchangeTx,

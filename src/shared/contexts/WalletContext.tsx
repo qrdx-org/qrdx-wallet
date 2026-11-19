@@ -15,11 +15,21 @@ import type { UnlockResult } from '../../core/wallet-manager'
 import {
   type ChainConfig,
   DEFAULT_CHAIN,
-  CHAIN_LIST,
+  allChains,
+  setCustomChains,
   getChain,
   supportsWeb3,
   isQrdxChain,
+  chainFamily,
+  isListedToken,
 } from '../../core/chains'
+import {
+  addressOn,
+  fetchOtherBalances,
+  fetchOtherHistory,
+  probeOtherChain,
+  type ChainAddresses,
+} from '../../core/other-chains'
 import {
   probeChainIdentity,
   trustChainId,
@@ -162,6 +172,19 @@ export interface WalletContextType {
   // ── Network ────────────────────────────────────────────────────────────
   activeChain: ChainConfig
   setActiveChain: (chainId: string) => void
+  /**
+   * The current account's address on the active chain: its classic 0x address on EVM chains,
+   * its Bitcoin or Solana address there. Null while it is derived, or on Solana for an
+   * account imported from a key (it has none).
+   */
+  activeAddress: string | null
+  /** The current account's Bitcoin and Solana addresses. */
+  chainAddresses: ChainAddresses | null
+  /** Home shows every network together (the portfolio) rather than the active one. */
+  allNetworks: boolean
+  setAllNetworks: (all: boolean) => void
+  /** The QRDX network the portfolio leads with: the active one, else the last used. */
+  homeQrdxChain: ChainConfig
   chains: ChainConfig[]
   networkStatus: NetworkStatus
   refreshNetworkStatus: () => Promise<void>
@@ -300,6 +323,7 @@ export function WalletProvider({
   const [addressBook, setAddressBook] = useState<AddressBookEntry[]>([])
   const [connectedSites, setConnectedSites] = useState<SitePermission[]>([])
   const [passkeyAvailability, setPasskeyAvailability] = useState<PasskeySupport>('unknown')
+  const [chainAddresses, setChainAddresses] = useState<ChainAddresses | null>(null)
 
   const initialized = state?.initialized ?? false
   const locked = state?.locked ?? true
@@ -311,6 +335,34 @@ export function WalletProvider({
         : null,
     [state]
   )
+
+  // Bitcoin and Solana addresses are derived from the keyring, so only while unlocked.
+  useEffect(() => {
+    setChainAddresses(null)
+    if (!currentWallet) return
+    let live = true
+    backend
+      .chainAddresses(currentWallet.id)
+      .then((a) => live && setChainAddresses(a))
+      .catch((err) => console.warn('Could not derive Bitcoin and Solana addresses:', err))
+    return () => {
+      live = false
+    }
+  }, [currentWallet?.id, backend]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The portfolio view, remembered; and the QRDX network it leads with.
+  const allNetworks = (state?.settings.portfolioView ?? 'all') === 'all'
+  const setAllNetworks = (all: boolean) => {
+    if (all === allNetworks) return
+    backend.updateSettings({ portfolioView: all ? 'all' : 'network' }).then(refresh).catch(() => undefined)
+  }
+  const [homeQrdxChain, setHomeQrdxChain] = useState<ChainConfig>(DEFAULT_CHAIN)
+  useEffect(() => {
+    if (isQrdxChain(activeChain)) setHomeQrdxChain(activeChain)
+  }, [activeChain])
+
+  const evm = chainFamily(activeChain) === 'evm'
+  const activeAddress = evm ? (currentWallet?.ethAddress ?? null) : addressOn(activeChain, chainAddresses)
 
   // ── State sync ──────────────────────────────────────────────────────────
   const refresh = useCallback(async () => {
@@ -482,7 +534,7 @@ export function WalletProvider({
   // ── Chain ───────────────────────────────────────────────────────────────
   const setActiveChain = (chainId: string) => {
     const chain = getChain(chainId)
-    if (!chain) return
+    if (!chain || chain.notLive) return
     setActiveChainState(chain)
     // Balances, prices and history are chain-scoped; showing the previous
     // chain's figures under a new network's name would be actively misleading.
@@ -500,14 +552,22 @@ export function WalletProvider({
     }
   }
 
+  // The user's networks live in settings; load them before anything looks a chain up.
+  const customKey = JSON.stringify(state?.settings.customChains ?? [])
+  const chains = useMemo(() => {
+    setCustomChains(JSON.parse(customKey))
+    return allChains()
+  }, [customKey])
+
   const restoredChainRef = useRef(false)
   useEffect(() => {
     const settings = state?.settings
     if (!settings || restoredChainRef.current) return
+    setCustomChains(settings.customChains)
     restoredChainRef.current = true
     if (settings.trustedChainIds) setTrustedChainIds(settings.trustedChainIds)
     const saved = settings.activeChainId ? getChain(settings.activeChainId) : undefined
-    if (saved) setActiveChainState(saved)
+    if (saved && !saved.notLive) setActiveChainState(saved)
   }, [state?.settings])
 
   const refreshNetworkStatus = useCallback(async () => {
@@ -517,6 +577,16 @@ export function WalletProvider({
     const probedChain = activeChain
     const isStale = () => seq !== probeSeqRef.current
     setNetworkStatus({ state: 'checking' })
+    if (chainFamily(probedChain) !== 'evm') {
+      // No chain id to verify: Bitcoin and Solana addresses and transactions name their network.
+      try {
+        await probeOtherChain(probedChain)
+        if (!isStale()) setNetworkStatus({ state: 'connected', chainId: 0, rpcUrl: probedChain.rpcUrl })
+      } catch (err) {
+        if (!isStale()) setNetworkStatus({ state: 'unreachable', message: err instanceof Error ? err.message : 'Could not reach the network' })
+      }
+      return
+    }
     try {
       const identity = await probeChainIdentity(probedChain, true)
       if (isStale()) return
@@ -564,7 +634,23 @@ export function WalletProvider({
 
   // ── Balances ────────────────────────────────────────────────────────────
   const fetchBalances = async (): Promise<TokenBalance[]> => {
-    if (!currentWallet || !supportsWeb3(activeChain)) return []
+    if (!currentWallet) return []
+    if (!evm) {
+      if (!activeAddress) return []
+      setBalancesLoading(true)
+      try {
+        const list = await fetchOtherBalances(activeChain, activeAddress)
+        setBalances(list)
+        setPqBalances([])
+        return list
+      } catch (err) {
+        console.warn('Failed to fetch balances:', err)
+        return []
+      } finally {
+        setBalancesLoading(false)
+      }
+    }
+    if (!supportsWeb3(activeChain)) return []
     setBalancesLoading(true)
     try {
       const watched = await watchedTokens.list(activeChain.id).catch(() => [])
@@ -601,8 +687,8 @@ export function WalletProvider({
   }
 
   useEffect(() => {
-    if (currentWallet && !locked && supportsWeb3(activeChain)) fetchBalances()
-  }, [currentWallet?.id, activeChain.id, locked]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (currentWallet && !locked && (supportsWeb3(activeChain) || activeAddress)) fetchBalances()
+  }, [currentWallet?.id, activeChain.id, locked, activeAddress]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const pqBalance = useMemo(
     () =>
@@ -724,7 +810,16 @@ export function WalletProvider({
   }, [displayCode])
 
   const refreshPrices = useCallback(async () => {
-    const all = [...balances, ...pqBalances]
+    // Priced by symbol, so only coins the registry lists by address: a token anyone named "USDC" is not worth a dollar.
+    const all = [...balances, ...pqBalances].filter((b) => isListedToken(activeChain, b.address))
+    // Test coins have no price; CoinGecko's ETH or SOL price is mainnet's. (QRDX testnet's comes from its own market.)
+    if (activeChain.isTestnet && !isQrdxChain(activeChain)) {
+      setPrices(new Map())
+      setPortfolioValue(0)
+      setPortfolioChange24h(0)
+      setPriceHistory([])
+      return
+    }
     if (all.length === 0) return
     const priceMap = await fetchPricesBySymbol([...new Set(all.map((b) => b.symbol))])
     // CoinGecko does not list QRDX: on QRDX networks its price and chart come from the trade API.
@@ -751,9 +846,12 @@ export function WalletProvider({
   // ── History ─────────────────────────────────────────────────────────────
   const refreshTransactions = useCallback(async () => {
     if (!currentWallet) return
+    if (!evm && !activeAddress) return
     setTransactionsLoading(true)
     try {
-      if (isQrdxChain(activeChain)) {
+      if (!evm) {
+        setTransactions(await fetchOtherHistory(activeChain, activeAddress!))
+      } else if (isQrdxChain(activeChain)) {
         const tokens = [
           ...(await watchedTokens.list(activeChain.id).catch(() => [])),
           ...(await exchange
@@ -772,11 +870,11 @@ export function WalletProvider({
     } finally {
       setTransactionsLoading(false)
     }
-  }, [currentWallet?.ethAddress, activeChain.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentWallet?.ethAddress, activeChain.id, activeAddress]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (currentWallet && !locked) refreshTransactions()
-  }, [currentWallet?.id, activeChain.id, locked]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentWallet?.id, activeChain.id, locked, activeAddress]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Address book & sites (not secret; readable while locked) ────────────
   const refreshAddressBook = useCallback(
@@ -840,7 +938,12 @@ export function WalletProvider({
     updateSettings,
     activeChain,
     setActiveChain,
-    chains: CHAIN_LIST,
+    activeAddress,
+    chainAddresses,
+    allNetworks,
+    setAllNetworks,
+    homeQrdxChain,
+    chains,
     networkStatus,
     refreshNetworkStatus,
     trustActiveChainId,

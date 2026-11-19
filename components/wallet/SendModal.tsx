@@ -1,5 +1,6 @@
 'use client'
 
+import { CoinLogo, isVerifiedToken } from './CoinLogo'
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
   ArrowLeft,
@@ -171,14 +172,15 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
   // Opened from a token's page: go straight to the form for it, once.
   const preselected = useRef(false)
   useEffect(() => {
-    if (!initialToken || preselected.current || !tokenOptions.length) return
+    // Wait for the real balances: before they load, the list holds a zero-balance placeholder.
+    if (!initialToken || preselected.current || sourceBalances.length === 0) return
     const want = initialToken.toLowerCase()
     const match = tokenOptions.find((t) => (t.contractAddress ?? '').toLowerCase() === want || (!t.contractAddress && t.symbol.toLowerCase() === want))
     if (match) {
       preselected.current = true
       handleSelectToken(match)
     }
-  }, [initialToken, tokenOptions])
+  }, [initialToken, tokenOptions, sourceBalances.length])
 
   const handleBack = () => {
     if (step === 'send-form') {
@@ -455,9 +457,7 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
                 className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-accent/30 active:bg-accent/50 transition-all group text-left"
               >
                 {/* Token icon */}
-                <div className={`h-10 w-10 rounded-xl bg-gradient-to-br ${token.color} flex items-center justify-center shadow-lg shadow-black/10 group-hover:scale-105 transition-transform`}>
-                  <span className="text-primary-foreground text-sm font-bold">{token.icon}</span>
-                </div>
+                <CoinLogo symbol={token.symbol} verified={isVerifiedToken(activeChain, token.contractAddress ?? '')} size={40} className="group-hover:scale-105 transition-transform" />
 
                 {/* Token info */}
                 <div className="flex-1 min-w-0">
@@ -506,9 +506,7 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="flex items-center gap-2.5 flex-1">
-              <div className={`h-7 w-7 rounded-lg bg-gradient-to-br ${token.color} flex items-center justify-center shadow-md`}>
-                <span className="text-primary-foreground text-xs font-bold">{token.icon}</span>
-              </div>
+              <CoinLogo symbol={token.symbol} verified={isVerifiedToken(activeChain, token.contractAddress ?? '')} size={28} />
               <div>
                 <h1 className="text-base font-semibold">Send {token.symbol}</h1>
                 <p className="text-[10px] text-muted-foreground">{token.name}</p>
@@ -522,7 +520,7 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
         {/* Selected token balance card — click to change token */}
         <button
           onClick={() => setStep('select-token')}
-          className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${token.color} p-[1px] w-full text-left group cursor-pointer`}
+          className="relative overflow-hidden rounded-2xl border border-border/60 w-full text-left group cursor-pointer"
         >
           <div className="rounded-2xl bg-background/95 backdrop-blur-sm px-4 py-3 group-hover:bg-background/90 transition-colors">
             <div className="flex items-center justify-between">
@@ -699,9 +697,7 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
                 className="w-full bg-background/60 border border-border/50 rounded-xl px-3 py-2.5 text-xl font-bold placeholder:text-muted-foreground/20 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/30 transition-all pr-20"
               />
               <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                <div className={`h-5 w-5 rounded-md bg-gradient-to-br ${token.color} flex items-center justify-center`}>
-                  <span className="text-primary-foreground text-[8px] font-bold">{token.icon}</span>
-                </div>
+                <CoinLogo symbol={token.symbol} verified={isVerifiedToken(activeChain, token.contractAddress ?? '')} size={20} />
                 <span className="text-sm font-semibold text-muted-foreground">{token.symbol}</span>
               </div>
             </div>

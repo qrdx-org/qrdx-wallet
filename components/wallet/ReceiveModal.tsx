@@ -1,11 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowLeft, Copy, Check, Share2 } from 'lucide-react'
+import { ArrowLeft, Copy, Check, Share2, Info } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-
+import { useWallet } from '@/src/shared/contexts/WalletContext'
+import { chainFamily, isQrdxChain } from '@/src/core/chains'
+import { NetworkLogo } from './CoinLogo'
 import { usePrimaryName } from './useQnsName'
 
 interface ReceiveModalProps {
@@ -15,172 +17,144 @@ interface ReceiveModalProps {
   onClose: () => void
 }
 
+/**
+ * The address to receive on, for the selected network only: on QRDX the quantum-safe address
+ * (or the classic one), on other EVM networks the 0x address, on Bitcoin and Solana their own.
+ * Offering an address the network cannot use would invite a lost transfer.
+ */
 export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: ReceiveModalProps) {
+  const { activeChain, activeAddress } = useWallet()
+  const family = chainFamily(activeChain)
+  const qrdx = isQrdxChain(activeChain)
   // The account's primary QRDX name: senders on QRDX can type it instead of an address.
-  const qnsName = usePrimaryName(pqAddress)
-  const [addressType, setAddressType] = useState<'eth' | 'pq'>('eth')
+  const qnsName = usePrimaryName(qrdx ? pqAddress : '')
+  const [kind, setKind] = useState<'pq' | 'eth'>(qrdx ? 'pq' : 'eth')
   const [copied, setCopied] = useState(false)
 
-  const activeAddress = addressType === 'eth' ? ethAddress : pqAddress
+  const address = family !== 'evm' ? activeAddress : qrdx && kind === 'pq' ? pqAddress : ethAddress
+  const noun = family === 'bitcoin' ? 'Bitcoin' : family === 'solana' ? 'Solana' : qrdx && kind === 'pq' ? 'quantum-safe' : activeChain.name
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(activeAddress)
+    if (!address) return
+    navigator.clipboard.writeText(address)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
   const handleShare = async () => {
-    if (navigator.share) {
-      await navigator.share({ text: activeAddress })
-    } else {
-      handleCopy()
-    }
+    if (!address) return
+    if (navigator.share) await navigator.share({ text: address }).catch(() => undefined)
+    else handleCopy()
   }
+
+  const note =
+    family === 'bitcoin'
+      ? `Send only bitcoin${activeChain.isTestnet ? ' on testnet4' : ''} to this address. This is a native SegWit (bc1…) address; any Bitcoin wallet can pay it.`
+      : family === 'solana'
+        ? `Send only SOL and Solana tokens${activeChain.isTestnet ? ' on devnet' : ''} to this address.`
+        : qrdx && kind === 'pq'
+          ? 'Your quantum-safe address on QRDX. Trading, staking and swaps use it. Senders on QRDX can also use your QRDX name.'
+          : qrdx
+            ? 'Your classic address on QRDX. It signs with ECDSA; keep large amounts on your quantum-safe address.'
+            : `Send only ${activeChain.name} assets to this address: ${activeChain.nativeCurrency.symbol} and tokens on ${activeChain.name}. The same address works on every EVM network, so check which network the sender uses.`
 
   return (
     <div className="min-h-screen mono-backdrop">
-      {/* Header */}
       <div className="glass-strong sticky top-0 z-20 pt-safe">
         <div className="px-4 py-3">
           <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-lg hover:bg-accent/50"
-              onClick={onClose}
-            >
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/50" onClick={onClose} aria-label="Back">
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <h1 className="text-base font-semibold">Receive</h1>
+            <h1 className="text-base font-semibold">Receive on {activeChain.name}</h1>
           </div>
         </div>
       </div>
 
       <div className="px-4 py-3 space-y-4">
-        {/* Address type toggle */}
-        <div className="flex gap-1 p-1 bg-accent/30 rounded-xl">
-          <button
-            onClick={() => setAddressType('eth')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-semibold transition-all ${
-              addressType === 'eth'
-                ? 'bg-background shadow-sm text-foreground/70'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded ${
-              addressType === 'eth' ? 'bg-foreground/10' : ''
-            }`}>
-              ETH
-            </span>
-            EVM Address
-          </button>
-          <button
-            onClick={() => setAddressType('pq')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-semibold transition-all ${
-              addressType === 'pq'
-                ? 'bg-background shadow-sm text-primary'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded ${
-              addressType === 'pq' ? 'bg-primary/20' : ''
-            }`}>
-              PQ
-            </span>
-            Quantum Address
-          </button>
-        </div>
+        {qrdx && (
+          <div className="flex gap-1 p-1 bg-accent/30 rounded-xl" role="tablist">
+            {(
+              [
+                ['pq', 'Quantum-safe', '0xPQ…'],
+                ['eth', 'Classic', '0x…'],
+              ] as const
+            ).map(([k, label, hint]) => (
+              <button
+                key={k}
+                role="tab"
+                aria-selected={kind === k}
+                onClick={() => setKind(k)}
+                className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${kind === k ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                {label} <span className="font-mono text-[10px] font-normal text-muted-foreground">{hint}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
-        {/* QR Code */}
-        <Card className="glass border-border/50">
-          <CardContent className="p-5 flex flex-col items-center">
-            <div className="text-xs text-muted-foreground mb-3 font-medium">
-              {accountName}
-              {qnsName && (
-                <span className="block mt-0.5 text-sm font-semibold text-foreground" title="Your QRDX name: anyone on QRDX can send to it">
-                  {qnsName}
-                </span>
-              )}
-            </div>
-            <div className="relative p-3 bg-white rounded-2xl shadow-lg">
-              <QRCodeSVG
-                value={activeAddress}
-                size={180}
-                level="M"
-                bgColor="#ffffff"
-                fgColor="#000000"
-                imageSettings={{
-                  src: '',
-                  height: 0,
-                  width: 0,
-                  excavate: false,
-                }}
-              />
-              {/* Center badge */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                {/* The code is always black on white, so its badge is too. */}
-                <div className="h-8 w-8 rounded-lg flex items-center justify-center text-[10px] font-bold text-white bg-black shadow-md ring-2 ring-white">
-                  {addressType === 'eth' ? 'ETH' : 'PQ'}
+        {!address ? (
+          <Card className="glass border-border/50">
+            <CardContent className="p-5 flex gap-3 text-xs text-muted-foreground">
+              <Info className="h-4 w-4 shrink-0" />
+              <p>
+                {family === 'solana'
+                  ? 'This account was imported from a private key, so it has no Solana address. Accounts from a recovery phrase have one.'
+                  : 'Preparing your address…'}
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <Card className="glass border-border/50">
+              <CardContent className="p-5 flex flex-col items-center">
+                <div className="text-xs text-muted-foreground mb-3 font-medium text-center">
+                  {accountName}
+                  {qrdx && kind === 'pq' && qnsName && (
+                    <span className="block mt-0.5 text-sm font-semibold text-foreground" title="Your QRDX name: anyone on QRDX can send to it">
+                      {qnsName}
+                    </span>
+                  )}
                 </div>
-              </div>
+                <div className="relative p-3 bg-white rounded-2xl shadow-lg">
+                  <QRCodeSVG value={address} size={180} level="M" bgColor="#ffffff" fgColor="#000000" />
+                  {/* The code is always black on white, so its badge is too. */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="rounded-full bg-white p-1 text-black shadow-md">
+                      <NetworkLogo chain={activeChain} size={30} className="bg-white text-black ring-black/10 [&>span]:bg-black" />
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 w-full">
+                  <p className="mb-1 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Your {noun} address</p>
+                  <p className="text-center font-mono text-[11px] text-foreground/80 break-all px-2 leading-relaxed">{address}</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button onClick={handleCopy} variant="outline" className="h-11 font-semibold glass hover:bg-accent/50 hover:border-primary/30">
+                {copied ? (
+                  <>
+                    <Check className="h-4 w-4 mr-2 text-green-500" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy
+                  </>
+                )}
+              </Button>
+              <Button onClick={handleShare} variant="outline" className="h-11 font-semibold glass hover:bg-accent/50 hover:border-primary/30">
+                <Share2 className="h-4 w-4 mr-2" />
+                Share
+              </Button>
             </div>
+          </>
+        )}
 
-            {/* Address display */}
-            <div className="mt-4 w-full">
-              <div className="flex items-center gap-2 justify-center mb-2">
-                <span className={`text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded ${
-                  addressType === 'eth'
-                    ? 'bg-foreground/10 text-foreground/70'
-                    : 'bg-primary/15 text-primary'
-                }`}>
-                  {addressType === 'eth' ? 'EVM' : 'PQ'}
-                </span>
-              </div>
-              <div className="text-center font-mono text-[11px] text-muted-foreground break-all px-2 leading-relaxed">
-                {activeAddress}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Action buttons */}
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            onClick={handleCopy}
-            variant="outline"
-            className="h-11 font-semibold glass hover:bg-accent/50 hover:border-primary/30"
-          >
-            {copied ? (
-              <>
-                <Check className="h-4 w-4 mr-2 text-green-500" />
-                Copied!
-              </>
-            ) : (
-              <>
-                <Copy className="h-4 w-4 mr-2" />
-                Copy
-              </>
-            )}
-          </Button>
-          <Button
-            onClick={handleShare}
-            variant="outline"
-            className="h-11 font-semibold glass hover:bg-accent/50 hover:border-primary/30"
-          >
-            <Share2 className="h-4 w-4 mr-2" />
-            Share
-          </Button>
-        </div>
-
-        {/* Info note */}
-        <div className="px-1 py-1">
-          <p className="text-[10px] text-muted-foreground/70 text-center leading-relaxed">
-            {addressType === 'eth'
-              ? 'Send only EVM-compatible tokens (ETH, ERC-20) to this address. Sending other assets may result in permanent loss.'
-              : 'This is your quantum-resistant address. Use it for QRDX chain native transfers with Dilithium/SPHINCS+ security.'
-            }
-          </p>
-        </div>
+        <p className="px-1 text-[11px] text-muted-foreground text-center leading-relaxed">{note}</p>
       </div>
     </div>
   )

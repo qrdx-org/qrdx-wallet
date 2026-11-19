@@ -60,13 +60,21 @@ const SYMBOL_TO_COINGECKO: Record<string, string> = {
   POL: 'matic-network',
   BNB: 'binancecoin',
   AVAX: 'avalanche-2',
-  FTM: 'fantom',
+  S: 'sonic-3',
+  MNT: 'mantle',
+  XDAI: 'xdai',
+  CELO: 'celo',
   ARB: 'arbitrum',
   OP: 'optimism',
   SOL: 'solana',
+  WSOL: 'wrapped-solana',
+  JUP: 'jupiter-exchange-solana',
+  BONK: 'bonk',
+  PYTH: 'pyth-network',
+  JITOSOL: 'jito-staked-sol',
+  MSOL: 'msol',
   DOGE: 'dogecoin',
   CRV: 'curve-dao-token',
-  QRDX: 'qrdx', // will 404 on CoinGecko since it's fictional — handled gracefully
 }
 
 /**
@@ -111,10 +119,14 @@ export async function fetchPrices(
 
     if (!res.ok) {
       console.warn(`CoinGecko price fetch failed: HTTP ${res.status}`)
-      // Return whatever we have cached (even if stale)
+      // CoinGecko's free API rate-limits; DefiLlama serves the same coins by their CoinGecko id.
+      const llama = currency === 'usd' ? await fetchLlamaPrices(idsToFetch).catch(() => new Map<string, TokenPrice>()) : new Map<string, TokenPrice>()
       for (const id of idsToFetch) {
-        const stale = priceCache.get(id)
-        if (stale) results.set(id, stale)
+        const p = llama.get(id) ?? priceCache.get(id)
+        if (p) {
+          if (llama.has(id)) priceCache.set(id, p)
+          results.set(id, p)
+        }
       }
       return results
     }
@@ -186,6 +198,74 @@ export async function getTokenPrice(
 ): Promise<TokenPrice | null> {
   const prices = await fetchPricesBySymbol([symbol], currency)
   return prices.get(symbol.toUpperCase()) ?? null
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  DefiLlama (coins.llama.fi): the same coins by CoinGecko id, keyless, several per request
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const LLAMA_API = 'https://coins.llama.fi'
+
+/** Current USD prices and 24 h change, for when CoinGecko refuses. */
+async function fetchLlamaPrices(ids: string[]): Promise<Map<string, TokenPrice>> {
+  const coins = ids.map((id) => `coingecko:${id}`).join(',')
+  const [cur, pct] = await Promise.all([
+    fetch(`${LLAMA_API}/prices/current/${coins}`, { signal: AbortSignal.timeout(15_000) }).then((r) => r.json() as Promise<{ coins: Record<string, { price: number }> }>),
+    fetch(`${LLAMA_API}/percentage/${coins}?period=24h`, { signal: AbortSignal.timeout(15_000) })
+      .then((r) => r.json() as Promise<{ coins: Record<string, number> }>)
+      .catch(() => ({ coins: {} as Record<string, number> })),
+  ])
+  const out = new Map<string, TokenPrice>()
+  for (const id of ids) {
+    const p = cur.coins[`coingecko:${id}`]
+    if (p) out.set(id, { id, usd: p.price, usd_24h_change: pct.coins[`coingecko:${id}`] ?? null, lastUpdated: Date.now() })
+  }
+  return out
+}
+
+/** Points per range: (period, count) so each history has 24 to 120 points. */
+const LLAMA_PERIODS: [number, string, number][] = [
+  [1, '30m', 48],
+  [7, '2h', 84],
+  [30, '8h', 90],
+  [365, '3d', 122],
+]
+
+/**
+ * Price histories for several coins over the last `days`, USD, timestamps in ms. DefiLlama in
+ * one request; CoinGecko for any it lacks. A coin with no history is absent from the map.
+ */
+export async function fetchPriceHistories(ids: string[], days: number): Promise<Map<string, PriceHistoryPoint[]>> {
+  const out = new Map<string, PriceHistoryPoint[]>()
+  const todo: string[] = []
+  for (const id of ids) {
+    const hit = historyCache.get(`llama:${id}:${days}`)
+    if (hit && Date.now() - hit.fetchedAt < HISTORY_CACHE_TTL_MS) out.set(id, hit.data)
+    else todo.push(id)
+  }
+  if (todo.length) {
+    const [, period, span] = LLAMA_PERIODS.find(([d]) => days <= d) ?? LLAMA_PERIODS[LLAMA_PERIODS.length - 1]
+    const start = Math.floor(Date.now() / 1000) - days * 86_400
+    try {
+      const res = await fetch(`${LLAMA_API}/chart/${todo.map((id) => `coingecko:${id}`).join(',')}?start=${start}&span=${span}&period=${period}`, { signal: AbortSignal.timeout(20_000) })
+      const body = (await res.json()) as { coins?: Record<string, { prices: { timestamp: number; price: number }[] }> }
+      for (const id of todo) {
+        const prices = body.coins?.[`coingecko:${id}`]?.prices
+        if (prices?.length) {
+          const data = prices.map((p) => ({ timestamp: p.timestamp * 1000, price: p.price }))
+          historyCache.set(`llama:${id}:${days}`, { data, fetchedAt: Date.now() })
+          out.set(id, data)
+        }
+      }
+    } catch (err) {
+      console.warn('DefiLlama history fetch error:', err)
+    }
+    for (const id of todo.filter((x) => !out.has(x))) {
+      const data = await fetchPriceHistory(id, days)
+      if (data.length) out.set(id, data)
+    }
+  }
+  return out
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

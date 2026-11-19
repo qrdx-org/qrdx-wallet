@@ -323,6 +323,43 @@ export async function callFromClassic(
   return { hash }
 }
 
+/**
+ * Call a contract from the account's 0x key on any EVM network (a swap's transaction, a token
+ * approval, a bridge deposit). Gas is the caller's limit, else the estimate plus a fifth.
+ */
+export async function sendContractCall(
+  signer: Signer,
+  input: { chain: ChainConfig | string; account: WalletAccount; to: string; data: string; value?: bigint; gasLimit?: bigint }
+): Promise<{ hash: string }> {
+  const chain = chainOf(input.chain)
+  const provider = getEvmProvider(chain.id)
+  const from = input.account.ethAddress
+  const call = { from, to: input.to, value: toHex(input.value ?? 0n), data: input.data }
+  const [gasPrice, nonce, chainId, estimate] = await Promise.all([
+    provider.getGasPrice(),
+    provider.getTransactionCount(from),
+    resolveSigningChainId(chain),
+    input.gasLimit ? Promise.resolve(input.gasLimit) : provider.estimateGas(call).then((g) => (g * 120n) / 100n),
+  ])
+  const tx: EthTransactionRequest = { ...call, nonce: toHex(nonce), chainId: toHex(chainId), gas: toHex(estimate), gasPrice: toHex(gasPrice) }
+  const raw = (await signer.signEvmTransaction(tx, input.account.id)).rawTransaction
+  const hash = await provider.sendRawTransaction(raw)
+  recordPendingTransaction(chain.id, hash, from, input.to, call.value, chain.nativeCurrency.symbol, chain.nativeCurrency.decimals)
+  return { hash }
+}
+
+/** ERC-20 allowance(owner, spender). */
+export async function erc20Allowance(chain: ChainConfig | string, token: string, owner: string, spender: string): Promise<bigint> {
+  const pad = (a: string) => a.toLowerCase().replace(/^0x/, '').padStart(64, '0')
+  const out = await getEvmProvider(chainOf(chain).id).rpc<string>('eth_call', [{ to: token, data: `0xdd62ed3e${pad(owner)}${pad(spender)}` }, 'latest'])
+  return out && out !== '0x' ? BigInt(out) : 0n
+}
+
+/** ERC-20 approve(spender, amount) calldata. */
+export function encodeErc20Approve(spender: string, amount: bigint): string {
+  return `0x095ea7b3${spender.toLowerCase().replace(/^0x/, '').padStart(64, '0')}${amount.toString(16).padStart(64, '0')}`
+}
+
 // ─── Speed up / cancel ──────────────────────────────────────────────────────
 
 /** A replacement must outbid the queued transaction; EVM nodes ask for at least 10 % more. */

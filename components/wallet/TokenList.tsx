@@ -1,11 +1,14 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { CoinLogo, isVerifiedToken } from './CoinLogo'
 import { TrendingUp, TrendingDown, ChevronRight, Loader2 } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { formatFiat as formatUsd } from '@/src/core/fiat'
 import { tokenImages } from '@/src/core/profiles'
+import { tradeApiBase, tradeGet } from '@/src/core/trade/api'
+import { isListedToken, isQrdxChain } from '@/src/core/chains'
+import type { ApiAsset } from '@/src/core/trade/types'
 import { formatAmount, mergeCredentialBalances } from '@/src/core/balances'
 import { hiddenTokens, onHiddenTokensChange } from '@/src/core/hidden-tokens'
 
@@ -18,6 +21,10 @@ export interface Token {
   valueNum: number
   change24h: number
   icon?: string
+  /** Which coin's mark to show, when it differs from the symbol (qETH shows ETH's). */
+  mark?: string
+  /** Shows the coin's mark (CoinLogo): the network's own coin or a token listed by address. */
+  verified: boolean
   color: string
   contractAddress?: string
   decimals: number
@@ -65,6 +72,23 @@ export function useTokenList(options: { includeHidden?: boolean } = {}): Token[]
     return () => ctrl.abort()
   }, [activeChain])
 
+  // QRDX: the trade site's verified assets (qETH, qUSDC, …), by token address, with the coin they stand for.
+  const [verifiedAssets, setVerifiedAssets] = useState<Map<string, string>>(new Map())
+  useEffect(() => {
+    const api = isQrdxChain(activeChain) ? tradeApiBase(activeChain) : null
+    setVerifiedAssets(new Map())
+    if (!api) return
+    const ctrl = new AbortController()
+    tradeGet<{ assets: ApiAsset[]; tokens: ApiAsset[] }>(api, '/assets?all=1', ctrl.signal)
+      .then((r) =>
+        setVerifiedAssets(
+          new Map([...r.assets, ...r.tokens].filter((a) => a.verified && a.address).map((a) => [a.address!.toLowerCase(), (a.slug ?? a.symbol).toUpperCase()]))
+        )
+      )
+      .catch(() => undefined)
+    return () => ctrl.abort()
+  }, [activeChain])
+
   return useMemo(() => {
     if (balances.length === 0 && pqBalances.length === 0) return []
 
@@ -73,7 +97,8 @@ export function useTokenList(options: { includeHidden?: boolean } = {}): Token[]
       .filter((b) => options.includeHidden || !b.address || !hidden.has(b.address.toLowerCase()))
       .map((b) => {
       const bal = Number(b.formattedBalance) || 0
-      const price = prices.get(b.symbol.toUpperCase())
+      // Prices are by symbol: only for coins the registry lists by address (see refreshPrices).
+      const price = isListedToken(activeChain, b.address) ? prices.get(b.symbol.toUpperCase()) : undefined
       const usdValue = price ? bal * price.usd : 0
       const change24h = price?.usd_24h_change ?? 0
 
@@ -86,13 +111,18 @@ export function useTokenList(options: { includeHidden?: boolean } = {}): Token[]
         valueNum: usdValue,
         change24h,
         icon: b.address ? images.get(b.address.toLowerCase()) : undefined,
+        verified: isVerifiedToken(activeChain, b.address) || verifiedAssets.has(b.address.toLowerCase()),
+        mark: verifiedAssets.get(b.address.toLowerCase()),
         color: TOKEN_COLORS[b.symbol] ?? 'from-primary/80 to-primary/50',
         contractAddress: b.address,
         decimals: b.decimals,
-        heldIn: b.classicRaw > 0n && b.pqRaw > 0n ? 'both' : b.pqRaw > 0n ? 'pq' : b.classicRaw > 0n ? 'classic' : undefined,
+        // Only QRDX accounts have two addresses to tell apart.
+        heldIn: !isQrdxChain(activeChain) ? undefined : b.classicRaw > 0n && b.pqRaw > 0n ? 'both' : b.pqRaw > 0n ? 'pq' : b.classicRaw > 0n ? 'classic' : undefined,
       } satisfies Token
     }).sort((a, b) => b.valueNum - a.valueNum || b.balanceNum - a.balanceNum)
-  }, [balances, pqBalances, prices, images, hiddenVersion, options.includeHidden, activeChain.id])
+    // hiddenVersion: recompute when the user hides or shows a token.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [balances, pqBalances, prices, images, verifiedAssets, hiddenVersion, options.includeHidden, activeChain])
 }
 
 // Keep ALL_TOKENS export for backwards compatibility with AllTokens component
@@ -149,12 +179,7 @@ export function TokenList({ pinnedSymbols, onViewAll, onSelect }: TokenListProps
           style={{ animationDelay: `${index * 50}ms` }}
         >
           <div className="flex items-center gap-3">
-            <Avatar className="h-9 w-9 shadow-sm">
-              <AvatarImage src={token.icon} alt={token.symbol} referrerPolicy="no-referrer" className="logo-mono object-cover" />
-              <AvatarFallback className={`bg-gradient-to-br ${token.color} text-primary-foreground text-xs font-bold`}>
-                {token.symbol.slice(0, 2)}
-              </AvatarFallback>
-            </Avatar>
+            <CoinLogo symbol={token.symbol} mark={token.mark} verified={token.verified} image={token.icon} size={36} />
             <div>
               <div className="font-semibold text-sm">{token.symbol}</div>
               <div className="text-xs text-muted-foreground">

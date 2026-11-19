@@ -39,7 +39,7 @@ relay API and a reference provider: qrdx-trade `docs/CONNECT.md`,
 | `eth_accounts` | Shared accounts, the selected one first. `[]` while the wallet is locked or the site is not connected. |
 | `eth_chainId`, `net_version` | The wallet's active network. |
 | `wallet_switchEthereumChain` | Networks in the wallet's registry only; unknown IDs → `4902`. Asks the user. |
-| `wallet_addEthereumChain` | Same as switch for known networks; custom networks are not accepted from dApps. |
+| `wallet_addEthereumChain` | Switches to a known network. An unknown one is added after its first RPC answers `eth_chainId` with the proposed id and the user approves; https only. |
 | `wallet_getPermissions`, `wallet_requestPermissions`, `wallet_revokePermissions` | EIP-2255. `revoke` disconnects the site. |
 | `qrdx_requestAccounts`, `qrdx_accounts` | Like the `eth_` versions, but each entry is `{ address, pqAddress, pqAccountId, pqPublicKey, pqFingerprint }`. |
 | `qrdx_chainInfo` | `{ id, name, chainId, isQrdx, isTestnet, nativeCurrency }` |

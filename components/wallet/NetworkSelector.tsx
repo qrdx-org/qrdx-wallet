@@ -8,10 +8,12 @@ import {
   ShieldAlert,
   WifiOff,
   Loader2,
+  Layers,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { isQrdxChain, type ChainConfig } from '@/src/core/chains'
+import { NetworkLogo } from './CoinLogo'
 
 /**
  * Network picker with live endpoint status.
@@ -34,7 +36,15 @@ export function NetworkSelector() {
     networkStatus,
     showTestnets,
     updateSettings,
+    allNetworks,
+    setAllNetworks,
   } = useWallet()
+  // Picking a network leaves the all-networks portfolio for that network's view.
+  const pick = (id: string) => {
+    setAllNetworks(false)
+    setActiveChain(id)
+    setOpen(false)
+  }
 
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -60,13 +70,14 @@ export function NetworkSelector() {
 
   // Testnets stay hidden unless enabled, but never hide the one in use —
   // otherwise the selector would show nothing for the active network.
-  const { qrdxChains, otherChains } = useMemo(() => {
+  const { qrdxChains, otherChains, nativeChains } = useMemo(() => {
     const visible = chains.filter(
       c => !c.isTestnet || showTestnets || c.id === activeChain.id,
     )
     return {
       qrdxChains: visible.filter(isQrdxChain),
-      otherChains: visible.filter(c => !isQrdxChain(c)),
+      otherChains: visible.filter(c => c.isEvm && !isQrdxChain(c)),
+      nativeChains: visible.filter(c => !c.isEvm),
     }
   }, [chains, showTestnets, activeChain.id])
 
@@ -98,12 +109,14 @@ export function NetworkSelector() {
         aria-expanded={open}
         className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/40 border border-border/50 hover:bg-accent/60 transition-colors"
       >
-        {networkStatus.state === 'checking' ? (
+        {allNetworks ? (
+          <Layers className="h-3 w-3 text-muted-foreground" />
+        ) : networkStatus.state === 'checking' ? (
           <Loader2 className="h-2.5 w-2.5 animate-spin text-muted-foreground" />
         ) : (
           <span className={`h-2 w-2 rounded-full ${dot}`} />
         )}
-        <span className="text-[10px] font-semibold">{activeChain.shortName}</span>
+        <span className="text-[10px] font-semibold">{allNetworks ? 'All networks' : activeChain.shortName}</span>
         <ChevronDown className="h-3 w-3 text-muted-foreground" />
       </button>
 
@@ -112,24 +125,45 @@ export function NetworkSelector() {
           role="listbox"
           className="absolute right-0 mt-2 w-72 max-h-[26rem] overflow-y-auto rounded-xl glass-strong border border-border/60 shadow-lg z-50 p-1.5"
         >
+          <button
+            role="option"
+            aria-selected={allNetworks}
+            onClick={() => {
+              setAllNetworks(true)
+              setOpen(false)
+            }}
+            className={`mb-1 w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-left transition-colors ${allNetworks ? 'bg-accent/60' : 'hover:bg-accent/40'}`}
+          >
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground/[0.07] ring-1 ring-inset ring-border/60">
+              <Layers className="h-3.5 w-3.5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs font-medium">All networks</span>
+              <span className="block text-[10px] text-muted-foreground">One portfolio: QRDX, EVM, Bitcoin, Solana</span>
+            </span>
+            {allNetworks && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+          </button>
           <ChainGroup
             label="QRDX"
             items={qrdxChains}
-            activeId={activeChain.id}
-            onSelect={id => {
-              setActiveChain(id)
-              setOpen(false)
-            }}
+            activeId={allNetworks ? '' : activeChain.id}
+            onSelect={pick}
           />
           {otherChains.length > 0 && (
             <ChainGroup
               label="EVM networks"
               items={otherChains}
-              activeId={activeChain.id}
-              onSelect={id => {
-                setActiveChain(id)
-                setOpen(false)
-              }}
+              activeId={allNetworks ? '' : activeChain.id}
+              onSelect={pick}
+            />
+          )}
+
+          {nativeChains.length > 0 && (
+            <ChainGroup
+              label="Bitcoin and Solana"
+              items={nativeChains}
+              activeId={allNetworks ? '' : activeChain.id}
+              onSelect={pick}
             />
           )}
 
@@ -183,14 +217,14 @@ function ChainGroup({
           key={chain.id}
           role="option"
           aria-selected={chain.id === activeId}
+          aria-disabled={chain.notLive}
+          disabled={chain.notLive}
           onClick={() => onSelect(chain.id)}
           className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-left transition-colors ${
             chain.id === activeId ? 'bg-accent/60' : 'hover:bg-accent/40'
-          }`}
+          } ${chain.notLive ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
-          <span
-            className={`h-6 w-6 rounded-lg bg-gradient-to-br ${chain.color} shrink-0`}
-          />
+          <NetworkLogo chain={chain} size={24} />
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
               <span className="text-xs font-medium truncate">{chain.name}</span>
@@ -201,7 +235,7 @@ function ChainGroup({
               )}
             </span>
             <span className="block text-[10px] text-muted-foreground truncate">
-              {chain.nativeCurrency.symbol} · chain {chain.chainId}
+              {chain.notLive ? 'Not live yet' : chain.isEvm ? `${chain.nativeCurrency.symbol} · chain ${chain.chainId}` : chain.nativeCurrency.symbol}
             </span>
           </span>
           {chain.id === activeId && (

@@ -6,11 +6,8 @@ import {
   ArrowLeft,
   ChevronRight,
   Shield,
-  Globe,
   DollarSign,
   Bell,
-  Trash2,
-  Plus,
   Check,
   Palette,
   Monitor,
@@ -18,7 +15,6 @@ import {
   ExternalLink,
   ToggleLeft,
   ToggleRight,
-  Save,
   Link,
   Unplug,
   Blocks,
@@ -50,7 +46,7 @@ import { useWallet } from '@/src/shared/contexts/WalletContext'
 interface SettingsProps {
   onBack: () => void
   /** Open on this page (the account switcher's "Manage accounts" opens 'wallets'). */
-  initialPage?: 'main' | 'wallets'
+  initialPage?: 'main' | 'wallets' | 'quantum-safety'
 }
 
 
@@ -65,34 +61,6 @@ const CURRENCIES = [
   { code: 'BTC', symbol: '₿', label: 'Bitcoin' },
   { code: 'ETH', symbol: 'Ξ', label: 'Ethereum' },
 ]
-
-interface Network {
-  id: string
-  name: string
-  rpc: string
-  chainId: number
-  symbol: string
-  explorer: string
-  isTestnet: boolean
-  icon?: string
-  /** Transport capabilities from chains.ts */
-  transport?: string
-}
-
-/**
- * Derive the Settings-local Network list from the canonical CHAIN_LIST
- * so there's a single source of truth.
- */
-const NETWORKS: Network[] = CHAIN_LIST.map((c) => ({
-  id: c.id,
-  name: c.name,
-  rpc: c.rpcUrl,
-  chainId: c.chainId,
-  symbol: c.nativeCurrency.symbol,
-  explorer: c.explorerUrl,
-  isTestnet: c.isTestnet,
-  transport: c.transport,
-}))
 
 /**
  * Best-effort hostname for display when a site supplied no name.
@@ -141,7 +109,6 @@ type SettingsPage =
   | 'security'
   | 'notifications'
   | 'network'
-  | 'network-detail'
   | 'connected-sites'
   | 'injected-apis'
   | 'address-book'
@@ -159,6 +126,7 @@ import { NamesPage } from './settings/NamesPage'
 import { AccountControlPage } from './settings/AccountControlPage'
 import { QuantumSafetyPage } from './settings/QuantumSafetyPage'
 import { MultisigPage } from './settings/MultisigPage'
+import { NetworksPage } from './settings/NetworksPage'
 
 export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
   const [page, setPage] = useState<SettingsPage>(initialPage)
@@ -167,7 +135,6 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
     allWallets,
     updateSettings,
     activeChain,
-    setActiveChain,
     state,
     platform,
     backend,
@@ -195,15 +162,6 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
   // Settings state (initialised from persisted settings if available)
   const savedSettings = state?.settings
   const [currency, setCurrencyLocal] = useState(savedSettings?.currency ?? 'USD')
-  // Mirrors the persisted `showTestnets` setting so the network list here and
-  // the dashboard's network selector agree, and the choice survives a restart.
-  const [testnetMode, setTestnetModeLocal] = useState(savedSettings?.showTestnets ?? false)
-  const setTestnetMode = (next: boolean) => {
-    setTestnetModeLocal(next)
-    void updateSettings({ showTestnets: next })
-  }
-  const [selectedNetwork, setSelectedNetwork] = useState<Network | null>(null)
-  const [editingNetwork, setEditingNetwork] = useState<Network | null>(null)
   const [injectedApis, setInjectedApis] = useState<InjectedApi[]>(DEFAULT_INJECTED_APIS)
 
   // ── Address book: add-contact form ──────────────────────────────────────
@@ -242,12 +200,9 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
   }
 
   const goBack = () => {
-    if (page === 'main') {
+    // A page opened directly (from the home screen) goes back there, not to this menu.
+    if (page === 'main' || page === initialPage) {
       onBack()
-    } else if (page === 'network-detail') {
-      setSelectedNetwork(null)
-      setEditingNetwork(null)
-      setPage('network')
     } else {
       setPage('main')
     }
@@ -723,199 +678,7 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
     return <NotificationsPage header={<Header title="Notifications" />} />
   }
 
-  // ── Networks ──────────────────────────────────────────────────────────────
-  if (page === 'network') {
-    const filtered = NETWORKS.filter((n) => (testnetMode ? n.isTestnet : !n.isTestnet))
-
-    return (
-      <div className="min-h-screen mono-backdrop">
-        <Header title="Networks" />
-        <div className="px-4 py-3 space-y-3">
-          {/* Testnet Mode Toggle */}
-          <Card className="glass border-border/50">
-            <CardContent className="p-3">
-              <button
-                onClick={() => setTestnetMode(!testnetMode)}
-                className="flex items-center justify-between w-full"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-lg bg-foreground/10 flex items-center justify-center">
-                    <Globe className="h-4 w-4 text-foreground/70" />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-sm font-medium">Testnet Mode</div>
-                    <div className="text-[10px] text-muted-foreground">
-                      {testnetMode ? 'Showing test networks' : 'Showing main networks'}
-                    </div>
-                  </div>
-                </div>
-                {testnetMode ? (
-                  <ToggleRight className="h-6 w-6 text-primary" />
-                ) : (
-                  <ToggleLeft className="h-6 w-6 text-muted-foreground" />
-                )}
-              </button>
-            </CardContent>
-          </Card>
-
-          {/* Network List */}
-          <Card className="glass border-border/50">
-            <CardContent className="p-1.5 space-y-0.5">
-              {filtered.map((net) => {
-                const isActiveNet = net.id === activeChain.id
-                return (
-                  <button
-                    key={net.id}
-                    onClick={() => {
-                      setActiveChain(net.id)
-                    }}
-                    onDoubleClick={() => {
-                      setSelectedNetwork(net)
-                      setEditingNetwork({ ...net })
-                      setPage('network-detail')
-                    }}
-                    className={`flex items-center gap-3 p-3 rounded-xl transition-all w-full text-left ${
-                      isActiveNet ? 'bg-primary/10 border border-primary/30' : 'hover:bg-accent/30'
-                    }`}
-                  >
-                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
-                      isActiveNet ? 'bg-primary text-primary-foreground' : 'bg-primary/10 text-primary'
-                    }`}>
-                      {net.symbol.slice(0, 3)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">{net.name}</span>
-                        {isActiveNet && (
-                          <span className="px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-500 text-[9px] font-semibold">
-                            Active
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">
-                        Chain ID: {net.chainId} · {net.symbol}
-                      </div>
-                    </div>
-                    {isActiveNet ? (
-                      <Check className="h-4 w-4 text-primary shrink-0" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                    )}
-                  </button>
-                )
-              })}
-            </CardContent>
-          </Card>
-
-          <Button
-            variant="outline"
-            className="w-full h-10 font-medium glass hover:bg-accent/50 hover:border-primary/30"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Custom Network
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
-  // ── Network Detail / Edit ─────────────────────────────────────────────────
-  if (page === 'network-detail' && editingNetwork) {
-    return (
-      <div className="min-h-screen mono-backdrop">
-        <Header title={selectedNetwork?.name ?? 'Network'} />
-        <div className="px-4 py-3 space-y-3">
-          {/* Network Icon & Name */}
-          <div className="flex flex-col items-center py-3 animate-fade-in">
-            <div className="h-14 w-14 rounded-2xl bg-primary/15 flex items-center justify-center text-lg font-bold text-primary shadow-lg shadow-primary/10 mb-2">
-              {editingNetwork.symbol.slice(0, 3)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {editingNetwork.isTestnet ? 'Testnet' : 'Mainnet'}
-            </p>
-          </div>
-
-          {/* Editable Fields */}
-          <Card className="glass border-border/50">
-            <CardContent className="p-3 space-y-3">
-              <div>
-                <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                  Network Name
-                </label>
-                <input
-                  type="text"
-                  value={editingNetwork.name}
-                  onChange={(e) => setEditingNetwork({ ...editingNetwork, name: e.target.value })}
-                  className="mt-1 w-full rounded-lg bg-background/60 border border-border/50 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                  RPC URL
-                </label>
-                <input
-                  type="text"
-                  value={editingNetwork.rpc}
-                  onChange={(e) => setEditingNetwork({ ...editingNetwork, rpc: e.target.value })}
-                  className="mt-1 w-full rounded-lg bg-background/60 border border-border/50 px-3 py-2 text-sm font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                    Chain ID
-                  </label>
-                  <input
-                    type="number"
-                    value={editingNetwork.chainId}
-                    onChange={(e) =>
-                      setEditingNetwork({ ...editingNetwork, chainId: parseInt(e.target.value) || 0 })
-                    }
-                    className="mt-1 w-full rounded-lg bg-background/60 border border-border/50 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                    Currency Symbol
-                  </label>
-                  <input
-                    type="text"
-                    value={editingNetwork.symbol}
-                    onChange={(e) => setEditingNetwork({ ...editingNetwork, symbol: e.target.value })}
-                    className="mt-1 w-full rounded-lg bg-background/60 border border-border/50 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                  Block Explorer URL
-                </label>
-                <input
-                  type="text"
-                  value={editingNetwork.explorer}
-                  onChange={(e) => setEditingNetwork({ ...editingNetwork, explorer: e.target.value })}
-                  className="mt-1 w-full rounded-lg bg-background/60 border border-border/50 px-3 py-2 text-sm font-mono text-xs focus:outline-none focus:ring-1 focus:ring-primary/50"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Button className="w-full h-10 font-medium bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25">
-            <Save className="h-4 w-4 mr-2" />
-            Save Changes
-          </Button>
-
-          <Button
-            variant="outline"
-            className="w-full h-10 font-medium glass text-red-400 hover:bg-red-500/10 hover:border-red-500/30"
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Remove Network
-          </Button>
-        </div>
-      </div>
-    )
-  }
+  if (page === 'network') return <NetworksPage onBack={goBack} />
 
   // ── Connected Sites ───────────────────────────────────────────────────────
   if (page === 'connected-sites') {

@@ -51,3 +51,11 @@ export function formatFiat(usd: number): string {
     new Intl.NumberFormat('en-US', { style: 'currency', currency: code, minimumFractionDigits: notation ? 0 : digits, maximumFractionDigits: notation ? 2 : digits, notation }).format(n)
   return abs >= 1_000_000 ? fmt(v, 'compact') : fmt(v)
 }
+
+/** A unit price: like formatFiat, with four significant digits below 1 (BONK at $0.00002371). */
+export function formatFiatPrice(usd: number): string {
+  const { code, perUsd } = current
+  const v = usd * perUsd
+  if (Math.abs(v) >= 1 || v === 0) return formatFiat(usd)
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: code, maximumSignificantDigits: 4 }).format(v)
+}

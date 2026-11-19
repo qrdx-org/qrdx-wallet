@@ -107,7 +107,7 @@ export function Explore({ onOpenToken }: { onOpenToken: (token: Token) => void }
 
   const current = data?.key === key ? data : null
 
-  const tokenFor = (asset: Pick<ApiAsset, 'symbol' | 'name' | 'address' | 'decimals' | 'image'>, change: number | null): Token | undefined => {
+  const tokenFor = (asset: Pick<ApiAsset, 'symbol' | 'name' | 'address' | 'decimals' | 'image' | 'verified'>, change: number | null): Token | undefined => {
     if (!asset.address) return undefined
     const native = asset.address.toUpperCase() === 'QRDX'
     const own = held.find((t) => (native ? !t.contractAddress : t.contractAddress?.toLowerCase() === asset.address!.toLowerCase()))
@@ -124,6 +124,7 @@ export function Explore({ onOpenToken }: { onOpenToken: (token: Token) => void }
       color: 'from-primary/80 to-primary/50',
       contractAddress: native ? undefined : asset.address,
       decimals: asset.decimals,
+      verified: native || !!asset.verified,
     }
   }
 

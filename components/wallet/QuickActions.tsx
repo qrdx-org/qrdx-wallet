@@ -15,6 +15,8 @@ export type QuickActionType = 'send' | 'receive' | 'swap' | 'buy' | 'shield' | '
 
 interface QuickActionsProps {
   onAction?: (action: QuickActionType) => void
+  /** The actions that work on the selected network; all when omitted. */
+  available?: QuickActionType[]
 }
 
 interface QuickAction {
@@ -79,14 +81,20 @@ function FolderMiniIcon({ gradient }: { gradient: string }) {
   )
 }
 
-export function QuickActions({ onAction }: QuickActionsProps) {
+export function QuickActions({ onAction, available }: QuickActionsProps) {
   const [folderOpen, setFolderOpen] = useState(false)
+  const shown = (a: QuickAction) => !available || available.includes(a.key)
+  // A folder of one is a detour: that action joins the main row.
+  const extra = FOLDER_ACTIONS.filter(shown)
+  const main = [...MAIN_ACTIONS.filter(shown), ...(extra.length === 1 ? extra : [])]
+  const folder = extra.length === 1 ? [] : extra
+  const columns = main.length + (folder.length ? 1 : 0)
 
   return (
     <div className="space-y-1.5">
       {/* Main row: 3 actions + folder */}
-      <div className="grid grid-cols-4 gap-1.5">
-        {MAIN_ACTIONS.map((action) => (
+      <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+        {main.map((action) => (
           <button
             key={action.key}
             onClick={() => onAction?.(action.key)}
@@ -100,6 +108,7 @@ export function QuickActions({ onAction }: QuickActionsProps) {
         ))}
 
         {/* Folder button */}
+        {folder.length > 0 && (
         <button
           onClick={() => setFolderOpen(!folderOpen)}
           className={`group flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl border transition-all ${
@@ -113,7 +122,7 @@ export function QuickActions({ onAction }: QuickActionsProps) {
               <X className="h-4 w-4 text-muted-foreground" />
             ) : (
               <div className="grid grid-cols-2 gap-[3px]">
-                {FOLDER_ACTIONS.map((a) => (
+                {folder.map((a) => (
                   <FolderMiniIcon key={a.key} gradient={a.gradient} />
                 ))}
               </div>
@@ -121,12 +130,13 @@ export function QuickActions({ onAction }: QuickActionsProps) {
           </div>
           <span className="text-[10px] font-medium text-muted-foreground group-hover:text-foreground transition-colors">More</span>
         </button>
+        )}
       </div>
 
       {/* Expanded folder tray */}
       {folderOpen && (
         <div className="grid grid-cols-4 gap-1.5 px-0 animate-in slide-in-from-top-2 fade-in duration-200">
-          {FOLDER_ACTIONS.map((action) => (
+          {folder.map((action) => (
             <button
               key={action.key}
               onClick={() => {

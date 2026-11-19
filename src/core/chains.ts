@@ -17,7 +17,10 @@
 // ─── Transport capabilities ────────────────────────────────────────────────
 
 /** How a chain can submit transactions */
-export type TransportCapability = 'web3' | 'pq' | 'web3+pq'
+export type TransportCapability = 'web3' | 'pq' | 'web3+pq' | 'native'
+
+/** Which kind of chain: EVM (the default), or Bitcoin or Solana with their own accounts and transactions. */
+export type ChainFamily = 'evm' | 'bitcoin' | 'solana'
 
 /**
  * Which signed-transaction envelope a chain's `eth_sendRawTransaction` accepts.
@@ -98,8 +101,15 @@ export interface ChainConfig {
   }
   /** What transaction signing / submission paths are supported */
   transport: TransportCapability
-  /** Is this an EVM-compatible chain? (all current chains are, but future ones may not be) */
+  /** Is this an EVM-compatible chain? False for Bitcoin and Solana. */
   isEvm: boolean
+  /** Omitted for EVM chains. */
+  family?: ChainFamily
+  /**
+   * Listed but not launched: shown, not selectable. QRDX mainnet until it launches
+   * (rpc.qrdx.org serves the testnet, chain 7620, meanwhile).
+   */
+  notLive?: boolean
   /** Testnet flag — testnets hidden by default */
   isTestnet: boolean
   /** Average block time in seconds (used for UI estimates) */
@@ -226,6 +236,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     // One block a slot: the chain spec's SLOT_DURATION_MS (standard 250).
     blockTimeSec: 0.25,
     color: 'from-primary to-primary/70',
+    notLive: true,
     tokens: [QRDX_NATIVE],
     pqBridgeTarget: undefined,
   },
@@ -283,10 +294,8 @@ export const CHAINS: Record<string, ChainConfig> = {
     name: 'Ethereum',
     shortName: 'ETH',
     chainId: 1,
-    rpcUrl: 'https://eth.llamarpc.com',
+    rpcUrl: 'https://ethereum-rpc.publicnode.com',
     rpcFallbacks: [
-      'https://rpc.ankr.com/eth',
-      'https://ethereum-rpc.publicnode.com',
       'https://1rpc.io/eth',
     ],
     explorerUrl: 'https://etherscan.io',
@@ -315,10 +324,9 @@ export const CHAINS: Record<string, ChainConfig> = {
     name: 'Ethereum Sepolia',
     shortName: 'Sepolia',
     chainId: 11155111,
-    rpcUrl: 'https://rpc.sepolia.org',
+    rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
     rpcFallbacks: [
-      'https://rpc.ankr.com/eth_sepolia',
-      'https://ethereum-sepolia-rpc.publicnode.com',
+      'https://1rpc.io/sepolia',
     ],
     explorerUrl: 'https://sepolia.etherscan.io',
     nativeCurrency: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
@@ -338,10 +346,10 @@ export const CHAINS: Record<string, ChainConfig> = {
     name: 'Polygon',
     shortName: 'POL',
     chainId: 137,
-    rpcUrl: 'https://polygon-rpc.com',
+    rpcUrl: 'https://polygon-bor-rpc.publicnode.com',
     rpcFallbacks: [
-      'https://rpc.ankr.com/polygon',
-      'https://polygon-bor-rpc.publicnode.com',
+      'https://1rpc.io/matic',
+      'https://polygon.drpc.org',
     ],
     explorerUrl: 'https://polygonscan.com',
     nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
@@ -363,7 +371,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     name: 'Polygon Amoy',
     shortName: 'Amoy',
     chainId: 80002,
-    rpcUrl: 'https://rpc-amoy.polygon.technology',
+    rpcUrl: 'https://polygon-amoy-bor-rpc.publicnode.com',
     explorerUrl: 'https://amoy.polygonscan.com',
     nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
     transport: 'web3',
@@ -383,8 +391,8 @@ export const CHAINS: Record<string, ChainConfig> = {
     chainId: 42161,
     rpcUrl: 'https://arb1.arbitrum.io/rpc',
     rpcFallbacks: [
-      'https://rpc.ankr.com/arbitrum',
       'https://arbitrum-one-rpc.publicnode.com',
+      'https://1rpc.io/arb',
     ],
     explorerUrl: 'https://arbiscan.io',
     nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
@@ -426,8 +434,8 @@ export const CHAINS: Record<string, ChainConfig> = {
     chainId: 10,
     rpcUrl: 'https://mainnet.optimism.io',
     rpcFallbacks: [
-      'https://rpc.ankr.com/optimism',
       'https://optimism-rpc.publicnode.com',
+      'https://1rpc.io/op',
     ],
     explorerUrl: 'https://optimistic.etherscan.io',
     nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
@@ -469,8 +477,8 @@ export const CHAINS: Record<string, ChainConfig> = {
     chainId: 8453,
     rpcUrl: 'https://mainnet.base.org',
     rpcFallbacks: [
-      'https://rpc.ankr.com/base',
       'https://base-rpc.publicnode.com',
+      'https://1rpc.io/base',
     ],
     explorerUrl: 'https://basescan.org',
     nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
@@ -511,8 +519,8 @@ export const CHAINS: Record<string, ChainConfig> = {
     chainId: 43114,
     rpcUrl: 'https://api.avax.network/ext/bc/C/rpc',
     rpcFallbacks: [
-      'https://rpc.ankr.com/avalanche',
       'https://avalanche-c-chain-rpc.publicnode.com',
+      'https://1rpc.io/avax/c',
     ],
     explorerUrl: 'https://snowtrace.io',
     nativeCurrency: { name: 'Avalanche', symbol: 'AVAX', decimals: 18 },
@@ -554,8 +562,8 @@ export const CHAINS: Record<string, ChainConfig> = {
     rpcUrl: 'https://bsc-dataseed.binance.org',
     rpcFallbacks: [
       'https://bsc-dataseed1.defibit.io',
-      'https://rpc.ankr.com/bsc',
       'https://bsc-rpc.publicnode.com',
+      'https://1rpc.io/bnb',
     ],
     explorerUrl: 'https://bscscan.com',
     nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
@@ -587,27 +595,28 @@ export const CHAINS: Record<string, ChainConfig> = {
     tokens: [{ address: '', symbol: 'BNB', name: 'BNB', decimals: 18 }],
   },
 
-  // ── Fantom ────────────────────────────────────────────────────────────────
+  // ── Sonic (Fantom's successor: FTM became S) ──────────────────────────────
 
-  'fantom': {
-    id: 'fantom',
-    name: 'Fantom Opera',
-    shortName: 'FTM',
-    chainId: 250,
-    rpcUrl: 'https://rpc.ftm.tools',
+  'sonic': {
+    id: 'sonic',
+    name: 'Sonic',
+    shortName: 'Sonic',
+    chainId: 146,
+    rpcUrl: 'https://rpc.soniclabs.com',
     rpcFallbacks: [
-      'https://rpc.ankr.com/fantom',
-      'https://fantom-rpc.publicnode.com',
+      'https://sonic-rpc.publicnode.com',
+      'https://1rpc.io/sonic',
     ],
-    explorerUrl: 'https://ftmscan.com',
-    nativeCurrency: { name: 'Fantom', symbol: 'FTM', decimals: 18 },
+    explorerUrl: 'https://sonicscan.org',
+    nativeCurrency: { name: 'Sonic', symbol: 'S', decimals: 18 },
     transport: 'web3',
     isEvm: true,
     isTestnet: false,
-    blockTimeSec: 1,
+    blockTimeSec: 2,
     color: 'from-primary to-primary/70',
     tokens: [
-      { address: '', symbol: 'FTM', name: 'Fantom', decimals: 18, coingeckoId: 'fantom' },
+      { address: '', symbol: 'S', name: 'Sonic', decimals: 18, coingeckoId: 'sonic-3' },
+      { address: '0x29219dd400f2Bf60E5a23d13Be72B486D4038894', symbol: 'USDC', name: 'USD Coin', decimals: 6, coingeckoId: 'usd-coin' },
     ],
   },
 
@@ -620,7 +629,7 @@ export const CHAINS: Record<string, ChainConfig> = {
     chainId: 324,
     rpcUrl: 'https://mainnet.era.zksync.io',
     rpcFallbacks: [
-      'https://rpc.ankr.com/zksync_era',
+      'https://1rpc.io/zksync2-era',
     ],
     explorerUrl: 'https://explorer.zksync.io',
     nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
@@ -634,6 +643,223 @@ export const CHAINS: Record<string, ChainConfig> = {
       { address: '0x1d17CBcF0D6D143135aE902365D2E5e2A16538D4', symbol: 'USDC', name: 'USD Coin', decimals: 6, coingeckoId: 'usd-coin' },
     ],
     pqBridgeTarget: 'qrdx-mainnet',
+  },
+  // ── More EVM networks ─────────────────────────────────────────────────────
+
+  'linea': {
+    id: 'linea',
+    name: 'Linea',
+    shortName: 'Linea',
+    chainId: 59144,
+    rpcUrl: 'https://rpc.linea.build',
+    rpcFallbacks: [
+      'https://linea-rpc.publicnode.com',
+      'https://1rpc.io/linea',
+    ],
+    explorerUrl: 'https://lineascan.build',
+    nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+    transport: 'web3',
+    isEvm: true,
+    isTestnet: false,
+    blockTimeSec: 2,
+    color: 'from-primary to-primary/70',
+    tokens: [
+      ETH_NATIVE,
+      { address: '0x176211869cA2b568f2A7D4EE941E073a821EE1ff', symbol: 'USDC', name: 'USD Coin', decimals: 6, coingeckoId: 'usd-coin' },
+    ],
+  },
+
+  'scroll': {
+    id: 'scroll',
+    name: 'Scroll',
+    shortName: 'Scroll',
+    chainId: 534352,
+    rpcUrl: 'https://rpc.scroll.io',
+    rpcFallbacks: [
+      'https://scroll-rpc.publicnode.com',
+      'https://1rpc.io/scroll',
+    ],
+    explorerUrl: 'https://scrollscan.com',
+    nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+    transport: 'web3',
+    isEvm: true,
+    isTestnet: false,
+    blockTimeSec: 2,
+    color: 'from-primary to-primary/70',
+    tokens: [
+      ETH_NATIVE,
+      { address: '0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4', symbol: 'USDC', name: 'USD Coin', decimals: 6, coingeckoId: 'usd-coin' },
+    ],
+  },
+
+  'unichain': {
+    id: 'unichain',
+    name: 'Unichain',
+    shortName: 'Unichain',
+    chainId: 130,
+    rpcUrl: 'https://mainnet.unichain.org',
+    rpcFallbacks: [
+      'https://unichain-rpc.publicnode.com',
+    ],
+    explorerUrl: 'https://uniscan.xyz',
+    nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+    transport: 'web3',
+    isEvm: true,
+    isTestnet: false,
+    blockTimeSec: 2,
+    color: 'from-primary to-primary/70',
+    tokens: [
+      ETH_NATIVE,
+      { address: '0x078D782b760474a361dDA0AF3839290b0EF57AD6', symbol: 'USDC', name: 'USD Coin', decimals: 6, coingeckoId: 'usd-coin' },
+    ],
+  },
+
+  'mantle': {
+    id: 'mantle',
+    name: 'Mantle',
+    shortName: 'Mantle',
+    chainId: 5000,
+    rpcUrl: 'https://rpc.mantle.xyz',
+    rpcFallbacks: [
+      'https://mantle-rpc.publicnode.com',
+      'https://1rpc.io/mantle',
+    ],
+    explorerUrl: 'https://mantlescan.xyz',
+    nativeCurrency: { name: 'Mantle', symbol: 'MNT', decimals: 18 },
+    transport: 'web3',
+    isEvm: true,
+    isTestnet: false,
+    blockTimeSec: 2,
+    color: 'from-primary to-primary/70',
+    tokens: [
+      { address: '', symbol: 'MNT', name: 'Mantle', decimals: 18, coingeckoId: 'mantle' },
+      { address: '0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9', symbol: 'USDC', name: 'USD Coin', decimals: 6, coingeckoId: 'usd-coin' },
+    ],
+  },
+
+  'gnosis': {
+    id: 'gnosis',
+    name: 'Gnosis',
+    shortName: 'Gnosis',
+    chainId: 100,
+    rpcUrl: 'https://rpc.gnosischain.com',
+    rpcFallbacks: [
+      'https://gnosis-rpc.publicnode.com',
+      'https://1rpc.io/gnosis',
+    ],
+    explorerUrl: 'https://gnosisscan.io',
+    nativeCurrency: { name: 'xDAI', symbol: 'XDAI', decimals: 18 },
+    transport: 'web3',
+    isEvm: true,
+    isTestnet: false,
+    blockTimeSec: 2,
+    color: 'from-primary to-primary/70',
+    tokens: [
+      { address: '', symbol: 'XDAI', name: 'xDAI', decimals: 18, coingeckoId: 'xdai' },
+    ],
+  },
+
+  'celo': {
+    id: 'celo',
+    name: 'Celo',
+    shortName: 'Celo',
+    chainId: 42220,
+    rpcUrl: 'https://forno.celo.org',
+    rpcFallbacks: [
+      'https://celo-rpc.publicnode.com',
+      'https://1rpc.io/celo',
+    ],
+    explorerUrl: 'https://celoscan.io',
+    nativeCurrency: { name: 'Celo', symbol: 'CELO', decimals: 18 },
+    transport: 'web3',
+    isEvm: true,
+    isTestnet: false,
+    blockTimeSec: 2,
+    color: 'from-primary to-primary/70',
+    tokens: [
+      { address: '', symbol: 'CELO', name: 'Celo', decimals: 18, coingeckoId: 'celo' },
+      { address: '0xcebA9300f2b948710d2653dD7B07f33A8B32118C', symbol: 'USDC', name: 'USD Coin', decimals: 6, coingeckoId: 'usd-coin' },
+    ],
+  },
+
+  // ── Bitcoin and Solana (not EVM: src/core/bitcoin.ts, src/core/solana.ts) ──
+
+  'bitcoin': {
+    id: 'bitcoin',
+    name: 'Bitcoin',
+    shortName: 'BTC',
+    family: 'bitcoin',
+    chainId: 0,
+    rpcUrl: 'https://mempool.space/api',
+    explorerUrl: 'https://mempool.space',
+    nativeCurrency: { name: 'Bitcoin', symbol: 'BTC', decimals: 8 },
+    transport: 'native',
+    isEvm: false,
+    isTestnet: false,
+    blockTimeSec: 600,
+    color: 'from-primary to-primary/70',
+    tokens: [{ address: '', symbol: 'BTC', name: 'Bitcoin', decimals: 8, coingeckoId: 'bitcoin' }],
+  },
+
+  'bitcoin-testnet': {
+    id: 'bitcoin-testnet',
+    name: 'Bitcoin Testnet4',
+    shortName: 'tBTC',
+    family: 'bitcoin',
+    chainId: 0,
+    rpcUrl: 'https://mempool.space/testnet4/api',
+    explorerUrl: 'https://mempool.space/testnet4',
+    nativeCurrency: { name: 'Testnet Bitcoin', symbol: 'BTC', decimals: 8 },
+    transport: 'native',
+    isEvm: false,
+    isTestnet: true,
+    blockTimeSec: 600,
+    color: 'from-primary to-primary/70',
+    tokens: [{ address: '', symbol: 'BTC', name: 'Testnet Bitcoin', decimals: 8 }],
+  },
+
+  'solana': {
+    id: 'solana',
+    name: 'Solana',
+    shortName: 'SOL',
+    family: 'solana',
+    chainId: 0,
+    rpcUrl: 'https://solana-rpc.publicnode.com',
+    explorerUrl: 'https://explorer.solana.com',
+    nativeCurrency: { name: 'Solana', symbol: 'SOL', decimals: 9 },
+    transport: 'native',
+    isEvm: false,
+    isTestnet: false,
+    blockTimeSec: 0.4,
+    color: 'from-primary to-primary/70',
+    tokens: [
+      { address: '', symbol: 'SOL', name: 'Solana', decimals: 9, coingeckoId: 'solana' },
+      { address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', symbol: 'USDC', name: 'USD Coin', decimals: 6, coingeckoId: 'usd-coin' },
+      { address: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', symbol: 'USDT', name: 'Tether USD', decimals: 6, coingeckoId: 'tether' },
+      { address: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN', symbol: 'JUP', name: 'Jupiter', decimals: 6, coingeckoId: 'jupiter-exchange-solana' },
+      { address: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', symbol: 'BONK', name: 'Bonk', decimals: 5, coingeckoId: 'bonk' },
+      { address: 'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3', symbol: 'PYTH', name: 'Pyth Network', decimals: 6, coingeckoId: 'pyth-network' },
+      { address: 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn', symbol: 'JITOSOL', name: 'Jito Staked SOL', decimals: 9, coingeckoId: 'jito-staked-sol' },
+      { address: 'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So', symbol: 'MSOL', name: 'Marinade Staked SOL', decimals: 9, coingeckoId: 'msol' },
+      { address: 'So11111111111111111111111111111111111111112', symbol: 'WSOL', name: 'Wrapped SOL', decimals: 9, coingeckoId: 'wrapped-solana' },
+    ],
+  },
+
+  'solana-devnet': {
+    id: 'solana-devnet',
+    name: 'Solana Devnet',
+    shortName: 'SOL Dev',
+    family: 'solana',
+    chainId: 0,
+    rpcUrl: 'https://api.devnet.solana.com',
+    explorerUrl: 'https://explorer.solana.com',
+    nativeCurrency: { name: 'Devnet SOL', symbol: 'SOL', decimals: 9 },
+    transport: 'native',
+    isEvm: false,
+    isTestnet: true,
+    blockTimeSec: 0.4,
+    color: 'from-primary to-primary/70',
+    tokens: [{ address: '', symbol: 'SOL', name: 'Devnet SOL', decimals: 9 }],
   },
 }
 
@@ -665,14 +891,105 @@ export const BRIDGEABLE_CHAINS: ChainConfig[] = CHAIN_LIST.filter(
   c => c.pqBridgeTarget != null
 )
 
+// ─── Networks the user added ────────────────────────────────────────────────
+
+/** An EVM network the user added (Settings → Networks, or a site's wallet_addEthereumChain). */
+export interface CustomChain {
+  chainId: number
+  name: string
+  rpcUrl: string
+  symbol: string
+  decimals?: number
+  explorerUrl?: string
+  isTestnet?: boolean
+}
+
+const customChains = new Map<string, ChainConfig>()
+
+export const customChainKey = (chainId: number) => `custom-${chainId}`
+
+export function customChainConfig(c: CustomChain): ChainConfig {
+  const decimals = c.decimals ?? 18
+  return {
+    id: customChainKey(c.chainId),
+    name: c.name,
+    shortName: c.name.length > 12 ? c.symbol : c.name,
+    chainId: c.chainId,
+    rpcUrl: c.rpcUrl,
+    explorerUrl: (c.explorerUrl ?? '').replace(/\/+$/, ''),
+    nativeCurrency: { name: c.symbol, symbol: c.symbol, decimals },
+    transport: 'web3',
+    isEvm: true,
+    isTestnet: !!c.isTestnet,
+    blockTimeSec: 2,
+    color: 'from-primary to-primary/70',
+    tokens: [{ address: '', symbol: c.symbol, name: c.symbol, decimals }],
+  }
+}
+
+/** Load the user's networks (from WalletSettings.customChains). A built-in chain id always wins. */
+export function setCustomChains(list: CustomChain[] = []): void {
+  customChains.clear()
+  for (const c of list) {
+    if (CHAIN_LIST.some(b => b.isEvm && b.chainId === c.chainId)) continue
+    const cfg = customChainConfig(c)
+    customChains.set(cfg.id, cfg)
+  }
+}
+
+/** Every network: built in, then the user's. */
+export function allChains(): ChainConfig[] {
+  return [...CHAIN_LIST, ...customChains.values()]
+}
+
+export function isCustomChain(chain: Pick<ChainConfig, 'id'>): boolean {
+  return chain.id.startsWith('custom-')
+}
+
+/**
+ * Check a network before adding it: a well-formed RPC address that answers with the chain id
+ * the network claims. https only, except a node on this machine.
+ */
+export async function verifyCustomChain(c: CustomChain): Promise<void> {
+  let url: URL
+  try {
+    url = new URL(c.rpcUrl)
+  } catch {
+    throw new Error('The RPC address is not a URL')
+  }
+  const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1'
+  if (url.protocol !== 'https:' && !(local && url.protocol === 'http:')) throw new Error('The RPC address must start with https://')
+  if (!c.name.trim() || c.name.length > 40) throw new Error('Give the network a name of up to 40 characters')
+  if (!/^[A-Za-z0-9.$-]{1,11}$/.test(c.symbol)) throw new Error('The currency symbol is 1 to 11 letters or digits')
+  if (!Number.isSafeInteger(c.chainId) || c.chainId <= 0) throw new Error('The chain id must be a positive whole number')
+  if (c.explorerUrl && !/^https:\/\//.test(c.explorerUrl)) throw new Error('The explorer address must start with https://')
+  let live: number
+  try {
+    const res = await fetch(c.rpcUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    live = Number(BigInt((await res.json()).result))
+  } catch {
+    throw new Error('That RPC address did not answer as an EVM node')
+  }
+  if (live !== c.chainId) throw new Error(`That RPC serves chain ${live}, not ${c.chainId}`)
+}
+
 /** Look up a chain by its EIP-155 chainId */
 export function getChainById(chainId: number): ChainConfig | undefined {
-  return CHAIN_LIST.find(c => c.chainId === chainId)
+  return allChains().find(c => c.isEvm && c.chainId === chainId)
+}
+
+export function chainFamily(chain: Pick<ChainConfig, 'family'>): ChainFamily {
+  return chain.family ?? 'evm'
 }
 
 /** Look up a chain by its slug id */
 export function getChain(id: string): ChainConfig | undefined {
-  return CHAINS[id]
+  return CHAINS[id] ?? customChains.get(id)
 }
 
 /** Whether a chain supports standard web3 sends */
@@ -703,6 +1020,16 @@ export function isQrdxChain(chain: ChainConfig): boolean {
 /** Every QRDX chain, in registry order. */
 export const QRDX_CHAINS: ChainConfig[] = CHAIN_LIST.filter(isQrdxChain)
 
+/**
+ * A token the registry lists for this chain by address (or the chain's own coin). Only these
+ * get a coin's logo, chart and price by symbol: anyone can name a token "USDC".
+ */
+export function isListedToken(chain: Pick<ChainConfig, 'tokens'>, address: string): boolean {
+  if (!address) return true
+  const a = address.toLowerCase()
+  return chain.tokens.some(t => t.address.toLowerCase() === a)
+}
+
 /** Get the native token for a chain */
 export function getNativeToken(chain: ChainConfig): ChainToken {
   return chain.tokens[0] // native is always first
@@ -723,8 +1050,8 @@ export function toAddChainParam(chain: ChainConfig): AddEthereumChainParameter {
 
 // ─── Default chains ─────────────────────────────────────────────────────────
 
-/** The default chain when no preference is stored */
-export const DEFAULT_CHAIN = CHAINS['qrdx-mainnet']
+/** The default chain when no preference is stored: the testnet, until mainnet launches. */
+export const DEFAULT_CHAIN = CHAINS['qrdx-testnet']
 
 /** The default EVM-only chain (for standard Ethereum operations) */
 export const DEFAULT_EVM_CHAIN = CHAINS['ethereum']

@@ -1,10 +1,11 @@
 'use client'
 
+import { explorerAddressUrl } from '@/src/core/other-chains'
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowDownLeft, ArrowLeft, ArrowLeftRight, ArrowUpRight, EyeOff, Eye, ExternalLink } from 'lucide-react'
 import { hiddenTokens, setTokenHidden } from '@/src/core/hidden-tokens'
 import { useConfirm } from './flow/ConfirmSheet'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { CoinLogo } from './CoinLogo'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { isQrdxChain } from '@/src/core/chains'
 import { fetchPriceHistory, symbolToCoingeckoId, type PriceHistoryPoint } from '@/src/core/prices'
@@ -61,7 +62,8 @@ export function TokenDetail({ token, onClose, onAction }: { token: Token; onClos
     let live = true
     const load = async (): Promise<PriceHistoryPoint[]> => {
       if (qrdx) return tokenPriceHistory(activeChain, isNative ? 'qrdx' : token.contractAddress!, range)
-      const id = symbolToCoingeckoId(token.symbol)
+      // By symbol only for a verified coin: anyone can name a token after another.
+      const id = token.verified ? symbolToCoingeckoId(token.symbol) : undefined
       if (!id) return []
       const points = await fetchPriceHistory(id, RANGE_DAYS[range])
       return range === '1H' ? points.filter((p) => p.timestamp >= Date.now() - 3_600_000) : points
@@ -105,10 +107,7 @@ export function TokenDetail({ token, onClose, onAction }: { token: Token; onClos
           <button type="button" onClick={onClose} aria-label="Back" className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-accent/50">
             <ArrowLeft className="h-4 w-4" />
           </button>
-          <Avatar className="h-8 w-8">
-            <AvatarImage src={token.icon} alt={token.symbol} referrerPolicy="no-referrer" className="logo-mono object-cover" />
-            <AvatarFallback className="bg-accent text-xs font-bold">{token.symbol.slice(0, 2)}</AvatarFallback>
-          </Avatar>
+          <CoinLogo symbol={token.symbol} mark={token.mark} verified={token.verified} image={token.icon} size={32} />
           <div className="min-w-0">
             <h1 className="truncate text-base font-semibold">{token.name}</h1>
             <p className="text-[10px] text-muted-foreground">{token.symbol}</p>
@@ -138,12 +137,12 @@ export function TokenDetail({ token, onClose, onAction }: { token: Token; onClos
           {history !== null && history.length === 0 && <p className="mt-1 text-center text-[10px] text-muted-foreground">No market chart for {token.symbol} on {activeChain.name} yet.</p>}
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className={cn('grid gap-2', qrdx ? 'grid-cols-3' : 'grid-cols-2')}>
           {([
             ['send', 'Send', ArrowUpRight],
             ['receive', 'Receive', ArrowDownLeft],
             ['swap', 'Swap', ArrowLeftRight],
-          ] as const).map(([action, label, Icon]) => (
+          ] as const).filter(([action]) => qrdx || action !== 'swap').map(([action, label, Icon]) => (
             <button key={action} type="button" onClick={() => onAction(action, token)} className="flex flex-col items-center gap-1.5 rounded-xl border border-border/60 py-3 text-xs font-medium hover:bg-accent/40">
               <Icon className="h-4 w-4" /> {label}
             </button>
@@ -189,7 +188,7 @@ export function TokenDetail({ token, onClose, onAction }: { token: Token; onClos
             </button>
           )}
           {token.contractAddress && (
-            <a href={`${activeChain.explorerUrl}/address/${token.contractAddress}`} target="_blank" rel="noreferrer" className="mt-3 flex items-center gap-1.5 text-xs font-medium hover:underline">
+            <a href={activeChain.isEvm ? `${activeChain.explorerUrl}/address/${token.contractAddress}` : explorerAddressUrl(activeChain, token.contractAddress)} target="_blank" rel="noreferrer" className="mt-3 flex items-center gap-1.5 text-xs font-medium hover:underline">
               <ExternalLink className="h-3.5 w-3.5" /> View on the explorer
             </a>
           )}

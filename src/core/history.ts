@@ -11,7 +11,7 @@
  *  they appear on chain.
  */
 
-import { CHAINS } from './chains'
+import { getChain } from './chains'
 import { type EthTransactionReceipt, weiToEth, fromHex } from './ethereum'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -44,21 +44,27 @@ export interface TransactionHistoryItem {
 
 // ─── Block explorer API URLs (Etherscan-compatible) ─────────────────────────
 
+/**
+ * Blockscout's Etherscan-compatible API, which needs no key. (Etherscan retired its v1 API;
+ * v2 and the *scan family need an API key, which a wallet cannot keep secret.) Networks not
+ * listed show only transactions sent from this wallet.
+ */
 const EXPLORER_APIS: Record<string, string> = {
-  'ethereum': 'https://api.etherscan.io/api',
-  'ethereum-sepolia': 'https://api-sepolia.etherscan.io/api',
-  'polygon': 'https://api.polygonscan.com/api',
-  'polygon-amoy': 'https://api-amoy.polygonscan.com/api',
-  'arbitrum': 'https://api.arbiscan.io/api',
-  'arbitrum-sepolia': 'https://api-sepolia.arbiscan.io/api',
-  'optimism': 'https://api-optimistic.etherscan.io/api',
-  'base': 'https://api.basescan.org/api',
-  'base-sepolia': 'https://api-sepolia.basescan.org/api',
-  'bsc': 'https://api.bscscan.com/api',
-  'bsc-testnet': 'https://api-testnet.bscscan.com/api',
-  'avalanche': 'https://api.snowtrace.io/api',
-  'fantom': 'https://api.ftmscan.com/api',
-  'zksync': 'https://block-explorer-api.mainnet.zksync.io/api',
+  'ethereum': 'https://eth.blockscout.com/api',
+  'ethereum-sepolia': 'https://eth-sepolia.blockscout.com/api',
+  'optimism': 'https://explorer.optimism.io/api',
+  'optimism-sepolia': 'https://testnet-explorer.optimism.io/api',
+  'base': 'https://base.blockscout.com/api',
+  'base-sepolia': 'https://base-sepolia.blockscout.com/api',
+  'arbitrum': 'https://arbitrum.blockscout.com/api',
+  'arbitrum-sepolia': 'https://arbitrum-sepolia.blockscout.com/api',
+  'polygon': 'https://polygon.blockscout.com/api',
+  'zksync': 'https://zksync.blockscout.com/api',
+  'unichain': 'https://unichain.blockscout.com/api',
+  'celo': 'https://celo.blockscout.com/api',
+  // Routescan's Etherscan-compatible API, also keyless.
+  'avalanche': 'https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api',
+  'mantle': 'https://api.routescan.io/v2/network/mainnet/evm/5000/etherscan/api',
 }
 
 // ─── Local pending transactions store ───────────────────────────────────────
@@ -78,7 +84,7 @@ export function recordPendingTransaction(
   nativeDecimals = 18
 ): void {
   const formattedValue = weiToEth(fromHex(valueWei || '0x0'), nativeDecimals)
-  const chain = CHAINS[chainId]
+  const chain = getChain(chainId)
 
   pendingTxs.set(hash, {
     hash,
@@ -150,7 +156,7 @@ export async function fetchTransactionHistory(
   page = 1,
   pageSize = 20
 ): Promise<TransactionHistoryItem[]> {
-  const chain = CHAINS[chainId]
+  const chain = getChain(chainId)
   if (!chain) return []
 
   const addr = address.toLowerCase()
@@ -243,7 +249,7 @@ export async function fetchTokenTransferHistory(
   page = 1,
   pageSize = 20
 ): Promise<TransactionHistoryItem[]> {
-  const chain = CHAINS[chainId]
+  const chain = getChain(chainId)
   if (!chain) return []
 
   const apiUrl = EXPLORER_APIS[chainId]
@@ -319,4 +325,76 @@ export async function fetchAllTransactionHistory(
 
   deduped.sort((a, b) => b.timestamp - a.timestamp)
   return deduped
+}
+
+// ─── Balance changes (for the portfolio's value history) ────────────────────
+
+/** One change to a balance: `token` is '' for the network's coin, else the contract (lower case). */
+export interface BalanceEvent {
+  time: number
+  token: string
+  delta: bigint
+}
+
+interface ExplorerTx {
+  timeStamp: string
+  from: string
+  to: string
+  value: string
+  isError?: string
+  gasUsed?: string
+  gasPrice?: string
+  contractAddress?: string
+}
+
+/**
+ * Every change to `address`'s balances on an EVM network, newest first, from its explorer:
+ * the coin sent and received (fees included, failed sends still pay them), the coin moved to it
+ * by contracts (internal transfers: a swap's output), and token transfers. Null where the
+ * network has no keyless explorer API. `complete` is false when older changes may exist.
+ */
+export async function fetchBalanceEvents(chainId: string, address: string, limit = 200): Promise<{ events: BalanceEvent[]; complete: boolean } | null> {
+  const api = EXPLORER_APIS[chainId]
+  if (!api) return null
+  const addr = address.toLowerCase()
+  // A refusal ("Too many requests") must not read as "no transactions": only an OK or an
+  // explicit "No transactions found" is an answer. One retry after a pause.
+  const get = async (action: string, retry = true): Promise<ExplorerTx[]> => {
+    const res = await fetch(`${api}?module=account&action=${action}&address=${address}&page=1&offset=${limit}&sort=desc`, { signal: AbortSignal.timeout(20_000) })
+    const body = (await res.json().catch(() => ({}))) as { status?: string; message?: string; result?: ExplorerTx[] | string | null }
+    if (Array.isArray(body.result)) return body.result
+    if (/no (internal )?(transactions|token transfers)/i.test(`${body.message} ${body.result}`)) return []
+    if (retry) {
+      await new Promise((r) => setTimeout(r, 1500))
+      return get(action, false)
+    }
+    throw new Error(`${body.message ?? `HTTP ${res.status}`}`)
+  }
+  // One after another: explorers rate-limit bursts.
+  const txs = await get('txlist')
+  const internal = await get('txlistinternal')
+  const tokens = await get('tokentx')
+  const events: BalanceEvent[] = []
+  for (const t of txs) {
+    const time = Number(t.timeStamp)
+    const ok = t.isError !== '1'
+    const value = BigInt(t.value || '0')
+    if (t.from?.toLowerCase() === addr) {
+      events.push({ time, token: '', delta: -(BigInt(t.gasUsed || '0') * BigInt(t.gasPrice || '0')) - (ok ? value : 0n) })
+    }
+    if (ok && t.to?.toLowerCase() === addr && value > 0n) events.push({ time, token: '', delta: value })
+  }
+  for (const t of internal) {
+    if (t.isError === '1') continue
+    const value = BigInt(t.value || '0')
+    if (t.to?.toLowerCase() === addr) events.push({ time: Number(t.timeStamp), token: '', delta: value })
+    if (t.from?.toLowerCase() === addr) events.push({ time: Number(t.timeStamp), token: '', delta: -value })
+  }
+  for (const t of tokens) {
+    const token = (t.contractAddress ?? '').toLowerCase()
+    const value = BigInt(t.value || '0')
+    if (t.to?.toLowerCase() === addr) events.push({ time: Number(t.timeStamp), token, delta: value })
+    if (t.from?.toLowerCase() === addr) events.push({ time: Number(t.timeStamp), token, delta: -value })
+  }
+  return { events: events.sort((a, b) => b.time - a.time), complete: txs.length < limit && tokens.length < limit && internal.length < limit }
 }

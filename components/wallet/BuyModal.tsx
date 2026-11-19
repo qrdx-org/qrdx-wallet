@@ -48,6 +48,7 @@ export function BuyModal({ onClose, onReceive, onSwap }: BuyModalProps) {
           action="Show my address"
           onClick={onReceive}
         />
+        {qrdx && (
         <Option
           icon={<ArrowLeftRight className="h-5 w-5" />}
           title="Swap a token you hold"
@@ -55,6 +56,7 @@ export function BuyModal({ onClose, onReceive, onSwap }: BuyModalProps) {
           action="Open swap"
           onClick={onSwap}
         />
+        )}
 
         <div className="flex items-start gap-2.5 rounded-xl border border-border/70 p-3">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />

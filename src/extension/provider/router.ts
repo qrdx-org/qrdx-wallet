@@ -29,8 +29,12 @@ import {
   getChainById,
   isQrdxChain,
   getFeeModel,
-  CHAIN_LIST,
+  DEFAULT_CHAIN,
+  customChainKey,
+  setCustomChains,
+  verifyCustomChain,
   type ChainConfig,
+  type CustomChain,
 } from '../../core/chains'
 import { addressesEqual } from '../../core/address'
 import { toAccountId } from '../../core/account-id'
@@ -138,6 +142,8 @@ export type ApprovalRequest =
       free?: boolean
     }
   | { kind: 'switch-chain'; origin: string; chain: string }
+  /** A site proposes an EVM network the wallet does not know; its RPC already answered with that chain id. */
+  | { kind: 'add-chain'; origin: string; network: CustomChain }
   | {
       kind: 'watch-asset'
       origin: string
@@ -284,9 +290,12 @@ export class ProviderRouter {
 
   // ── Shared state ──────────────────────────────────────────────────────────
 
+  /** The EVM network sites see. With Bitcoin or Solana selected in the wallet, the default one. */
   async activeChain(): Promise<ChainConfig> {
     const state = await this.d.manager.getState()
-    return getChain(state?.settings.activeChainId ?? '') ?? CHAIN_LIST[0]
+    setCustomChains(state?.settings.customChains)
+    const chain = getChain(state?.settings.activeChainId ?? '')
+    return chain && chain.isEvm && !chain.notLive ? chain : DEFAULT_CHAIN
   }
 
   private async accounts(): Promise<WalletAccount[]> {
@@ -432,8 +441,9 @@ export class ProviderRouter {
       case 'qrdx_sendExchangeBatch':
         return this.sendExchangeBatch(origin, params)
       case 'wallet_switchEthereumChain':
-      case 'wallet_addEthereumChain':
         return this.switchChain(origin, method, params)
+      case 'wallet_addEthereumChain':
+        return this.addChain(origin, params)
       case 'wallet_watchAsset':
         return this.watchAsset(origin, params)
     }
@@ -931,6 +941,35 @@ export class ProviderRouter {
     if ((await this.activeChain()).id === target.id) return null
     await this.approve({ kind: 'switch-chain', origin, chain: target.id }, 'manageChain')
     await this.d.manager.updateSettings({ activeChainId: target.id })
+    return null
+  }
+
+  /** EIP-3085: switch to a known network, or (approved) add one the wallet does not know. */
+  private async addChain(origin: string, params: unknown[]): Promise<null> {
+    if ((await this.exposedAccounts(origin)).length === 0) throw Errors.unauthorized()
+    const p = params[0] as
+      | { chainId?: string; chainName?: string; rpcUrls?: string[]; nativeCurrency?: { symbol?: string; decimals?: number }; blockExplorerUrls?: string[] }
+      | undefined
+    if (!p?.chainId || !/^0x[0-9a-fA-F]+$/.test(p.chainId))
+      throw Errors.invalidParams('wallet_addEthereumChain expects { chainId: "0x…" }')
+    if (getChainById(Number(BigInt(p.chainId)))) return this.switchChain(origin, 'wallet_addEthereumChain', params)
+    const network: CustomChain = {
+      chainId: Number(BigInt(p.chainId)),
+      name: String(p.chainName ?? '').slice(0, 40),
+      rpcUrl: String(p.rpcUrls?.[0] ?? ''),
+      symbol: String(p.nativeCurrency?.symbol ?? ''),
+      decimals: Number(p.nativeCurrency?.decimals ?? 18),
+      explorerUrl: p.blockExplorerUrls?.[0],
+    }
+    try {
+      await verifyCustomChain(network)
+    } catch (e) {
+      throw Errors.invalidParams(e instanceof Error ? e.message : 'Invalid network')
+    }
+    await this.approve({ kind: 'add-chain', origin, network }, 'manageChain')
+    const settings = (await this.d.manager.getState())?.settings
+    const others = (settings?.customChains ?? []).filter((c) => c.chainId !== network.chainId)
+    await this.d.manager.updateSettings({ customChains: [...others, network], activeChainId: customChainKey(network.chainId) })
     return null
   }
 

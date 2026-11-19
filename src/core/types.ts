@@ -54,6 +54,7 @@ export interface Network {
 // ./wallet-manager.ts).
 
 import type { DerivedAccountPublic, KeyringType } from './keyring'
+import type { CustomChain } from './chains'
 
 /** How an account came to exist — drives backup warnings and labels. */
 export type AccountSource =
@@ -143,6 +144,10 @@ export interface WalletSettings {
    * Only ever written through an explicit user confirmation.
    */
   trustedChainIds?: Record<string, number>
+  /** EVM networks the user added (core/chains.ts CustomChain). */
+  customChains?: CustomChain[]
+  /** Home shows every network together ('all', the default) or the selected one. */
+  portfolioView?: 'all' | 'network'
 }
 
 // Message Types

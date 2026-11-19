@@ -102,7 +102,7 @@ export function TokenBadge({
   const slug = asset.verified ? (asset.slug ?? asset.symbol.toLowerCase().replace(/^[qw](?=[a-z]{3})/, '')) : null
   if (slug && LOGOS.has(slug)) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={`/tokens/${slug}.svg`} alt="" aria-hidden className={cn('logo-mono shrink-0 rounded-full', SIZES[size], className)} />
+    return <img src={`tokens/${slug}.svg`} alt="" aria-hidden className={cn('logo-mono shrink-0 rounded-full', SIZES[size], className)} />
   }
   if (asset.image && broken !== asset.image) {
     return (

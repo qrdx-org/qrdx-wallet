@@ -236,6 +236,11 @@ export function ApprovalScreen(
       icon: <Network className="h-5 w-5" />,
       confirm: 'Switch',
     },
+    'add-chain': {
+      title: 'Add network?',
+      icon: <Network className="h-5 w-5" />,
+      confirm: 'Add and switch',
+    },
     'watch-asset': {
       title: 'Add token?',
       icon: <Coins className="h-5 w-5" />,
@@ -527,6 +532,19 @@ export function ApprovalScreen(
             <span>{w.activeChain.name}</span>
             <ArrowRight className="h-4 w-4 text-muted-foreground" />
             <span>{getChain(request.chain)?.name}</span>
+          </div>
+        )}
+
+        {request.kind === 'add-chain' && (
+          <div className="rounded-xl glass p-3">
+            <Field label="Network">{request.network.name}</Field>
+            <Field label="Chain id">{request.network.chainId}</Field>
+            <Field label="Currency">{request.network.symbol}</Field>
+            <Field label="RPC">{request.network.rpcUrl}</Field>
+            {request.network.explorerUrl && <Field label="Explorer">{request.network.explorerUrl}</Field>}
+            <p className="text-[10px] text-muted-foreground mt-2">
+              The RPC answered with this chain id. The site chose the RPC: it sees your address and balances on this network, and could show you wrong ones.
+            </p>
           </div>
         )}
 

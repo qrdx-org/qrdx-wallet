@@ -6,6 +6,7 @@ import { TrendingUp, TrendingDown } from 'lucide-react'
 import { createChart, ColorType, AreaSeries, CrosshairMode } from 'lightweight-charts'
 import type { IChartApi } from 'lightweight-charts'
 import type { PriceHistoryPoint } from '@/src/core/prices'
+import { formatFiatPrice } from '@/src/core/fiat'
 
 interface PortfolioChartProps {
   data?: PriceHistoryPoint[]
@@ -107,6 +108,7 @@ export function PortfolioChart({ data, change24h = 0, changeLabel = '24h' }: Por
       lastValueVisible: false,
     })
 
+    const data_ = data!
     series.setData(
       data!.map(p => ({
         time: Math.floor(p.timestamp / 1000) as any,
@@ -127,17 +129,14 @@ export function PortfolioChart({ data, change24h = 0, changeLabel = '24h' }: Por
       }
       const data = param.seriesData.get(series) as any
       if (data?.value !== undefined) {
-        const price = data.value.toLocaleString('en-US', {
-          style: 'currency',
-          currency: 'USD',
-          minimumFractionDigits: 2,
-        })
+        // In the chosen currency; with the date when the chart spans more than a day.
+        const price = formatFiatPrice(data.value)
         const date = new Date((param.time as number) * 1000)
-        const time = date.toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true,
-        })
+        const span = data_.length > 1 ? data_[data_.length - 1].timestamp - data_[0].timestamp : 0
+        const time =
+          span > 36 * 3_600_000
+            ? date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
+            : date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
         setHoverData({ price, time })
       }
     })

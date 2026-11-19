@@ -12,7 +12,7 @@ import {
   Check,
   GripVertical,
 } from 'lucide-react'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { CoinLogo } from './CoinLogo'
 import { Button } from '@/components/ui/button'
 import { useTokenList, type Token } from './TokenList'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -248,9 +248,7 @@ export function AllTokens({
                   }`}
                 >
                   <GripVertical className="h-3 w-3 text-primary/30 shrink-0" />
-                  <div className={`h-4 w-4 rounded-[4px] bg-gradient-to-br ${token.color} flex items-center justify-center`}>
-                    <span className="text-primary-foreground text-[7px] font-bold">{token.symbol.slice(0, 2)}</span>
-                  </div>
+                  <CoinLogo symbol={token.symbol} mark={token.mark} verified={token.verified} image={token.icon} size={16} />
                   <span className="text-[10px] font-semibold">{token.symbol}</span>
                   <button
                     onClick={(e) => {
@@ -288,12 +286,7 @@ export function AllTokens({
                 className="flex items-center gap-2.5 px-2 py-2.5 rounded-xl hover:bg-accent/30 transition-all group"
               >
                 {/* Token icon */}
-                <Avatar className="h-9 w-9 shadow-sm shrink-0">
-                  <AvatarImage src={token.icon} alt={token.symbol} referrerPolicy="no-referrer" className="logo-mono object-cover" />
-                  <AvatarFallback className={`bg-gradient-to-br ${token.color} text-primary-foreground text-xs font-bold`}>
-                    {token.symbol.slice(0, 2)}
-                  </AvatarFallback>
-                </Avatar>
+                <CoinLogo symbol={token.symbol} mark={token.mark} verified={token.verified} image={token.icon} size={36} />
 
                 {/* Token info: opens the token's page */}
                 <div className="flex-1 min-w-0 cursor-pointer" role="button" tabIndex={0} onClick={() => onSelect?.(token)} onKeyDown={(e) => e.key === 'Enter' && onSelect?.(token)}>

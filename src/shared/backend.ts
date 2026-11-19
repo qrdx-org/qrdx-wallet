@@ -61,6 +61,9 @@ export const BACKEND_METHODS = [
   'signPqTransaction',
   'signExchangeTransaction',
   'signMultisigPartial',
+  'chainAddresses',
+  'signBitcoinPsbt',
+  'signSolanaMessage',
 ] as const
 
 export type BackendMethod = (typeof BACKEND_METHODS)[number]
