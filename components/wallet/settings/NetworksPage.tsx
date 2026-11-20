@@ -14,10 +14,12 @@ import { SettingsPage, Section } from './shared'
 import { ErrorBanner, Notice, PrimaryButton, Sheet, TextField } from '../flow/FlowKit'
 import { NetworkLogo } from '../CoinLogo'
 import { useConfirm } from '../flow/ConfirmSheet'
+import { useShowUnverified } from '../portfolio/PortfolioHome'
 import { cn } from '@/lib/utils'
 
 export function NetworksPage({ onBack }: { onBack: () => void }) {
   const { chains, activeChain, setActiveChain, showTestnets, updateSettings, state } = useWallet()
+  const [showAll, setShowAll] = useShowUnverified()
   const [adding, setAdding] = useState(false)
   const { dialog, confirm } = useConfirm()
   const custom = state?.settings.customChains ?? []
@@ -94,6 +96,13 @@ export function NetworksPage({ onBack }: { onBack: () => void }) {
             <span className="block text-[10px] text-muted-foreground">QRDX Testnet, Sepolia, Bitcoin Testnet4, Solana Devnet and others</span>
           </span>
           <input type="checkbox" checked={showTestnets} onChange={(e) => void updateSettings({ showTestnets: e.target.checked })} className="h-4 w-4 accent-primary" />
+        </label>
+        <label className="flex cursor-pointer items-center justify-between border-t border-border/40 p-3">
+          <span>
+            <span className="block text-sm font-medium">Show unverified tokens</span>
+            <span className="block text-[10px] text-muted-foreground">List every token you hold, not only verified ones and the ones you trust. They stay unpriced.</span>
+          </span>
+          <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} className="h-4 w-4 accent-primary" />
         </label>
       </Section>
 

@@ -25,6 +25,7 @@ import { resolveRecipient, type Credential, type SendQuote } from '@/src/core/tx
 import { ethToWei, weiToEth } from '@/src/core/ethereum'
 import { defaultCredential, formatAmount, formatUnitsExact } from '@/src/core/balances'
 import { isQrdxChain } from '@/src/core/chains'
+import { qrdxVerifiedAssets, type VerifiedAsset } from '@/src/core/token-trust'
 import { formatFiat as formatUsd } from '@/src/core/fiat'
 import { ConfirmSheet } from './flow/ConfirmSheet'
 import { RecipientSuggestions } from './RecipientSuggestions'
@@ -44,6 +45,8 @@ interface SendModalProps {
   initialToken?: string
   /** Start with this recipient filled in ("Send again"). */
   initialRecipient?: string
+  /** QRDX: send from this address (the one that holds the token picked on the home screen). */
+  initialCredential?: Credential
 }
 
 interface TokenOption {
@@ -89,7 +92,7 @@ type TxStatus = 'idle' | 'estimating' | 'sending' | 'success' | 'error'
  * is shown so the user can see exactly where funds go. The fee shown is the
  * quote the transaction is then built with.
  */
-export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initialRecipient }: SendModalProps) {
+export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initialRecipient, initialCredential }: SendModalProps) {
   const { balances, pqBalances, activeChain, quoteSend, send, addressBook, addContact, networkStatus, prices, currentWallet, transactions } = useWallet()
   // Nothing is signed from the form: Review opens the confirmation, which signs.
   const [reviewing, setReviewing] = useState(false)
@@ -105,8 +108,9 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
   const [txHash, setTxHash] = useState<string | null>(null)
   // Start on the address that holds funds: on QRDX that is usually the post-quantum
   // one, where exchange tokens live; until the reader picks one themselves.
-  const [addressType, setAddressTypeState] = useState<Credential>(() => defaultCredential(balances, pqBalances, qrdx))
-  const pickedCredential = useRef(false)
+  const [addressType, setAddressTypeState] = useState<Credential>(() => (qrdx && initialCredential) || defaultCredential(balances, pqBalances, qrdx))
+  // Picked on the home screen counts as picked: balances loading later must not move it.
+  const pickedCredential = useRef(qrdx && !!initialCredential)
   useEffect(() => {
     if (!pickedCredential.current) setAddressTypeState(defaultCredential(balances, pqBalances, qrdx))
   }, [balances, pqBalances, qrdx])
@@ -156,6 +160,25 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
       }
     })
   }, [sourceBalances, activeChain, nativeSymbol, nativeDecimals])
+
+  // The chosen token follows its live balance: picked before the balances settled, it would
+  // otherwise keep the amount it had then (zero).
+  useEffect(() => {
+    if (!selectedToken) return
+    const live = tokenOptions.find((t) => (t.contractAddress ?? '').toLowerCase() === (selectedToken.contractAddress ?? '').toLowerCase() && (!!t.contractAddress || t.symbol === selectedToken.symbol))
+    if (live && live.raw !== selectedToken.raw) setSelectedToken(live)
+  }, [tokenOptions, selectedToken])
+
+  // QRDX: the trade site's verified assets (USDC, qETH, …), which the chain registry does not list.
+  const [verifiedAssets, setVerifiedAssets] = useState<Map<string, VerifiedAsset>>(new Map())
+  useEffect(() => {
+    let live = true
+    qrdxVerifiedAssets(activeChain).then((m) => live && setVerifiedAssets(m))
+    return () => {
+      live = false
+    }
+  }, [activeChain])
+  const verifiedToken = (address: string) => isVerifiedToken(activeChain, address) || verifiedAssets.has(address.toLowerCase())
 
   const filteredTokens = useMemo(() => {
     if (!search.trim()) return tokenOptions
@@ -397,6 +420,7 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
                 size="icon"
                 className="h-8 w-8 rounded-lg hover:bg-accent/50"
                 onClick={onClose}
+                aria-label="Back"
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
@@ -457,7 +481,7 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
                 className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-accent/30 active:bg-accent/50 transition-all group text-left"
               >
                 {/* Token icon */}
-                <CoinLogo symbol={token.symbol} verified={isVerifiedToken(activeChain, token.contractAddress ?? '')} size={40} className="group-hover:scale-105 transition-transform" />
+                <CoinLogo symbol={token.symbol} verified={verifiedToken(token.contractAddress ?? '')} size={40} className="group-hover:scale-105 transition-transform" />
 
                 {/* Token info */}
                 <div className="flex-1 min-w-0">
@@ -502,11 +526,12 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
               size="icon"
               className="h-8 w-8 rounded-lg hover:bg-accent/50"
               onClick={handleBack}
+              aria-label="Back"
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="flex items-center gap-2.5 flex-1">
-              <CoinLogo symbol={token.symbol} verified={isVerifiedToken(activeChain, token.contractAddress ?? '')} size={28} />
+              <CoinLogo symbol={token.symbol} verified={verifiedToken(token.contractAddress ?? '')} size={28} />
               <div>
                 <h1 className="text-base font-semibold">Send {token.symbol}</h1>
                 <p className="text-[10px] text-muted-foreground">{token.name}</p>
@@ -697,7 +722,7 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
                 className="w-full bg-background/60 border border-border/50 rounded-xl px-3 py-2.5 text-xl font-bold placeholder:text-muted-foreground/20 focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/30 transition-all pr-20"
               />
               <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                <CoinLogo symbol={token.symbol} verified={isVerifiedToken(activeChain, token.contractAddress ?? '')} size={20} />
+                <CoinLogo symbol={token.symbol} verified={verifiedToken(token.contractAddress ?? '')} size={20} />
                 <span className="text-sm font-semibold text-muted-foreground">{token.symbol}</span>
               </div>
             </div>

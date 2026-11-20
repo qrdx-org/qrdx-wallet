@@ -61,6 +61,7 @@ import type { KeystoreV3 } from '../../core/keystore'
 import { WatchedTokens } from '../../core/watched-tokens'
 import { exchange } from '../../core/exchange-client'
 import { qrdxPriceHistory, qrdxUsdPrice } from '../../core/trade/prices'
+import { isTrustedToken, qrdxVerifiedAssets } from '../../core/token-trust'
 import { fetchUsdRate, setDisplayCurrency, type FiatCode } from '../../core/fiat'
 import { ActivityLog, fetchQrdxActivity } from '../../core/activity'
 import { AddressBook, type AddressBookEntry, type AddressBookInput } from '../../core/address-book'
@@ -534,7 +535,9 @@ export function WalletProvider({
   // ── Chain ───────────────────────────────────────────────────────────────
   const setActiveChain = (chainId: string) => {
     const chain = getChain(chainId)
-    if (!chain || chain.notLive) return
+    // The same network again (Send from a QRDX holding while on QRDX): nothing to clear, and
+    // clearing would leave its balances empty, since nothing reloads them for the same network.
+    if (!chain || chain.notLive || chain.id === activeChain.id) return
     setActiveChainState(chain)
     // Balances, prices and history are chain-scoped; showing the previous
     // chain's figures under a new network's name would be actively misleading.
@@ -810,18 +813,22 @@ export function WalletProvider({
   }, [displayCode])
 
   const refreshPrices = useCallback(async () => {
-    // Priced by symbol, so only coins the registry lists by address: a token anyone named "USDC" is not worth a dollar.
-    const all = [...balances, ...pqBalances].filter((b) => isListedToken(activeChain, b.address))
-    // Test coins have no price; CoinGecko's ETH or SOL price is mainnet's. (QRDX testnet's comes from its own market.)
-    if (activeChain.isTestnet && !isQrdxChain(activeChain)) {
-      setPrices(new Map())
-      setPortfolioValue(0)
-      setPortfolioChange24h(0)
-      setPriceHistory([])
-      return
-    }
+    // Priced by symbol, so only verified tokens (listed by address, QRDX verified assets) and
+    // ones the user trusts: a token anyone named "USDC" is not worth a dollar. Test networks'
+    // coins are shown at the real coin's price.
+    const verified = await qrdxVerifiedAssets(activeChain)
+    const all = [...balances, ...pqBalances].filter(
+      (b) => isListedToken(activeChain, b.address) || verified.has(b.address.toLowerCase()) || isTrustedToken(activeChain.id, b.address)
+    )
     if (all.length === 0) return
-    const priceMap = await fetchPricesBySymbol([...new Set(all.map((b) => b.symbol))])
+    // The coin each one stands for (qUSDC is USDC), keyed back by its own symbol.
+    const coinOf = (b: { symbol: string; address: string }) => verified.get(b.address.toLowerCase())?.symbol ?? b.symbol
+    const bySymbol = await fetchPricesBySymbol([...new Set(all.map(coinOf))])
+    const priceMap = new Map<string, TokenPrice>()
+    for (const b of all) {
+      const p = bySymbol.get(coinOf(b).toUpperCase())
+      if (p) priceMap.set(b.symbol.toUpperCase(), p)
+    }
     // CoinGecko does not list QRDX: on QRDX networks its price and chart come from the trade API.
     const qrdx = isQrdxChain(activeChain)
     if (qrdx) {

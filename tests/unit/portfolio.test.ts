@@ -7,7 +7,7 @@ import { keccak256 } from 'ethereum-cryptography/keccak.js'
 import { ed25519 } from '@noble/curves/ed25519.js'
 import { base58 } from '@scure/base'
 import { CHAINS } from '../../src/core/chains'
-import { groupHoldings, assetAmount, portfolioChains, type Holding } from '../../src/core/portfolio'
+import { groupHoldings, assetAmount, portfolioChains, priceIdFor, type Holding } from '../../src/core/portfolio'
 import { bridgeRouteFor, encodeLockboxDeposit } from '../../src/core/bridge'
 import { dexLink } from '../../src/core/aggregators'
 import { signSolMessage, solAddressOf, solPrivateKey, splitTransaction, withPayerSignature } from '../../src/core/solana'
@@ -35,9 +35,29 @@ describe('portfolio', () => {
     expect(u.holdings).toHaveLength(2)
     expect(u.usd).toBeCloseTo(12)
     expect(assetAmount(u)).toBe('12')
-    // Test networks' value is kept apart from the real total.
-    expect(assets[0].usd).toBe(0)
-    expect(assets[0].testnetUsd).toBe(800)
+    // QRDX testnet is valued like any other network.
+    expect(assets[0].usd).toBe(800)
+  })
+
+  it('prices test coins and QRDX verified assets as the real coin, and unverified tokens not at all', () => {
+    expect(priceIdFor(CHAINS['ethereum-sepolia'], '', 'ETH')).toBe('ethereum')
+    expect(priceIdFor(CHAINS['bitcoin-testnet'], '', 'BTC')).toBe('bitcoin')
+    expect(priceIdFor(CHAINS['solana-devnet'], '', 'SOL')).toBe('solana')
+    // QRDX itself: the trade API prices it.
+    expect(priceIdFor(CHAINS['qrdx-testnet'], '', 'QRDX')).toBeUndefined()
+    const usdc = '0xa0ad4f35bf2d518a62ebb7e39a32a8f791703362'
+    expect(priceIdFor(CHAINS['qrdx-testnet'], usdc, 'USDC', { symbol: 'USDC', slug: 'usdc' })).toBe('usd-coin')
+    expect(priceIdFor(CHAINS['qrdx-testnet'], usdc, 'USDC')).toBeUndefined()
+    expect(priceIdFor(CHAINS['qrdx-testnet'], usdc, 'USDC', undefined, true)).toBe('usd-coin')
+  })
+
+  it('puts a test network\'s USDC with the real one', () => {
+    const usdc = price('usd-coin', 1)
+    const test: Holding = { ...h('base', '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', 'USDC', 3_000_000n, 6, usdc), chain: CHAINS['qrdx-testnet'], address: '0xa0ad4f35bf2d518a62ebb7e39a32a8f791703362', listed: true }
+    const assets = groupHoldings([h('base', '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', 'USDC', 5_000_000n, 6, usdc), test])
+    expect(assets).toHaveLength(1)
+    expect(assets[0].usd).toBeCloseTo(8)
+    expect(assets[0].testnet).toBe(false)
   })
 
   it('keeps an unlisted token named USDC apart from USDC', () => {
@@ -130,5 +150,29 @@ describe('value history', () => {
     expect(amountsOver(10n, changes, times)).toEqual([9n, 13n, 10n])
     // A history that does not reach back far enough never goes below zero.
     expect(amountsOver(1n, [{ time: 50, token: '', delta: 5n }], [0])).toEqual([0n])
+  })
+
+  it('reads QRDX index rows: fees, transfers both ways, swaps, failures', async () => {
+    const { qrdxRowEvents } = await import('../../src/core/portfolio-history')
+    const me = '0xpqabc'
+    const usdc = '0xa0ad4f35bf2d518a62ebb7e39a32a8f791703362'
+    const decimals = (t: string) => (t === usdc ? 18 : undefined)
+    const row = (r: Record<string, unknown>) => ({ block_height: 1, tx_hash: 'x', timestamp: 100, kind: 'exchange', op: null, sender: null, target: null, asset: null, amount: null, status: 'success', fee: null, error: null, detail: null, ...r }) as never
+    const e18 = 10n ** 18n
+    expect(qrdxRowEvents(row({ op: 'TOKEN_TRANSFER', sender: '0xPQabc', target: '0xother', asset: 'QRDX', amount: '2', fee: '0.5' }), me, 'pq', decimals)).toEqual([
+      { time: 100, token: '', delta: -(e18 / 2n), credential: 'pq' },
+      { time: 100, token: '', delta: -2n * e18, credential: 'pq' },
+    ])
+    expect(qrdxRowEvents(row({ op: 'TOKEN_TRANSFER', sender: '0xother', target: '0xPQabc', asset: usdc, amount: '1.5' }), me, 'pq', decimals)).toEqual([{ time: 100, token: usdc, delta: (3n * e18) / 2n, credential: 'pq' }])
+    const swap = qrdxRowEvents(row({ op: 'SWAP', sender: '0xpqabc', fee: '0', detail: { params: { token_in: 'QRDX', token_out: usdc, amount_in: '10' }, amount_out: '4' } }), me, 'pq', decimals)
+    expect(swap.map((e) => [e.token, e.delta])).toEqual([
+      ['', -10n * e18],
+      [usdc, 4n * e18],
+    ])
+    // Failed: only the fee moved. Staking keeps the value in the account: only the fee.
+    expect(qrdxRowEvents(row({ op: 'TOKEN_TRANSFER', status: 'failed', sender: '0xpqabc', asset: 'QRDX', amount: '9', fee: '1' }), me, 'pq', decimals).map((e) => e.delta)).toEqual([-e18])
+    expect(qrdxRowEvents(row({ op: 'STAKE_DELEGATE', sender: '0xpqabc', asset: 'QRDX', amount: '9', fee: '1' }), me, 'pq', decimals).map((e) => e.delta)).toEqual([-e18])
+    // A token whose decimals are unknown is not guessed.
+    expect(qrdxRowEvents(row({ op: 'TOKEN_TRANSFER', target: '0xpqabc', asset: '0xdead', amount: '1' }), me, 'pq', decimals)).toEqual([])
   })
 })

@@ -11,13 +11,18 @@ import { tradeApiBase, tradeGet } from './api'
 import type { CandleSeries, IndexPrice } from './types'
 
 /** QRDX in USD on this network, or null when nothing prices it. */
-export async function qrdxUsdPrice(chain: ChainConfig): Promise<TokenPrice | null> {
+export function qrdxUsdPrice(chain: ChainConfig): Promise<TokenPrice | null> {
+  return tradeUsdPrice(chain, 'qrdx')
+}
+
+/** A verified asset's USD price (`asset` is its slug) from this network's trade API: an index price, or routed through pools. */
+export async function tradeUsdPrice(chain: ChainConfig, asset: string): Promise<TokenPrice | null> {
   const api = tradeApiBase(chain)
   if (!api) return null
   try {
-    const p = await tradeGet<IndexPrice>(api, '/prices/qrdx')
+    const p = await tradeGet<IndexPrice>(api, `/prices/${encodeURIComponent(asset)}`)
     return {
-      id: `qrdx-${p.source}`,
+      id: `${asset}-${p.source}`,
       usd: Number(p.price),
       usd_24h_change: p.change24h === null ? null : Number(p.change24h),
       lastUpdated: p.asOf * 1000,

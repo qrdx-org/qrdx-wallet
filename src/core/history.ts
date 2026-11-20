@@ -334,6 +334,8 @@ export interface BalanceEvent {
   time: number
   token: string
   delta: bigint
+  /** QRDX: which of the account's two addresses it moved. */
+  credential?: 'classic' | 'pq'
 }
 
 interface ExplorerTx {

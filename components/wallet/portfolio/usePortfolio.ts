@@ -10,6 +10,7 @@ import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { fetchPortfolio, portfolioChains, type Portfolio } from '@/src/core/portfolio'
 import { WatchedTokens } from '@/src/core/watched-tokens'
 import { createDefaultStorage } from '@/src/core/storage'
+import { onTrustChange } from '@/src/core/token-trust'
 
 const FRESH_MS = 60_000
 const cache = new Map<string, { at: number; value?: Portfolio; pending?: Promise<Portfolio> }>()
@@ -49,6 +50,8 @@ export function usePortfolio(enabled = true): { portfolio: Portfolio | null; loa
   )
 
   useEffect(() => load(false), [load])
+  // Trusting a token prices it and lists it with the rest.
+  useEffect(() => onTrustChange((what) => what === 'trust' && load(true)), [load])
 
   const entry = key ? cache.get(key) : undefined
   return { portfolio: entry?.value ?? null, loading: !!entry?.pending || !entry, refresh: () => load(true) }

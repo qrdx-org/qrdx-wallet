@@ -44,14 +44,14 @@ import { TradeSheet } from './portfolio/TradeSheet'
 import type { Asset, Holding } from '@/src/core/portfolio'
 
 export function Dashboard() {
-  const { lock, currentWallet, balances, pqBalances, balancesLoading, activeChain, activeAddress: chainAddress, portfolioValue, portfolioChange24h, priceHistory, transactions, pqBalance, combinedNativeBalance, prices, allNetworks, homeQrdxChain, setActiveChain, chains } = useWallet()
+  const { lock, currentWallet, balances, pqBalances, balancesLoading, activeChain, activeAddress: chainAddress, portfolioValue, portfolioChange24h, priceHistory, transactions, pqBalance, combinedNativeBalance, prices, allNetworks, homeQrdxChain, setActiveChain, chains, showTestnets } = useWallet()
   const family = chainFamily(activeChain)
   // All networks: one portfolio (src/core/portfolio.ts). Actions on an asset elsewhere switch to
   // its network for as long as they are open; home then returns to the QRDX network.
   const { portfolio, loading: portfolioLoading, refresh: refreshPortfolio } = usePortfolio(allNetworks)
   const [openAsset, setOpenAsset] = useState<Asset | null>(null)
   const [tradeHolding, setTradeHolding] = useState<Holding | null>(null)
-  const [picker, setPicker] = useState<'send' | 'swap' | 'receive' | null>(null)
+  const [picker, setPicker] = useState<'send' | 'receive' | null>(null)
   const qrdx = isQrdxChain(activeChain)
   // What works here: everything on QRDX; sending, receiving and funding on other EVM networks;
   // sending and receiving on Bitcoin and Solana.
@@ -65,6 +65,8 @@ export function Dashboard() {
   const [sendToken, setSendToken] = useState<string | undefined>(undefined)
   // "Send again" from a transaction starts with its recipient.
   const [sendTo, setSendTo] = useState<string | undefined>(undefined)
+  // Send from a holding picked on the home screen: the QRDX address that holds it.
+  const [sendCredential, setSendCredential] = useState<'classic' | 'pq' | undefined>(undefined)
   // Swap opened from a token's page pays with that token.
   const [swapFrom, setSwapFrom] = useState<string | undefined>(undefined)
   const nativeSym = activeChain.nativeCurrency?.symbol ?? 'ETH'
@@ -103,7 +105,8 @@ export function Dashboard() {
   const sendFrom = (h: Holding) => {
     setPicker(null)
     setActiveChain(h.chain.id)
-    setSendToken(h.address || (chainFamily(h.chain) === 'evm' ? h.symbol : undefined))
+    setSendToken(h.address || (chainFamily(h.chain) === 'evm' ? h.chain.nativeCurrency.symbol : undefined))
+    setSendCredential(h.credential)
     setActiveModal('send')
   }
   const tradeFrom = (h: Holding) => {
@@ -230,7 +233,8 @@ export function Dashboard() {
         pqAddress={pqAddress}
         initialToken={sendToken}
         initialRecipient={sendTo}
-        onClose={() => (setActiveModal(null), setSendToken(undefined), setSendTo(undefined))}
+        initialCredential={sendCredential}
+        onClose={() => (setActiveModal(null), setSendToken(undefined), setSendTo(undefined), setSendCredential(undefined))}
       />
     )
   }
@@ -238,7 +242,14 @@ export function Dashboard() {
     return <ReceiveModal ethAddress={ethAddress} pqAddress={pqAddress} accountName={accountName} onClose={() => setActiveModal(null)} />
   }
   if (activeModal === 'swap') {
-    return <SwapModal initialFrom={swapFrom} onClose={() => (setActiveModal(null), setSwapFrom(undefined))} />
+    return (
+      <SwapModal
+        initialFrom={swapFrom}
+        elsewhere={allNetworks ? (portfolio?.assets ?? []).flatMap((a) => a.holdings).filter((h) => !isQrdxChain(h.chain) && h.raw > 0n && h.listed) : []}
+        onElsewhere={(h) => (setActiveModal(null), setSwapFrom(undefined), tradeFrom(h))}
+        onClose={() => (setActiveModal(null), setSwapFrom(undefined))}
+      />
+    )
   }
   if (activeModal === 'buy') {
     return <BuyModal onClose={() => setActiveModal(null)} onReceive={() => setActiveModal('receive')} onSwap={() => setActiveModal('swap')} />
@@ -496,7 +507,7 @@ export function Dashboard() {
 
         {/* Quick Actions */}
         <QuickActions
-          onAction={(a) => (allNetworks && (a === 'send' || a === 'swap' || a === 'receive') ? setPicker(a) : setActiveModal(a))}
+          onAction={(a) => (allNetworks && (a === 'send' || a === 'receive') ? setPicker(a) : (allNetworks && a === 'swap' && setActiveChain(homeQrdxChain.id), setActiveModal(a)))}
           available={allNetworks ? ['send', 'receive', 'swap', 'shield', 'buy', 'trade', 'stake'] : actions}
         />
 
@@ -567,8 +578,7 @@ export function Dashboard() {
         </Card>
       </div>
       {picker === 'send' && <HoldingPicker title="Send what?" portfolio={portfolio} onPick={sendFrom} onClose={() => setPicker(null)} />}
-      {picker === 'swap' && <HoldingPicker title="Trade what?" portfolio={portfolio} onPick={tradeFrom} onClose={() => setPicker(null)} />}
-      {picker === 'receive' && <ReceiveNetworkPicker chains={chains} qrdx={homeQrdxChain} onPick={receiveOn} onClose={() => setPicker(null)} />}
+      {picker === 'receive' && <ReceiveNetworkPicker chains={chains} qrdx={homeQrdxChain} showTestnets={showTestnets} onPick={receiveOn} onClose={() => setPicker(null)} />}
       {showAccounts && (
         <AccountSwitcher
           onClose={() => setShowAccounts(false)}

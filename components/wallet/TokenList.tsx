@@ -8,6 +8,7 @@ import { formatFiat as formatUsd } from '@/src/core/fiat'
 import { tokenImages } from '@/src/core/profiles'
 import { tradeApiBase, tradeGet } from '@/src/core/trade/api'
 import { isListedToken, isQrdxChain } from '@/src/core/chains'
+import { isTrustedToken } from '@/src/core/token-trust'
 import type { ApiAsset } from '@/src/core/trade/types'
 import { formatAmount, mergeCredentialBalances } from '@/src/core/balances'
 import { hiddenTokens, onHiddenTokensChange } from '@/src/core/hidden-tokens'
@@ -97,8 +98,9 @@ export function useTokenList(options: { includeHidden?: boolean } = {}): Token[]
       .filter((b) => options.includeHidden || !b.address || !hidden.has(b.address.toLowerCase()))
       .map((b) => {
       const bal = Number(b.formattedBalance) || 0
-      // Prices are by symbol: only for coins the registry lists by address (see refreshPrices).
-      const price = isListedToken(activeChain, b.address) ? prices.get(b.symbol.toUpperCase()) : undefined
+      // Prices are by symbol: only for verified or trusted tokens (see refreshPrices).
+      const priced = isListedToken(activeChain, b.address) || verifiedAssets.has(b.address.toLowerCase()) || isTrustedToken(activeChain.id, b.address)
+      const price = priced ? prices.get(b.symbol.toUpperCase()) : undefined
       const usdValue = price ? bal * price.usd : 0
       const change24h = price?.usd_24h_change ?? 0
 

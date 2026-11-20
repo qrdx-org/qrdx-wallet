@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { ArrowDownLeft, ArrowLeft, ArrowLeftRight, ArrowUpRight } from 'lucide-react'
+import { ArrowDownLeft, ArrowLeft, ArrowLeftRight, ArrowUpRight, ShieldAlert } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { formatFiat, formatFiatPrice } from '@/src/core/fiat'
 import { formatAmount } from '@/src/core/balances'
@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { PortfolioChart } from '../PortfolioChart'
 import { CoinLogo, NetworkLogo } from '../CoinLogo'
 import { Change } from './PortfolioHome'
+import { setTokenTrusted } from '@/src/core/token-trust'
 
 const RANGES = [
   ['1D', 1],
@@ -45,6 +46,11 @@ export function AssetPage({
   const { homeQrdxChain } = useWallet()
   const qrdx = asset.key === 'qrdx'
   const id = asset.holdings.find((h) => h.coingeckoId)?.coingeckoId
+  // A QRDX verified asset CoinGecko does not price: its market on the trade API.
+  const tradeAsset = asset.holdings.find((h) => h.qrdxSlug && !h.coingeckoId)
+  // An unverified token (one network, one address), or one the user trusts.
+  const token = asset.holdings[0]
+  const trustable = !!token?.address && (!asset.listed || !!token.trusted)
   const [range, setRange] = useState<(typeof RANGES)[number][0]>('1D')
   const [history, setHistory] = useState<{ key: string; points: PriceHistoryPoint[] } | null>(null)
   const [market, setMarket] = useState<MarketData | null>(null)
@@ -54,15 +60,21 @@ export function AssetPage({
   useEffect(() => {
     let live = true
     const days = RANGES.find(([r]) => r === range)![1]
-    const load = qrdx ? tokenPriceHistory(homeQrdxChain, 'qrdx', range) : id && asset.listed ? fetchPriceHistory(id, days) : Promise.resolve([])
+    const load = qrdx
+      ? tokenPriceHistory(homeQrdxChain, 'qrdx', range)
+      : id && asset.listed
+        ? fetchPriceHistory(id, days)
+        : tradeAsset
+          ? tokenPriceHistory(tradeAsset.chain, tradeAsset.qrdxSlug!, range)
+          : Promise.resolve([])
     load.then((points) => live && setHistory({ key, points })).catch(() => live && setHistory({ key, points: [] }))
     return () => {
       live = false
     }
-  }, [key, qrdx, id, asset.listed, range, homeQrdxChain])
+  }, [key, qrdx, id, asset.listed, range, homeQrdxChain, tradeAsset])
 
   useEffect(() => {
-    if (!id || !asset.listed || asset.testnet) return
+    if (!id || !asset.listed) return
     let live = true
     fetchMarketData(id)
       .then((m) => live && setMarket(m))
@@ -70,7 +82,7 @@ export function AssetPage({
     return () => {
       live = false
     }
-  }, [id, asset.listed, asset.testnet])
+  }, [id, asset.listed])
 
   const points = history?.key === key ? history.points : null
   const price = asset.price?.usd ?? market?.price
@@ -89,7 +101,7 @@ export function AssetPage({
           <button type="button" onClick={onClose} aria-label="Back" className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-accent/50">
             <ArrowLeft className="h-4 w-4" />
           </button>
-          <CoinLogo symbol={asset.symbol} verified={asset.listed} size={32} />
+          <CoinLogo symbol={asset.symbol} verified={asset.listed && !token?.trusted} size={32} />
           <div className="min-w-0">
             <h1 className="truncate text-base font-semibold">{asset.name}</h1>
             <p className="text-[10px] text-muted-foreground">
@@ -120,15 +132,15 @@ export function AssetPage({
                   </span>
                 )}
               </div>
-              {asset.testnet && <p className="mt-1 text-[10px] text-amber-500">Test network: this is its own market&apos;s price, not a real value.</p>}
+              {asset.testnet && !qrdx && <p className="mt-1 text-[10px] text-muted-foreground">Test coins are shown at the real {asset.symbol}&apos;s price.</p>}
             </>
           ) : (
             <p className="text-xs text-muted-foreground">
-              {asset.listed ? 'No market price for this coin.' : 'No price: the wallet prices only tokens listed for their network, since anyone can name a token after another.'}
+              {asset.listed ? 'No market price for this coin.' : 'No price: anyone can name a token after another coin, so the wallet prices only verified tokens and the ones you trust.'}
             </p>
           )}
           {points && points.length > 1 && <PortfolioChart data={points} change24h={market?.change24h ?? asset.price?.usd_24h_change ?? 0} changeLabel={range} />}
-          {(qrdx || (id && asset.listed)) && (
+          {(qrdx || (id && asset.listed) || tradeAsset) && (
             <div className="mt-1 flex justify-center gap-1">
               {RANGES.map(([r]) => (
                 <button key={r} type="button" onClick={() => setRange(r)} className={cn('rounded-md px-2.5 py-1 text-[10px] font-semibold', range === r ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-accent/50')}>
@@ -166,6 +178,26 @@ export function AssetPage({
           </section>
         )}
 
+        {trustable && (
+          <section className="rounded-xl border border-border/60 p-3 text-xs">
+            <p className="flex items-center gap-1.5 font-semibold">
+              <ShieldAlert className="h-3.5 w-3.5" /> {token.trusted ? 'Trusted by you' : 'Unverified token'}
+            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {token.trusted
+                ? `You trust ${token.address.slice(0, 6)}…${token.address.slice(-4)} on ${token.chain.name}: it is listed and counted like a verified token${id ? `, at ${asset.symbol}'s market price` : ''}.`
+                : `Not on ${token.chain.name}'s verified list. Anyone can create a token called ${asset.symbol}; trust it only if you know where it came from.`}
+            </p>
+            <button
+              type="button"
+              onClick={() => (setTokenTrusted(token.chain.id, token.address, !token.trusted), onClose())}
+              className="mt-2 w-full rounded-lg border border-border/60 py-2 text-xs font-medium hover:bg-accent/40"
+            >
+              {token.trusted ? 'Stop trusting it' : 'Trust this token'}
+            </button>
+          </section>
+        )}
+
         <section className="rounded-xl glass p-3">
           <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Your {asset.symbol}</h2>
           {asset.holdings.map((h) => (
@@ -175,6 +207,7 @@ export function AssetPage({
                 <span className="block">{h.chain.name}</span>
                 <span className="block text-[10px] text-muted-foreground">
                   {h.credential === 'pq' ? 'Quantum-safe address' : h.credential === 'classic' ? 'Classic address' : h.address ? `Token ${h.address.slice(0, 6)}…${h.address.slice(-4)}` : 'Network coin'}
+                  {h.chain.isTestnet ? ' · test network' : ''}
                 </span>
               </span>
               <span className="text-right tabular-nums">

@@ -5,7 +5,7 @@
  * is on, QRDX first. Pickers start Send, Receive and Swap from an asset or a network.
  */
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import { ChevronDown, ChevronRight, Loader2, RefreshCw, TrendingDown, TrendingUp, X } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -17,6 +17,15 @@ import { CoinLogo, NetworkLogo } from '../CoinLogo'
 import { PortfolioChart } from '../PortfolioChart'
 import { useValueHistory } from './useValueHistory'
 import type { ValueRange } from '@/src/core/portfolio-history'
+import { onTrustChange, setShowUnverified, showUnverified } from '@/src/core/token-trust'
+
+/** The "show unverified tokens" preference, live. */
+export function useShowUnverified(): [boolean, (v: boolean) => void] {
+  return [useSyncExternalStore(onTrustChange, showUnverified, () => false), setShowUnverified]
+}
+
+/** Shown with the rest: verified or trusted, worth something, QRDX itself, or every token when the user asks. */
+const inMainList = (a: Asset, all: boolean) => all || a.listed || a.usd > 0 || a.key === 'qrdx'
 
 const VALUE_RANGES: ValueRange[] = ['1D', '1W', '1M', '1Y']
 
@@ -32,7 +41,7 @@ export function Change({ pct, className }: { pct: number | null | undefined; cla
   )
 }
 
-/** The total across networks, the day's change, test networks apart, and value by network. */
+/** The total across networks, the day's change, and value by network. */
 export function PortfolioSummary({ portfolio, loading, onRefresh, visible }: { portfolio: Portfolio | null; loading: boolean; onRefresh: () => void; visible: boolean }) {
   const [range, setRange] = useState<ValueRange>('1D')
   const { history, loading: historyLoading } = useValueHistory(portfolio, range)
@@ -43,7 +52,7 @@ export function PortfolioSummary({ portfolio, loading, onRefresh, visible }: { p
     const m = new Map<string, { chain: ChainConfig; usd: number }>()
     for (const a of portfolio?.assets ?? [])
       for (const h of a.holdings)
-        if (!h.chain.isTestnet && h.usd) m.set(h.chain.id, { chain: h.chain, usd: (m.get(h.chain.id)?.usd ?? 0) + h.usd })
+        if (h.usd) m.set(h.chain.id, { chain: h.chain, usd: (m.get(h.chain.id)?.usd ?? 0) + h.usd })
     // Dust (under a cent) is not worth a chip.
     return [...m.values()].filter((n) => n.usd >= 0.01).sort((a, b) => b.usd - a.usd)
   }, [portfolio])
@@ -66,9 +75,6 @@ export function PortfolioSummary({ portfolio, loading, onRefresh, visible }: { p
               {portfolio.change24hUsd >= 0 ? '+' : '−'}
               {formatFiat(Math.abs(portfolio.change24hUsd))} <Change pct={pct} /> today
             </span>
-          )}
-          {portfolio && portfolio.testnetUsd > 0 && (
-            <span title="Test networks' own markets; not part of the total">+ {formatFiat(portfolio.testnetUsd)} on test networks</span>
           )}
         </div>
         {byNetwork.length > 0 && (
@@ -125,14 +131,16 @@ function AssetRow({ asset, onOpen, visible }: { asset: Asset; onOpen: (a: Asset)
   const h = asset.holdings[0]
   const single = new Set(asset.holdings.map((x) => x.chain.id)).size === 1
   const amount = assetAmount(asset)
-  const value = asset.usd + asset.testnetUsd
+  const value = asset.usd
   return (
     <button type="button" onClick={() => onOpen(asset)} className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-accent/30">
-      <CoinLogo symbol={asset.symbol} verified={asset.listed} size={36} network={single && h.address ? h.chain : undefined} />
+      <CoinLogo symbol={asset.symbol} verified={asset.listed && !h.trusted} size={36} network={single && h.address ? h.chain : undefined} />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5 text-sm font-semibold">
           <span className="truncate">{asset.symbol}</span>
           {asset.testnet && <span className="rounded bg-amber-500/15 px-1 py-0.5 text-[8px] font-bold uppercase text-amber-500">Test</span>}
+          {!asset.listed && <span className="rounded bg-foreground/10 px-1 py-0.5 text-[8px] font-bold uppercase text-muted-foreground">Unverified</span>}
+          {h.trusted && <span className="rounded bg-foreground/10 px-1 py-0.5 text-[8px] font-bold uppercase text-muted-foreground">Trusted</span>}
         </span>
         <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           {asset.price ? (
@@ -157,11 +165,12 @@ function AssetRow({ asset, onOpen, visible }: { asset: Asset; onOpen: (a: Asset)
 }
 
 /**
- * Assets, QRDX first. Tokens the registry does not list (airdropped, possibly spam) are folded
- * away unless they have value or the user opens them.
+ * Assets, QRDX first. Unverified tokens (airdropped, possibly spam) are folded away unless they
+ * have value, the user trusts them, or the user shows every token ("Show in my list").
  */
 export function AssetList({ portfolio, onOpen, visible }: { portfolio: Portfolio | null; onOpen: (a: Asset) => void; visible: boolean }) {
   const [showUnlisted, setShowUnlisted] = useState(false)
+  const [showAll, setShowAll] = useShowUnverified()
   if (!portfolio) {
     return (
       <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
@@ -169,7 +178,7 @@ export function AssetList({ portfolio, onOpen, visible }: { portfolio: Portfolio
       </div>
     )
   }
-  const main = portfolio.assets.filter((a) => a.listed || a.usd > 0 || a.key === 'qrdx')
+  const main = portfolio.assets.filter((a) => inMainList(a, showAll))
   const unlisted = portfolio.assets.filter((a) => !main.includes(a))
   return (
     <div className="space-y-0.5">
@@ -179,15 +188,25 @@ export function AssetList({ portfolio, onOpen, visible }: { portfolio: Portfolio
       {main.length === 0 && <p className="py-6 text-center text-xs text-muted-foreground">Nothing held yet. Receive on any network to start.</p>}
       {unlisted.length > 0 && (
         <>
-          <button type="button" onClick={() => setShowUnlisted((v) => !v)} className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-[11px] text-muted-foreground hover:bg-accent/30">
-            <span>
-              {unlisted.length} unverified token{unlisted.length > 1 ? 's' : ''}
-              <span className="block text-[10px]">Not listed for their network; anyone can send these. Never trust their name.</span>
-            </span>
-            {showUnlisted ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-          </button>
+          <div className="flex items-center gap-1 rounded-xl px-3 py-2 text-[11px] text-muted-foreground">
+            <button type="button" onClick={() => setShowUnlisted((v) => !v)} className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left hover:text-foreground">
+              <span>
+                {unlisted.length} unverified token{unlisted.length > 1 ? 's' : ''}
+                <span className="block text-[10px]">Anyone can create or send these. Open one to trust it.</span>
+              </span>
+              {showUnlisted ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+            </button>
+            <button type="button" onClick={() => setShowAll(true)} className="shrink-0 rounded-lg border border-border/60 px-2 py-1 text-[10px] font-medium text-foreground hover:bg-accent/50">
+              Show in my list
+            </button>
+          </div>
           {showUnlisted && unlisted.map((a) => <AssetRow key={a.key} asset={a} onOpen={onOpen} visible={visible} />)}
         </>
+      )}
+      {showAll && portfolio.assets.some((a) => !inMainList(a, false)) && (
+        <button type="button" onClick={() => setShowAll(false)} className="w-full rounded-xl px-3 py-2 text-left text-[10px] text-muted-foreground hover:bg-accent/30">
+          Unverified tokens are shown. <span className="font-medium text-foreground underline-offset-2 hover:underline">Fold them away</span>
+        </button>
       )}
     </div>
   )
@@ -209,44 +228,62 @@ function PickerShell({ title, onClose, children }: { title: string; onClose: () 
   )
 }
 
-/** Pick one holding (an asset on one network): what Send and Swap start from. */
+/** Pick one holding (an asset on one network): what Send starts from. Every held token, unverified ones last. */
 export function HoldingPicker({ title, portfolio, onPick, onClose }: { title: string; portfolio: Portfolio | null; onPick: (h: Holding) => void; onClose: () => void }) {
-  const holdings = (portfolio?.assets ?? []).filter((a) => a.listed || a.usd > 0 || a.key === 'qrdx').flatMap((a) => a.holdings).filter((h) => h.raw > 0n)
+  const [showAll] = useShowUnverified()
+  const held = (portfolio?.assets ?? []).flatMap((a) => a.holdings.map((h) => ({ h, main: inMainList(a, showAll) }))).filter(({ h }) => h.raw > 0n)
+  const main = held.filter((x) => x.main).map((x) => x.h)
+  const other = held.filter((x) => !x.main).map((x) => x.h)
+  const row = (h: Holding) => (
+    <button
+      key={`${h.chain.id}:${h.address}:${h.credential ?? ''}`}
+      type="button"
+      onClick={() => onPick(h)}
+      className="flex w-full items-center gap-3 rounded-xl p-2.5 text-left hover:bg-accent/40"
+    >
+      <CoinLogo symbol={h.symbol} verified={h.listed && !h.trusted} size={32} network={h.chain} />
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium">{h.symbol}</span>
+        <span className="block text-[10px] text-muted-foreground">
+          {h.chain.name}
+          {h.credential === 'pq' ? ' · quantum-safe address' : h.credential === 'classic' ? ' · classic address' : ''}
+          {!h.listed ? ' · unverified' : h.trusted ? ' · trusted by you' : ''}
+        </span>
+      </span>
+      <span className="text-right text-xs tabular-nums">
+        {formatAmount(h.raw, h.decimals)}
+        {h.usd ? <span className="block text-[10px] text-muted-foreground">{formatFiat(h.usd)}</span> : null}
+      </span>
+    </button>
+  )
   return (
     <PickerShell title={title} onClose={onClose}>
-      {holdings.length === 0 ? (
+      {!portfolio ? (
+        <p className="flex items-center justify-center gap-2 p-4 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading every network…
+        </p>
+      ) : held.length === 0 ? (
         <p className="p-4 text-center text-xs text-muted-foreground">Nothing to send yet.</p>
       ) : (
-        holdings.map((h) => (
-          <button
-            key={`${h.chain.id}:${h.address}:${h.credential ?? ''}`}
-            type="button"
-            onClick={() => onPick(h)}
-            className="flex w-full items-center gap-3 rounded-xl p-2.5 text-left hover:bg-accent/40"
-          >
-            <CoinLogo symbol={h.symbol} verified={h.listed} size={32} network={h.chain} />
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium">{h.symbol}</span>
-              <span className="block text-[10px] text-muted-foreground">
-                {h.chain.name}
-                {h.credential === 'pq' ? ' · quantum-safe address' : h.credential === 'classic' ? ' · classic address' : ''}
-              </span>
-            </span>
-            <span className="text-right text-xs tabular-nums">
-              {formatAmount(h.raw, h.decimals)}
-              {h.usd ? <span className="block text-[10px] text-muted-foreground">{formatFiat(h.usd)}</span> : null}
-            </span>
-          </button>
-        ))
+        <>
+          {main.map(row)}
+          {other.length > 0 && (
+            <>
+              <p className="px-2.5 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Unverified</p>
+              {other.map(row)}
+            </>
+          )}
+        </>
       )}
     </PickerShell>
   )
 }
 
 /** Pick the network to receive on: QRDX first, then one row for every EVM network, Bitcoin, Solana. */
-export function ReceiveNetworkPicker({ chains, qrdx, onPick, onClose }: { chains: ChainConfig[]; qrdx: ChainConfig; onPick: (c: ChainConfig) => void; onClose: () => void }) {
-  const evm = chains.filter((c) => c.isEvm && !isQrdxChain(c) && !c.isTestnet)
-  const native = chains.filter((c) => chainFamily(c) !== 'evm' && !c.isTestnet)
+export function ReceiveNetworkPicker({ chains, qrdx, showTestnets, onPick, onClose }: { chains: ChainConfig[]; qrdx: ChainConfig; showTestnets?: boolean; onPick: (c: ChainConfig) => void; onClose: () => void }) {
+  const evm = chains.filter((c) => c.isEvm && !isQrdxChain(c) && !c.isTestnet && !c.notLive)
+  // Bitcoin and Solana have their own addresses per network: test ones too, when shown.
+  const native = chains.filter((c) => chainFamily(c) !== 'evm' && (showTestnets || !c.isTestnet))
   const row = (c: ChainConfig, label: string, note: string) => (
     <button key={c.id + label} type="button" onClick={() => onPick(c)} className="flex w-full items-center gap-3 rounded-xl p-2.5 text-left hover:bg-accent/40">
       <NetworkLogo chain={c} size={32} />

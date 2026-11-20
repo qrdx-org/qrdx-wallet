@@ -1,13 +1,15 @@
 'use client'
 
 /**
- * Trading an asset held on a network QRDX does not run: bring it to QRDX over the bridge and
- * trade it there, or swap it where it is through an aggregator (LI.FI on EVM networks, Jupiter
- * on Solana), with the quote set against the market price. The DEX's own site is linked too.
+ * Trading an asset held on a network QRDX does not run. Where an aggregator quotes the network
+ * (LI.FI on EVM networks, Jupiter on Solana) it opens straight on the swap, laid out like QRDX's
+ * own, with the quote set against the market price; bringing the asset to QRDX over the bridge
+ * is offered beside it when QRDX bridges it. Elsewhere (Bitcoin, test networks) it explains the
+ * options. The DEX's own site is linked too.
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDown, CheckCircle2, ExternalLink, Loader2, Repeat, Waypoints } from 'lucide-react'
+import { ArrowDown, ArrowLeft, CheckCircle2, ChevronDown, ChevronRight, ExternalLink, Loader2, Waypoints } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { chainFamily, type ChainToken } from '@/src/core/chains'
 import { formatAmount, formatUnitsExact } from '@/src/core/balances'
@@ -20,18 +22,17 @@ import { bridgeConfig, bridgeRouteFor, depositToQrdx, type BridgeRoute } from '@
 import type { Holding } from '@/src/core/portfolio'
 import { SettingsPage, Section } from '../settings/shared'
 import { ErrorBanner, Notice, PrimaryButton } from '../flow/FlowKit'
+import { Sheet } from '../trade/kit'
 import { CoinLogo, NetworkLogo } from '../CoinLogo'
 import { cn } from '@/lib/utils'
-
-type Stage = 'choose' | 'swap' | 'bridge'
 
 export function TradeSheet({ holding, onClose, onDone }: { holding: Holding; onClose: () => void; onDone: () => void }) {
   const { homeQrdxChain, currentWallet, chainAddresses, backend } = useWallet()
   const chain = holding.chain
   const family = chainFamily(chain)
   const owner = family === 'evm' ? (currentWallet?.ethAddress ?? '') : (addressOn(chain, chainAddresses) ?? '')
-  const from: SwapToken = { address: holding.address, symbol: holding.symbol, decimals: holding.decimals }
-  const [stage, setStage] = useState<Stage>('choose')
+  const swappable = !chain.isTestnet && (family === 'evm' || family === 'solana')
+  const [bridging, setBridging] = useState(false)
   const [route, setRoute] = useState<BridgeRoute | null | undefined>(undefined)
 
   useEffect(() => {
@@ -44,83 +45,52 @@ export function TradeSheet({ holding, onClose, onDone }: { holding: Holding; onC
     }
   }, [homeQrdxChain, chain, holding.address])
 
-  const swappable = !chain.isTestnet && (family === 'evm' || family === 'solana')
-  const usdc = chain.tokens.find((t) => t.symbol === 'USDC')
-  const link = dexLink(chain, from, usdc && usdc.address !== holding.address ? usdc : { address: '', symbol: chain.nativeCurrency.symbol, decimals: chain.nativeCurrency.decimals })
-
-  if (stage === 'swap' && currentWallet) {
-    return <AggregatorSwap holding={holding} owner={owner} onBack={() => setStage('choose')} onDone={onDone} signer={backend} />
+  if (bridging && route && currentWallet) {
+    return <BridgeDeposit holding={holding} route={route} onBack={() => setBridging(false)} onDone={onDone} />
   }
-  if (stage === 'bridge' && route && currentWallet) {
-    return <BridgeDeposit holding={holding} route={route} onBack={() => setStage('choose')} onDone={onDone} />
+  if (swappable && currentWallet) {
+    return <AggregatorSwap holding={holding} owner={owner} signer={backend} route={route} onBridge={() => setBridging(true)} onBack={onClose} onDone={onDone} />
   }
 
   return (
     <SettingsPage title={`Trade ${holding.symbol}`} onBack={onClose}>
       <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
-        <CoinLogo symbol={holding.symbol} verified={holding.listed} size={22} network={chain} />
+        <CoinLogo symbol={holding.symbol} verified={holding.listed && !holding.trusted} size={22} network={chain} />
         {formatAmount(holding.raw, holding.decimals)} {holding.symbol} on {chain.name}
       </div>
-
-      <Section title="On QRDX">
-        <div className="space-y-2 p-3 text-xs">
-          <p className="flex items-center gap-2 font-semibold">
-            <NetworkLogo chain={homeQrdxChain} size={20} /> Bring it to QRDX and trade there
-          </p>
-          <p className="text-[11px] text-muted-foreground">
-            QRDX&apos;s order books and pools, with your quantum-safe account. The bridge mints {holding.symbol} on QRDX once the validators attest your deposit.
-          </p>
-          {route === undefined ? (
-            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" /> Checking what {homeQrdxChain.name} bridges…
-            </p>
-          ) : route ? (
-            <PrimaryButton onClick={() => setStage('bridge')}>
-              <Waypoints className="mr-1.5 h-4 w-4" /> Bridge {holding.symbol} to QRDX
-            </PrimaryButton>
-          ) : (
-            <Notice>
-              {family !== 'evm'
-                ? `QRDX's bridge takes tokens from EVM networks; ${chain.name} is not bridged.`
-                : !holding.address
-                  ? `The bridge takes tokens, not ${chain.nativeCurrency.symbol} itself, and ${homeQrdxChain.name} lists none from ${chain.name} yet.`
-                  : `${homeQrdxChain.name} does not bridge ${holding.symbol} from ${chain.name} yet.`}
-            </Notice>
-          )}
-        </div>
-      </Section>
-
-      <Section title={`On ${chain.name}`}>
-        <div className="space-y-2 p-3 text-xs">
-          {swappable ? (
-            <>
-              <p className="flex items-center gap-2 font-semibold">
-                <Repeat className="h-4 w-4" /> Swap where it is
-              </p>
-              <p className="text-[11px] text-muted-foreground">
-                {family === 'solana'
-                  ? 'Jupiter finds the best price across Raydium, Orca, Meteora and others. You sign in this wallet.'
-                  : 'LI.FI finds the best price across Uniswap, SushiSwap, Aerodrome and others on this network. You sign in this wallet.'}
-              </p>
-              <PrimaryButton variant="outline" onClick={() => setStage('swap')}>
-                Get a quote
-              </PrimaryButton>
-              {link && (
-                <a href={link.url} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-1 pt-1 text-[11px] text-muted-foreground hover:text-foreground">
-                  Or swap on {link.name}&apos;s site <ExternalLink className="h-3 w-3" />
-                </a>
-              )}
-            </>
-          ) : (
-            <Notice>
-              {family === 'bitcoin'
-                ? 'Bitcoin has no exchange on its own chain. Send it to an exchange you use, or bridge it to QRDX once QRDX lists it.'
-                : `${chain.name} is a test network: aggregators quote mainnets only.`}
-            </Notice>
-          )}
-        </div>
-      </Section>
+      <Notice>
+        {family === 'bitcoin'
+          ? 'Bitcoin has no exchange on its own chain. Send it to an exchange you use, or bridge it to QRDX once QRDX lists it.'
+          : `${chain.name} is a test network: aggregators quote mainnets only. Swap on QRDX instead, or send it where you trade.`}
+      </Notice>
+      <BridgeOffer holding={holding} route={route} onBridge={() => setBridging(true)} />
     </SettingsPage>
+  )
+}
+
+/** Bringing the holding to QRDX: the button when QRDX bridges it, else why not. */
+function BridgeOffer({ holding, route, onBridge, compact }: { holding: Holding; route: BridgeRoute | null | undefined; onBridge: () => void; compact?: boolean }) {
+  const { homeQrdxChain } = useWallet()
+  const chain = holding.chain
+  if (route === undefined) return compact ? null : <p className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Checking what {homeQrdxChain.name} bridges…</p>
+  if (route)
+    return (
+      <button type="button" onClick={onBridge} className="flex w-full items-center gap-3 rounded-xl border border-border/60 p-3 text-left hover:bg-accent/40">
+        <NetworkLogo chain={homeQrdxChain} size={28} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">Bring it to QRDX instead</span>
+          <span className="block text-[11px] text-muted-foreground">Trade {holding.symbol} on QRDX&apos;s order books and pools with your quantum-safe account.</span>
+        </span>
+        <Waypoints className="h-4 w-4 shrink-0 text-muted-foreground" />
+      </button>
+    )
+  if (compact) return null
+  return (
+    <p className="px-1 text-[11px] text-muted-foreground">
+      {chainFamily(chain) !== 'evm'
+        ? `QRDX's bridge takes tokens from EVM networks; ${chain.name} is not bridged yet.`
+        : `${homeQrdxChain.name} does not bridge ${holding.address ? holding.symbol : chain.nativeCurrency.symbol} from ${chain.name} yet.`}
+    </p>
   )
 }
 
@@ -128,28 +98,35 @@ function AggregatorSwap({
   holding,
   owner,
   signer,
+  route,
+  onBridge,
   onBack,
   onDone,
 }: {
   holding: Holding
   owner: string
   signer: Parameters<typeof executeSwap>[0]
+  route: BridgeRoute | null | undefined
+  onBridge: () => void
   onBack: () => void
   onDone: () => void
 }) {
   const { currentWallet } = useWallet()
   const chain = holding.chain
+  const from: SwapToken = { address: holding.address, symbol: holding.symbol, decimals: holding.decimals }
   const targets = useMemo(
     () => chain.tokens.filter((t) => t.address.toLowerCase() !== holding.address.toLowerCase() && t.symbol !== 'WSOL'),
     [chain, holding.address]
   )
   const [to, setTo] = useState<ChainToken>(() => targets.find((t) => t.symbol === 'USDC') ?? targets[0])
+  const [picking, setPicking] = useState(false)
   const [amount, setAmount] = useState('')
   const [quote, setQuote] = useState<SwapQuote | null>(null)
   const [market, setMarket] = useState<{ from?: number; to?: number }>({})
   const [busy, setBusy] = useState<'quote' | 'approving' | 'swapping' | 'confirming' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<{ id: string; ok: boolean } | null>(null)
+  const link = dexLink(chain, from, to ?? { address: '', symbol: chain.nativeCurrency.symbol, decimals: chain.nativeCurrency.decimals })
 
   // Market prices of both sides, to set the quote against.
   useEffect(() => {
@@ -179,7 +156,7 @@ function AggregatorSwap({
     let live = true
     const t = setTimeout(() => {
       setBusy('quote')
-      quoteSwap({ chain, owner, from: { address: holding.address, symbol: holding.symbol, decimals: holding.decimals }, to: { address: to.address, symbol: to.symbol, decimals: to.decimals }, amount: raw })
+      quoteSwap({ chain, owner, from, to: { address: to.address, symbol: to.symbol, decimals: to.decimals }, amount: raw })
         .then((q) => live && setQuote(q))
         .catch((e) => live && setError(e instanceof Error ? e.message : 'No quote'))
         .finally(() => live && setBusy(null))
@@ -188,7 +165,7 @@ function AggregatorSwap({
       live = false
       clearTimeout(t)
     }
-  }, [amount, to, holding, chain, owner])
+  }, [amount, to, holding, chain, owner]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const swap = async () => {
     if (!quote || !currentWallet) return
@@ -223,101 +200,131 @@ function AggregatorSwap({
   const rate = quote && inAmt ? out / inAmt : null
   const marketRate = market.from && market.to ? market.from / market.to : null
   const vsMarket = rate && marketRate ? ((rate - marketRate) / marketRate) * 100 : null
+  const max = () => setAmount(formatUnitsExact(holding.address ? holding.raw : (holding.raw * 95n) / 100n, holding.decimals))
+  const problem = !inAmt ? 'Enter an amount' : busy === 'quote' || (!quote && !error) ? 'Getting a quote…' : !quote ? 'No quote' : null
 
   return (
-    <SettingsPage title={`Swap on ${chain.name}`} onBack={onBack}>
-      <Section title="You pay">
-        <div className="space-y-1.5 p-2">
-          <div className="flex items-center gap-2">
-            <input
-              value={amount}
-              onChange={(e) => setAmount(e.target.value.replace(',', '.'))}
-              inputMode="decimal"
-              placeholder="0.00"
-              aria-label="Amount to swap"
-              className="h-12 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-xl font-bold tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/50"
-            />
-            <span className="flex items-center gap-1.5 text-sm font-semibold">
-              <CoinLogo symbol={holding.symbol} verified={holding.listed} size={22} /> {holding.symbol}
-            </span>
-          </div>
-          <div className="flex justify-between px-1 text-[11px] text-muted-foreground">
-            <span>
-              Balance {formatAmount(holding.raw, holding.decimals)}{' '}
-              <button type="button" onClick={() => setAmount(formatUnitsExact(holding.address ? holding.raw : (holding.raw * 95n) / 100n, holding.decimals))} className="font-semibold text-foreground hover:underline">
-                {holding.address ? 'Max' : '95%'}
-              </button>
-            </span>
-            {market.from && inAmt > 0 && <span>{formatFiat(inAmt * market.from)}</span>}
+    <div className="flex min-h-screen flex-col mono-backdrop">
+      <div className="glass-strong sticky top-0 z-20 pt-safe">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <button type="button" onClick={onBack} aria-label="Back" className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-accent/50">
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div>
+            <h1 className="text-base font-semibold">Swap</h1>
+            <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <NetworkLogo chain={chain} size={11} /> {chain.name} · {chainFamily(chain) === 'solana' ? 'best price across Solana DEXs, by Jupiter' : 'best price across its DEXs, by LI.FI'}
+            </p>
           </div>
         </div>
-      </Section>
-
-      <div className="flex justify-center">
-        <ArrowDown className="h-4 w-4 text-muted-foreground" />
       </div>
 
-      <Section title="You get">
-        <div className="space-y-2 p-2">
-          <div className="flex flex-wrap gap-1.5">
-            {targets.map((t) => (
-              <button
-                key={t.address || 'native'}
-                type="button"
-                onClick={() => setTo(t)}
-                className={cn('flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs', to?.address === t.address ? 'border-foreground/40 bg-accent' : 'border-border/60 hover:bg-accent/50')}
-              >
-                <CoinLogo symbol={t.symbol} verified size={16} /> {t.symbol}
+      <div className="flex-1 space-y-3 px-4 py-4">
+        <div className="rounded-2xl border bg-card p-1.5 shadow-xl shadow-black/5">
+          <div className="rounded-xl bg-muted/60 p-3.5">
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>You pay</span>
+              <button type="button" onClick={max} className="tabular-nums hover:text-foreground">
+                Balance {formatAmount(holding.raw, holding.decimals)} <span className="ml-1 font-semibold text-foreground">{holding.address ? 'Max' : '95%'}</span>
               </button>
-            ))}
+            </div>
+            <div className="mt-1.5 flex items-center gap-2">
+              <span className="flex shrink-0 items-center gap-1.5 rounded-full border bg-card py-1 pl-1 pr-2.5 text-sm font-semibold shadow-sm">
+                <CoinLogo symbol={holding.symbol} verified={holding.listed && !holding.trusted} size={26} network={holding.address ? chain : undefined} /> {holding.symbol}
+              </span>
+              <input
+                value={amount}
+                onChange={(e) => setAmount(e.target.value.replace(',', '.').replace(/[^0-9.]/g, ''))}
+                inputMode="decimal"
+                placeholder="0"
+                aria-label="Amount to swap"
+                className="h-12 w-full min-w-0 bg-transparent text-right text-3xl font-semibold tabular-nums outline-none placeholder:text-muted-foreground/40"
+              />
+            </div>
+            <div className="mt-0.5 text-right text-[10px] text-muted-foreground tabular-nums">{market.from && inAmt > 0 ? `≈ ${formatFiat(inAmt * market.from)}` : ''}</div>
           </div>
-          <div className="px-1 text-xl font-bold tabular-nums">
-            {busy === 'quote' ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : quote ? `${formatAmount(quote.toAmount, to.decimals, 6)} ${to.symbol}` : '—'}
+          <div className="relative z-10 -my-3 flex justify-center">
+            <span className="rounded-xl border-4 border-card bg-muted p-2">
+              <ArrowDown className="h-4 w-4" />
+            </span>
           </div>
-          {quote && market.to && <p className="px-1 text-[11px] text-muted-foreground">{formatFiat(out * market.to)}</p>}
-        </div>
-      </Section>
+          <div className="rounded-xl bg-muted/60 p-3.5">
+            <div className="text-[11px] text-muted-foreground">You receive</div>
+            <div className="mt-1.5 flex items-center gap-2">
+              <button type="button" onClick={() => setPicking(true)} className="flex shrink-0 items-center gap-1.5 rounded-full border bg-card py-1 pl-1 pr-2 text-sm font-semibold shadow-sm hover:bg-accent">
+                {to ? <CoinLogo symbol={to.symbol} verified size={26} /> : <span className="h-[26px] w-[26px] rounded-full bg-muted" />}
+                {to?.symbol ?? 'Select'}
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+              <div className={cn('h-12 min-w-0 flex-1 truncate text-right text-3xl font-semibold leading-[3rem] tabular-nums', quote ? 'text-foreground' : 'text-muted-foreground/40')}>
+                {busy === 'quote' ? <Loader2 className="ml-auto mt-3 h-6 w-6 animate-spin text-muted-foreground" /> : quote ? formatAmount(quote.toAmount, to.decimals, 6) : '0'}
+              </div>
+            </div>
+            <div className="mt-0.5 text-right text-[10px] text-muted-foreground tabular-nums">{quote && market.to ? `≈ ${formatFiat(out * market.to)}` : ''}</div>
+          </div>
 
-      {quote && (
-        <Section>
-          <div className="space-y-1.5 p-3 text-[11px]">
-            {rate && (
-              <Line k="Rate" v={`1 ${holding.symbol} = ${rate.toPrecision(6)} ${to.symbol}`} />
-            )}
+          <div className="space-y-1.5 px-2.5 pb-2 pt-3 text-[11px]">
+            <Line k="Rate" v={rate ? `1 ${holding.symbol} = ${rate.toPrecision(6)} ${to.symbol}` : '—'} />
             {marketRate && (
               <Line
                 k="Market rate"
                 v={
                   <>
                     {marketRate.toPrecision(6)} {to.symbol}
-                    {vsMarket != null && (
-                      <span className={cn('ml-1', vsMarket < -1 ? 'text-red-500' : 'text-muted-foreground')}>
-                        ({vsMarket >= 0 ? '+' : ''}
-                        {vsMarket.toFixed(2)}%)
-                      </span>
-                    )}
+                    {vsMarket != null && <span className={cn('ml-1', vsMarket < -1 ? 'text-red-500' : 'text-muted-foreground')}>({vsMarket >= 0 ? '+' : ''}{vsMarket.toFixed(2)}%)</span>}
                   </>
                 }
               />
             )}
             {market.from && <Line k={`${holding.symbol} price`} v={formatFiatPrice(market.from)} />}
-            <Line k="At least" v={`${formatAmount(quote.toAmountMin, to.decimals, 6)} ${to.symbol} (0.5% slippage)`} />
-            {quote.priceImpact != null && <Line k="Price impact" v={<span className={quote.priceImpact > 2 ? 'text-red-500' : ''}>{quote.priceImpact.toFixed(2)}%</span>} />}
-            {quote.feeUsd != null && <Line k="Network fee" v={`about ${formatFiat(quote.feeUsd)}`} />}
-            {quote.serviceFee && <Line k={quote.serviceFee.name} v={`${quote.serviceFee.percent.toFixed(2)}%${quote.serviceFee.usd ? ` · ${formatFiat(quote.serviceFee.usd)}` : ''}, in the rate`} />}
-            <Line k="Route" v={quote.route.length ? quote.route.join(' → ') : quote.provider} />
-            <p className="pt-1 text-[10px] text-muted-foreground">
-              Quote by {quote.provider}. {quote.approval ? `First you approve exactly ${amount} ${holding.symbol} for its contract; then the swap. ` : ''}It can change until you sign.
-            </p>
+            <Line k="Minimum received" v={quote ? `${formatAmount(quote.toAmountMin, to.decimals, 6)} ${to.symbol} (0.5% slippage)` : '—'} />
+            {quote?.priceImpact != null && <Line k="Price impact" v={<span className={quote.priceImpact > 2 ? 'text-red-500' : ''}>{quote.priceImpact.toFixed(2)}%</span>} />}
+            {quote?.feeUsd != null && <Line k="Network fee" v={`about ${formatFiat(quote.feeUsd)}`} />}
+            {quote?.serviceFee && <Line k={quote.serviceFee.name} v={`${quote.serviceFee.percent.toFixed(2)}%${quote.serviceFee.usd ? ` · ${formatFiat(quote.serviceFee.usd)}` : ''}, in the rate`} />}
+            {quote && <Line k="Route" v={quote.route.length ? quote.route.join(' → ') : quote.provider} />}
           </div>
-        </Section>
-      )}
-      {vsMarket != null && vsMarket < -3 && <Notice tone="warning">This quote is {Math.abs(vsMarket).toFixed(1)}% below the market rate. Try a smaller amount.</Notice>}
-      <ErrorBanner error={error} />
-      <PrimaryButton loading={!!busy && busy !== 'quote'} disabled={!quote || !!busy} onClick={swap}>
-        {busy === 'approving' ? 'Approving…' : busy === 'swapping' ? 'Swapping…' : busy === 'confirming' ? 'Confirming…' : 'Swap'}
-      </PrimaryButton>
-    </SettingsPage>
+          <PrimaryButton loading={!!busy && busy !== 'quote'} disabled={!!problem || !!busy} onClick={swap}>
+            {busy === 'approving' ? 'Approving…' : busy === 'swapping' ? 'Swapping…' : busy === 'confirming' ? 'Confirming…' : (problem ?? (quote?.approval ? 'Approve and swap' : 'Swap'))}
+          </PrimaryButton>
+        </div>
+
+        {quote && (
+          <p className="px-1 text-[10px] text-muted-foreground">
+            Quote by {quote.provider}; it can change until you sign. {quote.approval ? `You first approve exactly ${amount} ${holding.symbol} for its contract, then swap; you sign both in this wallet.` : 'You sign it in this wallet.'}
+          </p>
+        )}
+        {vsMarket != null && vsMarket < -3 && <Notice tone="warning">This quote is {Math.abs(vsMarket).toFixed(1)}% below the market rate. Try a smaller amount.</Notice>}
+        <ErrorBanner error={error} />
+        <BridgeOffer holding={holding} route={route} onBridge={onBridge} compact />
+        {link && (
+          <a href={link.url} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-1 pt-1 text-[11px] text-muted-foreground hover:text-foreground">
+            Or swap on {link.name}&apos;s site <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
+      </div>
+
+      <Sheet open={picking} onClose={() => setPicking(false)} title="Receive">
+        <div className="-mx-1 pb-2">
+          {targets.map((t) => (
+            <button
+              key={t.address || 'native'}
+              type="button"
+              onClick={() => (setTo(t), setPicking(false))}
+              className={cn('flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-accent/60', to?.address === t.address && 'bg-accent/50')}
+            >
+              <CoinLogo symbol={t.symbol} verified size={32} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">{t.symbol}</span>
+                <span className="block truncate text-[10px] text-muted-foreground">
+                  {t.name} on {chain.name}
+                </span>
+              </span>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </button>
+          ))}
+        </div>
+      </Sheet>
+    </div>
   )
 }
 

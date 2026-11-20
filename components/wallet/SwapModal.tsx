@@ -30,11 +30,17 @@ import { nodeFeatures } from '@/src/core/tx-service'
 import { Line, Sheet, TokenBadge, useDebounced } from './trade/kit'
 import { SubmissionList, useTradeSubmit } from './trade/submit'
 import { cn } from '@/lib/utils'
+import type { Holding } from '@/src/core/portfolio'
+import { formatAmount } from '@/src/core/balances'
+import { CoinLogo } from './CoinLogo'
 
 interface SwapModalProps {
   onClose: () => void
   /** Pay with this token (a token address, or QRDX) instead of QRDX. */
   initialFrom?: string
+  /** What the account holds on other networks: listed under "You pay", each swapped where it is or brought to QRDX. */
+  elsewhere?: Holding[]
+  onElsewhere?: (h: Holding) => void
 }
 
 interface Asset {
@@ -72,7 +78,7 @@ const deadlineIn = (minutes: number) => Math.floor(Date.now() / 1000) + minutes 
 
 const validSlippage = (v: string) => /^\d*\.?\d+$/.test(v) && Number(v) > 0 && Number(v) <= 50
 
-export function SwapModal({ onClose, initialFrom }: SwapModalProps) {
+export function SwapModal({ onClose, initialFrom, elsewhere = [], onElsewhere }: SwapModalProps) {
   const { activeChain, currentWallet, pqBalance, fetchBalances } = useWallet()
   const qrdx = isQrdxChain(activeChain)
   const api = qrdx ? tradeApiBase(activeChain) : null
@@ -450,6 +456,8 @@ export function SwapModal({ onClose, initialFrom }: SwapModalProps) {
       <TokenPicker
         open={picking !== null}
         assets={assets.filter((a) => (picking === 'to' ? a.id !== fromId : true))}
+        elsewhere={picking === 'from' && onElsewhere ? elsewhere : []}
+        onElsewhere={(h) => (setPicking(null), onElsewhere?.(h))}
         onClose={() => setPicking(null)}
         onPick={(a) => {
           if (picking === 'from') {
@@ -512,9 +520,24 @@ function SidePanel({
   )
 }
 
-function TokenPicker({ open, assets, onClose, onPick }: { open: boolean; assets: Asset[]; onClose: () => void; onPick: (a: Asset) => void }) {
+function TokenPicker({
+  open,
+  assets,
+  elsewhere,
+  onElsewhere,
+  onClose,
+  onPick,
+}: {
+  open: boolean
+  assets: Asset[]
+  elsewhere: Holding[]
+  onElsewhere: (h: Holding) => void
+  onClose: () => void
+  onPick: (a: Asset) => void
+}) {
   const [q, setQ] = useState('')
   const needle = q.trim().toLowerCase()
+  const others = elsewhere.filter((h) => !needle || h.symbol.toLowerCase().includes(needle) || h.chain.name.toLowerCase().includes(needle))
   const rows = assets
     .filter((a) => !needle || a.symbol.toLowerCase().includes(needle) || a.name.toLowerCase().includes(needle) || a.id.toLowerCase() === needle)
     .sort((a, b) => Number(b.verified) - Number(a.verified) || Number(b.balance ?? 0) - Number(a.balance ?? 0))
@@ -537,7 +560,22 @@ function TokenPicker({ open, assets, onClose, onPick }: { open: boolean; assets:
             <span className="num text-right text-xs">{a.balance != null ? fmtSize(a.balance) : ''}</span>
           </button>
         ))}
-        {!rows.length && <p className="py-6 text-center text-xs text-muted-foreground">No token matches.</p>}
+        {!rows.length && !others.length && <p className="py-6 text-center text-xs text-muted-foreground">No token matches.</p>}
+        {others.length > 0 && (
+          <>
+            <p className="px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">On other networks</p>
+            {others.map((h) => (
+              <button key={`${h.chain.id}:${h.address}`} type="button" onClick={() => onElsewhere(h)} className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-accent/60">
+                <CoinLogo symbol={h.symbol} verified={h.listed && !h.trusted} size={32} network={h.chain} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">{h.symbol}</span>
+                  <span className="block truncate text-[10px] text-muted-foreground">{h.chain.name} · swap there, or bring it to QRDX</span>
+                </span>
+                <span className="num text-right text-xs">{formatAmount(h.raw, h.decimals)}</span>
+              </button>
+            ))}
+          </>
+        )}
       </div>
     </Sheet>
   )
