@@ -120,16 +120,17 @@ async function holdingsOn(
     return address ? (await fetchOtherBalances(chain, address)).map((b) => make(b)) : []
   }
   const watched = await extraTokens(chain.id).catch(() => [])
-  if (!isQrdxChain(chain)) return (await fetchBalances(chain, account, 'classic', watched)).map((b) => make(b))
+  if (!isQrdxChain(chain)) return account.ethAddress ? (await fetchBalances(chain, account, 'classic', watched)).map((b) => make(b)) : []
   // QRDX: both addresses, and every token the node lists.
   const native = await exchange
     .tokens(chain)
     .then((l) => l.map((t) => ({ address: t.token_address, symbol: t.symbol, name: t.name, decimals: t.decimals })))
     .catch(() => [])
   const extra = [...native, ...watched]
+  // A watched address (watch-list.ts) fills one of the two.
   const [classic, pq] = await Promise.all([
-    fetchBalances(chain, account, 'classic', extra),
-    fetchBalances(chain, account, 'pq', extra).catch(() => []),
+    account.ethAddress ? fetchBalances(chain, account, 'classic', extra) : [],
+    account.pqAccountId ? fetchBalances(chain, account, 'pq', extra).catch(() => []) : [],
   ])
   return [...classic.map((b) => make(b, 'classic')), ...pq.map((b) => make(b, 'pq'))]
 }

@@ -12,6 +12,7 @@ import { formatFiat, formatFiatPrice } from '@/src/core/fiat'
 import { formatAmount } from '@/src/core/balances'
 import { fetchPriceHistory, type PriceHistoryPoint } from '@/src/core/prices'
 import { tokenPriceHistory } from '@/src/core/trade/prices'
+import { timeAgo } from '@/src/core/trade/format'
 import { fetchMarketData, type MarketData } from '@/src/core/market'
 import { isQrdxChain, type ChainConfig } from '@/src/core/chains'
 import type { Asset, Holding } from '@/src/core/portfolio'
@@ -36,12 +37,15 @@ export function AssetPage({
   onSend,
   onReceive,
   onTrade,
+  readOnly,
 }: {
   asset: Asset
   onClose: () => void
   onSend: (h: Holding) => void
   onReceive: (c: ChainConfig) => void
   onTrade: (h: Holding) => void
+  /** A watched address: nothing to send, receive or trust from here. */
+  readOnly?: boolean
 }) {
   const { homeQrdxChain } = useWallet()
   const qrdx = asset.key === 'qrdx'
@@ -132,6 +136,11 @@ export function AssetPage({
                   </span>
                 )}
               </div>
+              {asset.price?.stale && (
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  The market gives no price right now: this is its last one, from {timeAgo(asset.price.lastUpdated / 1000)}.
+                </p>
+              )}
               {asset.testnet && !qrdx && <p className="mt-1 text-[10px] text-muted-foreground">Test coins are shown at the real {asset.symbol}&apos;s price.</p>}
             </>
           ) : (
@@ -151,19 +160,21 @@ export function AssetPage({
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
-          {(
-            [
-              ['send', 'Send', ArrowUpRight, () => act('send')],
-              ['receive', 'Receive', ArrowDownLeft, () => (chains.length === 1 ? onReceive(chains[0]) : onReceive(chains.find(isQrdxChain) ?? chains[0]))],
-              ['trade', 'Trade', ArrowLeftRight, () => act('trade')],
-            ] as const
-          ).map(([k, label, Icon, run]) => (
-            <button key={k} type="button" onClick={run} disabled={k === 'send' && holdings.length === 0} className="flex flex-col items-center gap-1.5 rounded-xl border border-border/60 py-3 text-xs font-medium hover:bg-accent/40 disabled:opacity-40">
-              <Icon className="h-4 w-4" /> {label}
-            </button>
-          ))}
-        </div>
+        {!readOnly && (
+          <div className="grid grid-cols-3 gap-2">
+            {(
+              [
+                ['send', 'Send', ArrowUpRight, () => act('send')],
+                ['receive', 'Receive', ArrowDownLeft, () => (chains.length === 1 ? onReceive(chains[0]) : onReceive(chains.find(isQrdxChain) ?? chains[0]))],
+                ['trade', 'Trade', ArrowLeftRight, () => act('trade')],
+              ] as const
+            ).map(([k, label, Icon, run]) => (
+              <button key={k} type="button" onClick={run} disabled={k === 'send' && holdings.length === 0} className="flex flex-col items-center gap-1.5 rounded-xl border border-border/60 py-3 text-xs font-medium hover:bg-accent/40 disabled:opacity-40">
+                <Icon className="h-4 w-4" /> {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {choose && (
           <section className="rounded-xl border border-border/60 p-2">
@@ -178,7 +189,7 @@ export function AssetPage({
           </section>
         )}
 
-        {trustable && (
+        {trustable && !readOnly && (
           <section className="rounded-xl border border-border/60 p-3 text-xs">
             <p className="flex items-center gap-1.5 font-semibold">
               <ShieldAlert className="h-3.5 w-3.5" /> {token.trusted ? 'Trusted by you' : 'Unverified token'}

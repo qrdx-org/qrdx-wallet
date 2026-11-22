@@ -67,6 +67,11 @@ const EXPLORER_APIS: Record<string, string> = {
   'mantle': 'https://api.routescan.io/v2/network/mainnet/evm/5000/etherscan/api',
 }
 
+/** A network's keyless Etherscan-compatible API, or undefined when it has none. */
+export function explorerApiFor(chainId: string): string | undefined {
+  return EXPLORER_APIS[chainId]
+}
+
 // ─── Local pending transactions store ───────────────────────────────────────
 
 const pendingTxs = new Map<string, TransactionHistoryItem>()

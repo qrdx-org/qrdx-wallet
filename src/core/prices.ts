@@ -25,6 +25,8 @@ export interface TokenPrice {
   usd_market_cap?: number
   /** Last updated timestamp */
   lastUpdated: number
+  /** The last price the market gave, kept because it gives none right now (see trade/prices.ts). */
+  stale?: boolean
 }
 
 export interface PriceHistoryPoint {

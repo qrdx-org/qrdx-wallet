@@ -136,7 +136,7 @@ async function qrdxEventsOn(chain: ChainConfig, account: WalletAccount, decimals
 async function eventsOn(chain: ChainConfig, account: WalletAccount, addresses: ChainAddresses | null, decimals: (token: string) => number | undefined): Promise<ChainEvents | null> {
   if (isQrdxChain(chain)) return qrdxEventsOn(chain, account, decimals)
   const family = chainFamily(chain)
-  if (family === 'evm') return fetchBalanceEvents(chain.id, account.ethAddress)
+  if (family === 'evm') return account.ethAddress ? fetchBalanceEvents(chain.id, account.ethAddress) : null
   const address = addressOn(chain, addresses)
   if (!address) return null
   if (family === 'bitcoin') {

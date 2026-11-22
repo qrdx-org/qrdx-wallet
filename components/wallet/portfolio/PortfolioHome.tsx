@@ -15,7 +15,7 @@ import { assetAmount, type Asset, type Holding, type Portfolio } from '@/src/cor
 import { chainFamily, isQrdxChain, type ChainConfig } from '@/src/core/chains'
 import { CoinLogo, NetworkLogo } from '../CoinLogo'
 import { PortfolioChart } from '../PortfolioChart'
-import { useValueHistory } from './useValueHistory'
+import { useValueHistory, type HistorySubject } from './useValueHistory'
 import type { ValueRange } from '@/src/core/portfolio-history'
 import { onTrustChange, setShowUnverified, showUnverified } from '@/src/core/token-trust'
 
@@ -42,9 +42,22 @@ export function Change({ pct, className }: { pct: number | null | undefined; cla
 }
 
 /** The total across networks, the day's change, and value by network. */
-export function PortfolioSummary({ portfolio, loading, onRefresh, visible }: { portfolio: Portfolio | null; loading: boolean; onRefresh: () => void; visible: boolean }) {
+export function PortfolioSummary({
+  portfolio,
+  loading,
+  onRefresh,
+  visible,
+  subject,
+}: {
+  portfolio: Portfolio | null
+  loading: boolean
+  onRefresh: () => void
+  visible: boolean
+  /** A watched address instead of the open account. */
+  subject?: HistorySubject
+}) {
   const [range, setRange] = useState<ValueRange>('1D')
-  const { history, loading: historyLoading } = useValueHistory(portfolio, range)
+  const { history, loading: historyLoading } = useValueHistory(portfolio, range, subject)
   const first = history?.points[0]?.price ?? 0
   const last = history?.points[history.points.length - 1]?.price ?? 0
   const rangeChange = first > 0 ? ((last - first) / first) * 100 : 0
@@ -146,7 +159,7 @@ function AssetRow({ asset, onOpen, visible }: { asset: Asset; onOpen: (a: Asset)
           {asset.price ? (
             <>
               <span className="tabular-nums">{formatFiatPrice(asset.price.usd)}</span>
-              <Change pct={asset.price.usd_24h_change} />
+              {asset.price.stale ? <span>last price</span> : <Change pct={asset.price.usd_24h_change} />}
             </>
           ) : (
             <span className="truncate">{networksLabel(asset)}</span>

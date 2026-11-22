@@ -2,7 +2,7 @@
  * The cross-network portfolio (src/core/portfolio.ts), bridge deposits (src/core/bridge.ts),
  * aggregator links (src/core/aggregators.ts) and signing Solana v0 transactions (src/core/solana.ts).
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { keccak256 } from 'ethereum-cryptography/keccak.js'
 import { ed25519 } from '@noble/curves/ed25519.js'
 import { base58 } from '@scure/base'
@@ -12,6 +12,10 @@ import { bridgeRouteFor, encodeLockboxDeposit } from '../../src/core/bridge'
 import { dexLink } from '../../src/core/aggregators'
 import { signSolMessage, solAddressOf, solPrivateKey, splitTransaction, withPayerSignature } from '../../src/core/solana'
 import type { TokenPrice } from '../../src/core/prices'
+import { tradeUsdPrice } from '../../src/core/trade/prices'
+import { approvalPairs, approvalsSupported, revokeCall } from '../../src/core/approvals'
+import { watchAccount, watchChains, watchKind } from '../../src/core/watch-list'
+import { toAccountId } from '../../src/core/account-id'
 
 const price = (id: string, usd: number, change = 0): TokenPrice => ({ id, usd, usd_24h_change: change, lastUpdated: 0 })
 const h = (chain: keyof typeof CHAINS, address: string, symbol: string, raw: bigint, decimals: number, p?: TokenPrice): Holding => {
@@ -174,5 +178,91 @@ describe('value history', () => {
     expect(qrdxRowEvents(row({ op: 'STAKE_DELEGATE', sender: '0xpqabc', asset: 'QRDX', amount: '9', fee: '1' }), me, 'pq', decimals).map((e) => e.delta)).toEqual([-e18])
     // A token whose decimals are unknown is not guessed.
     expect(qrdxRowEvents(row({ op: 'TOKEN_TRANSFER', target: '0xpqabc', asset: '0xdead', amount: '1' }), me, 'pq', decimals)).toEqual([])
+  })
+})
+
+describe('QRDX price from the trade API', () => {
+  const testnet = CHAINS['qrdx-testnet']
+  const ok = (price: string) => new Response(JSON.stringify({ price, change24h: null, source: 'route', asOf: Math.floor(Date.now() / 1000) }))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('tries again once, then keeps the last real price, marked stale', async () => {
+    const fetchMock = vi.fn().mockRejectedValueOnce(new TypeError('network')).mockResolvedValueOnce(ok('443.9'))
+    vi.stubGlobal('fetch', fetchMock)
+    const fresh = await tradeUsdPrice(testnet, 'qrdx')
+    expect(fresh).toMatchObject({ usd: 443.9 })
+    expect(fresh?.stale).toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network')))
+    expect(await tradeUsdPrice(testnet, 'qrdx')).toMatchObject({ usd: 443.9, stale: true })
+  })
+
+  it('gives nothing for an asset it never priced', async () => {
+    const notFound = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { message: 'Unknown asset' } }), { status: 404 }))
+    vi.stubGlobal('fetch', notFound)
+    expect(await tradeUsdPrice(testnet, 'never-priced')).toBeNull()
+    expect(notFound).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('token approvals', () => {
+  const me = '0x00000000000000000000000000000000000000aa'
+  const token = '0x00000000000000000000000000000000000000bb'
+  const router = '0x00000000000000000000000000000000000000cc'
+  const word = (a: string) => a.slice(2).padStart(64, '0')
+  const tx = (input: string, at: number, extra: Record<string, string> = {}) => ({ from: me, to: token, input, timeStamp: String(at), isError: '0', ...extra })
+
+  it('finds approvals the account sent, keeping the latest per token and spender', () => {
+    const pairs = approvalPairs(
+      [
+        tx(`0x095ea7b3${word(router)}${'f'.repeat(64)}`, 100),
+        tx(`0x095ea7b3${word(router)}${'0'.repeat(64)}`, 200),
+        tx(`0xa22cb465${word(router)}${word('0x1')}`, 150),
+        tx(`0x095ea7b3${word(router)}${'1'.padStart(64, '0')}`, 300, { isError: '1' }),
+        tx(`0xa9059cbb${word(router)}${'1'.padStart(64, '0')}`, 400),
+        { ...tx(`0x095ea7b3${word(router)}${'1'.padStart(64, '0')}`, 500), from: router },
+      ],
+      me.toUpperCase().replace('0X', '0x')
+    )
+    expect([...pairs.values()]).toEqual([
+      { token, spender: router, kind: 'amount', at: 200 },
+      { token, spender: router, kind: 'all', at: 150 },
+    ])
+  })
+
+  it('revokes with approve(spender, 0) or setApprovalForAll(operator, false)', () => {
+    expect(revokeCall({ token, spender: router, kind: 'amount' })).toEqual({ to: token, data: `0x095ea7b3${word(router)}${'0'.repeat(64)}` })
+    expect(revokeCall({ token, spender: router, kind: 'all' })).toEqual({ to: token, data: `0xa22cb465${word(router)}${'0'.repeat(64)}` })
+  })
+
+  it('lists approvals only where a keyless explorer reads the account', () => {
+    expect(approvalsSupported(CHAINS['ethereum'])).toBe(true)
+    expect(approvalsSupported(CHAINS['qrdx-testnet'])).toBe(false)
+    expect(approvalsSupported(CHAINS['bitcoin'])).toBe(false)
+  })
+})
+
+describe('watched addresses', () => {
+  const pq = '0xPQ8d30632d776eC1b311f674aE80ECd06d04df27f4bb0f6BEE32693cAFb5AC59D6'
+  const eth = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'
+  const btc = 'bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu'
+  const sol = '11111111111111111111111111111111'
+  const all = portfolioChains(Object.values(CHAINS), CHAINS['qrdx-testnet'], true)
+
+  it('tells the address apart and reads it only where it exists', () => {
+    expect([pq, eth, btc, sol, 'nonsense'].map(watchKind)).toEqual(['pq', 'evm', 'bitcoin', 'solana', null])
+    expect(watchChains(pq, all).map((c) => c.id)).toEqual(['qrdx-testnet'])
+    expect(watchChains(btc, all).map((c) => c.id)).toEqual(['bitcoin'])
+    const evm = watchChains(eth, all)
+    expect(evm.some((c) => c.id === 'qrdx-testnet') && evm.some((c) => c.id === 'base')).toBe(true)
+    expect(evm.every((c) => c.family !== 'bitcoin' && c.family !== 'solana')).toBe(true)
+  })
+
+  it('fills one slot of a key-less stand-in account', () => {
+    expect(watchAccount(pq).account).toMatchObject({ ethAddress: '', pqAddress: pq, pqAccountId: toAccountId(pq) })
+    expect(watchAccount(eth).account).toMatchObject({ ethAddress: eth, pqAddress: '', pqAccountId: '' })
+    expect(watchAccount(eth).addresses).toBeNull()
+    expect(watchAccount(btc).addresses).toEqual({ bitcoin: { mainnet: btc, testnet: '' }, solana: null })
   })
 })

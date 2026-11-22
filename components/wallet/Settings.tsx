@@ -28,7 +28,9 @@ import {
   AtSign,
   UserCog,
   ShieldCheck,
-  KeySquare } from 'lucide-react'
+  KeySquare,
+  BadgeCheck,
+  Eye } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useTheme } from 'next-themes'
@@ -118,6 +120,8 @@ type SettingsPage =
   | 'account-control'
   | 'quantum-safety'
   | 'multisig'
+  | 'approvals'
+  | 'watch'
 
 // ─── Component ──────────────────────────────────────────────────────────────
 import { useConfirm } from './flow/ConfirmSheet'
@@ -126,6 +130,8 @@ import { NamesPage } from './settings/NamesPage'
 import { AccountControlPage } from './settings/AccountControlPage'
 import { QuantumSafetyPage } from './settings/QuantumSafetyPage'
 import { MultisigPage } from './settings/MultisigPage'
+import { ApprovalsPage } from './settings/ApprovalsPage'
+import { WatchPage } from './settings/WatchPage'
 import { NetworksPage } from './settings/NetworksPage'
 
 export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
@@ -358,6 +364,13 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
                   gradient="from-primary to-primary/60"
                 />
                 <MenuItem
+                  icon={Eye}
+                  label="Watched addresses"
+                  description="Follow any address's portfolio"
+                  onClick={() => setPage('watch')}
+                  gradient="from-primary to-primary/60"
+                />
+                <MenuItem
                   icon={Palette}
                   label="Theme"
                   description="Appearance & color scheme"
@@ -440,6 +453,13 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
                   label="Multisig"
                   description="Set up, sign and submit m-of-n transactions"
                   onClick={() => setPage('multisig')}
+                  gradient="from-primary to-primary/70"
+                />
+                <MenuItem
+                  icon={BadgeCheck}
+                  label="Token approvals"
+                  description="See and revoke what sites may spend"
+                  onClick={() => setPage('approvals')}
                   gradient="from-primary to-primary/70"
                 />
                 <MenuItem
@@ -672,6 +692,8 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
   if (page === 'account-control') return <AccountControlPage onBack={goBack} />
   if (page === 'quantum-safety') return <QuantumSafetyPage onBack={goBack} />
   if (page === 'multisig') return <MultisigPage onBack={goBack} />
+  if (page === 'approvals') return <ApprovalsPage onBack={goBack} />
+  if (page === 'watch') return <WatchPage onBack={goBack} />
 
   // ── Notifications ─────────────────────────────────────────────────────────
   if (page === 'notifications') {
