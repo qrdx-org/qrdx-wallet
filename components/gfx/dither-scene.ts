@@ -19,12 +19,18 @@ const SLOTS = 6
 
 export interface DitherOptions {
   canvas: HTMLCanvasElement
+  /** Where the orb sits, in cells, for a canvas w by h cells (default: behind the wallet, orbFor). */
+  place?: (w: number, h: number) => [number, number, number]
+  /** Whether the orb rises slower than the page as it scrolls (a fixed backdrop's depth). */
+  parallax?: boolean
+  /** Pure black (dark) or white (light) ground, for a canvas blended into the page (screen or multiply). */
+  blend?: boolean
   /** Called once the first frame is on the canvas (or never, when WebGPU is unavailable). */
   onReady: () => void
   onFail: () => void
 }
 
-export function startDither({ canvas, onReady, onFail }: DitherOptions) {
+export function startDither({ canvas, place = orbFor, parallax = true, blend = false, onReady, onFail }: DitherOptions) {
   let disposed = false
   let gpu: Gpu | null = null
   let out: Surface | null = null
@@ -60,7 +66,8 @@ export function startDither({ canvas, onReady, onFail }: DitherOptions) {
   function colors() {
     if (!fx) return
     const dark = document.documentElement.classList.contains('dark')
-    fx.set({ params: { bg: tokenRgb('--background'), fg: tokenRgb('--foreground'), ink: dark ? INK.dark : INK.light, dark: dark ? 1 : 0 } })
+    const bg = blend ? (dark ? [0, 0, 0] : [1, 1, 1]) : tokenRgb('--background')
+    fx.set({ params: { bg, fg: tokenRgb('--foreground'), ink: dark ? INK.dark : INK.light, dark: dark ? 1 : 0 } })
   }
 
   function tick(currentFrame: Frame) {
@@ -71,9 +78,9 @@ export function startDither({ canvas, onReady, onFail }: DitherOptions) {
     look[1] += (aim[1] - look[1]) * 0.06
     scrolled += (scrollY - scrolled) * 0.12
     for (let i = 0; i < SLOTS; i++) ripples[i][3] = t - seenAt[i]
-    const [ox, oy, r] = orbFor(...out.size)
+    const [ox, oy, r] = place(...out.size)
     // The orb rises with the page at a third of its speed: it sits further back.
-    const orb = [ox, oy - (scrolled * 0.35) / CELL, r]
+    const orb = [ox, oy - (parallax ? (scrolled * 0.35) / CELL : 0), r]
     fx.set({ params: { resolution: out.size, orb, time: t, busy, waveAge: t - waveAt, look: [look[0], look[1], turn(t) - 0.05 * t, 0], ripples } })
     currentFrame.pass(out, fx)
     if (!ready) {
@@ -113,7 +120,7 @@ export function startDither({ canvas, onReady, onFail }: DitherOptions) {
             resolution: out.size,
             time: START,
             busy: 0,
-            orb: orbFor(...out.size),
+            orb: place(...out.size),
             waveAge: 99,
             bg: [0, 0, 0],
             ink: INK.dark,

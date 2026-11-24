@@ -109,7 +109,7 @@ function tone(qx: number, qy: number, t: number, dark: boolean): number {
 type Rgb = [number, number, number]
 
 /** Draws the still frame into a 2D canvas sized to the backdrop, one pixel per cell. */
-export function drawStill(canvas: HTMLCanvasElement, bg: Rgb, fg: Rgb, dark: boolean) {
+export function drawStill(canvas: HTMLCanvasElement, bg: Rgb, fg: Rgb, dark: boolean, place: (w: number, h: number) => [number, number, number] = orbFor) {
   const ink = dark ? INK.dark : INK.light
   const w = Math.max(1, Math.round(canvas.clientWidth / CELL))
   const h = Math.max(1, Math.round(canvas.clientHeight / CELL))
@@ -121,7 +121,7 @@ export function drawStill(canvas: HTMLCanvasElement, bg: Rgb, fg: Rgb, dark: boo
   const px = img.data
   const off = bg.map((c) => Math.round(c * 255))
   const on = bg.map((c, i) => Math.round((c + (fg[i] - c) * ink) * 255))
-  const [ox, oy, r] = orbFor(w, h)
+  const [ox, oy, r] = place(w, h)
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const qx = (x + 0.5 - ox) / r

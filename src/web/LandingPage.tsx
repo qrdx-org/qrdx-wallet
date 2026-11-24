@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { QrdxMark } from '@/components/QrdxMark'
+import { LandingOrb } from './LandingOrb'
 import { DOWNLOADS, REPO_URL } from './downloads'
 
 type Browser = 'chromium' | 'firefox' | 'safari' | 'other'
@@ -269,14 +270,14 @@ export function LandingPage() {
       </nav>
 
       {/* ── Hero ────────────────────────────────────────────────── */}
-      <section className="mx-auto grid max-w-6xl items-center gap-14 px-4 pb-20 pt-16 sm:px-6 sm:pt-24 lg:grid-cols-[1.1fr_1fr] lg:pb-28">
-        <div>
+      <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-14 sm:px-6 sm:pt-20 lg:grid-cols-[1.05fr_1fr] lg:pb-24">
+        <div className="stagger">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-3.5 py-1.5 text-xs font-medium text-muted-foreground">
             <ShieldCheck className="h-3.5 w-3.5 text-foreground" />
             ML-DSA-65 post-quantum signatures
           </div>
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-[3.5rem] lg:leading-[1.05]">
-            The wallet for the <span className="gradient-text">post-quantum</span> era
+          <h1 className="text-[2.75rem] font-semibold leading-[1] tracking-[-0.045em] sm:text-6xl lg:text-[4.25rem]">
+            The wallet for the post-quantum era
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
             Self-custody for QRDX and EVM networks. Hold, send, swap, trade and stake with keys that stay on your device, as a browser
@@ -298,59 +299,68 @@ export function LandingPage() {
           </p>
         </div>
 
-        {/* One phrase, two keys */}
-        <div className="metal-card relative rounded-3xl border border-border bg-card/80 p-6 shadow-2xl shadow-black/10 sm:p-8">
-          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Every account</div>
-          <div className="mt-4 rounded-2xl border border-border bg-background/70 p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card">
-                <KeyRound className="h-4 w-4" />
-              </div>
-              <div>
-                <div className="text-sm font-semibold">One recovery phrase</div>
-                <div className="text-xs text-muted-foreground">12 or 24 words, written down once</div>
-              </div>
-            </div>
-          </div>
-          <div className="mx-auto h-6 w-px bg-border" />
-          <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              { title: 'Post-quantum key', alg: 'ML-DSA-65', addr: '0xPQ…', use: "Signs QRDX's quantum-safe transactions" },
-              { title: 'Classic key', alg: 'secp256k1', addr: '0x…', use: 'For Ethereum and other EVM networks' },
-            ].map((k) => (
-              <div key={k.title} className="rounded-2xl border border-border bg-background/70 p-4">
-                <div className="text-sm font-semibold">{k.title}</div>
-                <div className="mt-1 font-mono text-xs text-muted-foreground">
-                  {k.alg} · {k.addr}
-                </div>
-                <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{k.use}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-5 flex items-center gap-2 border-t border-border/70 pt-4 text-xs text-muted-foreground">
-            <Fingerprint className="h-4 w-4 shrink-0 text-foreground" />
-            Encrypted with AES-256-GCM on this device. Unlock with a password or a passkey.
-          </div>
-        </div>
+        <figure>
+          <LandingOrb className="mx-auto aspect-square w-full max-w-[520px]" />
+          <figcaption className="mx-auto mt-2 max-w-[420px] text-center font-mono text-[11px] leading-relaxed text-muted-foreground">
+            The wallet&apos;s backdrop, live: liquid chrome printed in 2-pixel dots. In the wallet it ripples with your own transactions.
+          </figcaption>
+        </figure>
       </section>
 
       {/* ── Features ────────────────────────────────────────────── */}
       <section id="features" className="scroll-mt-16 border-t border-border/60 bg-card/30">
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-          <div className="max-w-2xl">
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Everything QRDX, in one wallet</h2>
-            <p className="mt-4 text-muted-foreground">Built for the network&apos;s native exchange, staking and post-quantum accounts, and at home on EVM chains.</p>
-          </div>
-          <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((f) => (
-              <div key={f.title} className="bg-card p-6">
-                <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background">
-                  <f.icon className="h-[18px] w-[18px]" />
+          <div className="grid gap-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <div>
+              <h2 className="text-3xl font-semibold tracking-[-0.035em] sm:text-[2.75rem] sm:leading-[1.05]">Everything QRDX, in one wallet</h2>
+              <p className="mt-4 max-w-md text-muted-foreground">Built for the network&apos;s native exchange, staking and post-quantum accounts, and at home on EVM chains.</p>
+              <div className="mt-10 rounded-3xl border border-border bg-card/60 p-6 sm:p-7">
+                <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Every account</div>
+                <div className="mt-4 rounded-2xl border border-border bg-background/70 p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card">
+                      <KeyRound className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold">One recovery phrase</div>
+                      <div className="text-xs text-muted-foreground">12 or 24 words, written down once</div>
+                    </div>
+                  </div>
                 </div>
-                <h3 className="font-semibold">{f.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{f.body}</p>
+                <div className="mx-auto h-6 w-px bg-border" />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[
+                    { title: 'Post-quantum key', alg: 'ML-DSA-65', addr: '0xPQ…', use: "Signs QRDX's quantum-safe transactions" },
+                    { title: 'Classic key', alg: 'secp256k1', addr: '0x…', use: 'For Ethereum and other EVM networks' },
+                  ].map((k) => (
+                    <div key={k.title} className="rounded-2xl border border-border bg-background/70 p-4">
+                      <div className="text-sm font-semibold">{k.title}</div>
+                      <div className="mt-1 font-mono text-xs text-muted-foreground">
+                        {k.alg} · {k.addr}
+                      </div>
+                      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{k.use}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-5 flex items-center gap-2 border-t border-border/70 pt-4 text-xs text-muted-foreground">
+                  <Fingerprint className="h-4 w-4 shrink-0 text-foreground" />
+                  Encrypted with AES-256-GCM on this device. Unlock with a password or a passkey.
+                </div>
               </div>
-            ))}
+            </div>
+            <ol className="stagger">
+              {FEATURES.map((f, i) => (
+                <li key={f.title} className="grid grid-cols-[2.25rem_minmax(0,1fr)] gap-x-4 border-t border-border py-6 last:border-b">
+                  <span className="pt-0.5 font-mono text-xs text-muted-foreground">{String(i + 1).padStart(2, '0')}</span>
+                  <div>
+                    <h3 className="flex items-center gap-2 font-semibold">
+                      <f.icon className="h-4 w-4 text-muted-foreground" /> {f.title}
+                    </h3>
+                    <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{f.body}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
           </div>
         </div>
       </section>
@@ -359,7 +369,7 @@ export function LandingPage() {
       <section id="download" className="scroll-mt-16 border-t border-border/60">
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
           <div className="max-w-2xl">
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Get QRDX Wallet</h2>
+            <h2 className="text-3xl font-semibold tracking-[-0.035em] sm:text-[2.75rem] sm:leading-[1.05]">Get QRDX Wallet</h2>
             <p className="mt-4 text-muted-foreground">
               The same wallet three ways. Your recovery phrase moves between them, and the vault format is the same everywhere.
             </p>
