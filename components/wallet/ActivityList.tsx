@@ -1,7 +1,8 @@
 'use client'
 
+import { Loading, Spinner } from '@/components/motion/Loading'
 import { useState } from 'react'
-import { ArrowUpRight, ArrowDownLeft, RefreshCw, FileCode2, Loader2, ChevronRight } from 'lucide-react'
+import { ArrowUpRight, ArrowDownLeft, RefreshCw, FileCode2, ChevronRight } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import type { TransactionHistoryItem } from '@/src/core/history'
 import { TransactionDetail } from './TransactionDetail'
@@ -107,8 +108,7 @@ export function ActivityList({ onSendAgain }: { onSendAgain?: (to: string, token
   if (transactionsLoading && transactions.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin mb-2 opacity-50" />
-        <p className="text-sm">Loading activity...</p>
+        <Loading label="Loading activity" />
       </div>
     )
   }
@@ -139,7 +139,7 @@ export function ActivityList({ onSendAgain }: { onSendAgain?: (to: string, token
           className="text-[10px] text-primary font-medium hover:text-primary/80 transition-colors disabled:opacity-50"
         >
           {transactionsLoading ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
+            <Spinner size={12} />
           ) : (
             'Refresh'
           )}
@@ -163,7 +163,7 @@ export function ActivityList({ onSendAgain }: { onSendAgain?: (to: string, token
           <div className="flex items-center gap-3">
             <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${getIconStyle(tx.type)}`}>
               {tx.status === 'pending' ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Spinner size={16} />
               ) : (
                 getIcon(tx.type)
               )}

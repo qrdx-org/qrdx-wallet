@@ -7,6 +7,7 @@
  * a token between it and the main account, and fund its perps from its own balance.
  */
 
+import { CtaButton } from '@/components/motion/CtaButton'
 import { useState } from 'react'
 import { Layers, Plus, Wallet } from 'lucide-react'
 import { dec, isAmount } from '@/src/core/trade/decimal'
@@ -76,8 +77,7 @@ export function AccountsView({ api, trader }: { api: string; trader: string }) {
                   placeholder="Name (optional)"
                   className="h-9 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-base sm:text-xs"
                 />
-                <button
-                  type="button"
+                <CtaButton
                   onClick={() =>
                     ask({
                       op: 'SUBACCOUNT_CREATE',
@@ -88,11 +88,9 @@ export function AccountsView({ api, trader }: { api: string; trader: string }) {
                         refresh()
                       },
                     })
-                  }
-                  className="flex h-9 items-center gap-1 rounded-xl bg-primary px-3 text-xs font-semibold text-primary-foreground"
-                >
+                  } className="h-9 px-3 text-xs" size="sm">
                   <Plus className="h-3.5 w-3.5" /> Create
-                </button>
+                </CtaButton>
               </div>
             )}
           </>
@@ -274,8 +272,7 @@ function MoveSheet({
             </div>
           </>
         )}
-        <button
-          type="button"
+        <CtaButton
           disabled={!valid || over}
           onClick={() =>
             ask({
@@ -288,11 +285,9 @@ function MoveSheet({
                 onDone()
               },
             })
-          }
-          className="h-11 w-full rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50"
-        >
+          } className="h-11 w-full text-sm" size="sm">
           {over ? `Only ${fmtSize(chosen!.balance)} ${chosen!.asset.symbol}` : 'Move'}
-        </button>
+        </CtaButton>
       </div>
     </Sheet>
   )

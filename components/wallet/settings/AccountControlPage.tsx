@@ -7,8 +7,9 @@
  * trading agents it approved. Every change is an ACCOUNT_POLICY (or AGENT_REVOKE) signed here.
  */
 
+import { Loading } from '@/components/motion/Loading'
 import { useEffect, useState } from 'react'
-import { Clock, KeyRound, Loader2, ShieldAlert, ShieldCheck, Users, Zap } from 'lucide-react'
+import { Clock, KeyRound, ShieldAlert, ShieldCheck, Users, Zap } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { isQrdxChain } from '@/src/core/chains'
 import { accountAuthority, accountControlled, type Authority } from '@/src/core/qns'
@@ -80,7 +81,7 @@ export function AccountControlPage({ onBack }: { onBack: () => void }) {
         <Notice>{activeChain.name}&apos;s node predates account control.</Notice>
       ) : !auth ? (
         <p className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading {short(me || '0x')}…
+          <Loading label={`Reading ${short(me || '0x')}`} />
         </p>
       ) : (
         <>
@@ -279,7 +280,7 @@ function GuardianSheet({ account, onClose, onBack }: { account: string; onClose:
         <p className="break-all font-mono text-[11px] text-muted-foreground">{account}</p>
         {!auth ? (
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading its guardians…
+            <Loading label="Reading its guardians" />
           </p>
         ) : auth.guardians ? (
           <Notice>

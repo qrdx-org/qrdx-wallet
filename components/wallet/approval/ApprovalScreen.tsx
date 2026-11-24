@@ -9,6 +9,7 @@
  * always check.
  */
 
+import { Loading } from '@/components/motion/Loading'
 import { useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle,
@@ -174,7 +175,7 @@ export function ApprovalScreen(
   if (!request)
     return (
       <FlowScreen className="justify-center items-center">
-        <div className="text-sm text-muted-foreground">Loading request…</div>
+        <Loading label="Loading the request" />
       </FlowScreen>
     )
 

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { QrdxMark } from '@/components/QrdxMark'
+import { CtaButton } from '@/components/motion/CtaButton'
 import { LandingOrb } from './LandingOrb'
 import { DOWNLOADS, REPO_URL } from './downloads'
 
@@ -49,6 +50,19 @@ function usePlatform(): { platform: Platform; browser: Browser; known: boolean }
 }
 
 // ── Small pieces ─────────────────────────────────────────────────────────
+
+/** The page's main actions as the wallet's specular button: a link (a page, a download, or a section of this one). */
+function LinkCta({ href, className, children }: { href: string; className?: string; children: ReactNode }) {
+  const go = () => {
+    if (href.startsWith('#')) document.querySelector(href)?.scrollIntoView({ behavior: 'smooth' })
+    else window.location.assign(href)
+  }
+  return (
+    <CtaButton onClick={go} className={className}>
+      {children}
+    </CtaButton>
+  )
+}
 /** The mark alone, in ink, as the trade site draws it: no tile. */
 function Logo({ className }: { className?: string }) {
   return <QrdxMark className={cn('text-foreground', className)} />
@@ -113,8 +127,6 @@ function Tabs<T extends string>({ value, onChange, options }: { value: T; onChan
   )
 }
 
-const primaryBtn =
-  'inline-flex items-center justify-center gap-2 rounded-xl bg-foreground px-5 py-3 text-sm font-semibold text-background transition-opacity hover:opacity-90'
 const secondaryBtn =
   'inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-5 py-3 text-sm font-semibold transition-colors hover:bg-secondary'
 
@@ -262,9 +274,9 @@ export function LandingPage() {
             <a href={REPO_URL} className="hidden rounded-lg px-3 py-2 text-sm text-muted-foreground hover:text-foreground md:inline-flex">
               GitHub
             </a>
-            <a href="/wallet" className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90">
+            <LinkCta href="/wallet" className="h-9 px-4 text-sm">
               Open wallet <ArrowRight className="h-3.5 w-3.5" />
-            </a>
+            </LinkCta>
           </div>
         </div>
       </nav>
@@ -284,9 +296,9 @@ export function LandingPage() {
             extension, in any browser tab, or installed on your iPhone.
           </p>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-            <a href={heroDownload.href} className={primaryBtn}>
+            <LinkCta href={heroDownload.href} className="h-12 px-5 text-sm">
               <heroDownload.icon className="h-4 w-4" /> {heroDownload.label}
-            </a>
+            </LinkCta>
             <a href="/wallet" className={secondaryBtn}>
               <Globe className="h-4 w-4" /> Open the web wallet
             </a>
@@ -399,18 +411,36 @@ export function LandingPage() {
               </p>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <a href={DOWNLOADS.chrome} className={cn(extTab === 'chromium' ? primaryBtn : secondaryBtn, 'justify-between')}>
-                  <span className="flex items-center gap-2">
-                    <Download className="h-4 w-4" /> Chrome, Brave, Edge
-                  </span>
-                  <span className="font-mono text-[11px] opacity-60">.zip</span>
-                </a>
-                <a href={DOWNLOADS.firefox} className={cn(extTab === 'firefox' ? primaryBtn : secondaryBtn, 'justify-between')}>
-                  <span className="flex items-center gap-2">
-                    <Download className="h-4 w-4" /> Firefox
-                  </span>
-                  <span className="font-mono text-[11px] opacity-60">.zip</span>
-                </a>
+                {extTab === 'chromium' ? (
+                  <LinkCta href={DOWNLOADS.chrome} className="h-12 w-full !justify-between px-5 text-sm">
+                    <span className="flex items-center gap-2">
+                      <Download className="h-4 w-4" /> Chrome, Brave, Edge
+                    </span>
+                    <span className="font-mono text-[11px] opacity-60">.zip</span>
+                  </LinkCta>
+                ) : (
+                  <a href={DOWNLOADS.chrome} className={cn(secondaryBtn, 'justify-between')}>
+                    <span className="flex items-center gap-2">
+                      <Download className="h-4 w-4" /> Chrome, Brave, Edge
+                    </span>
+                    <span className="font-mono text-[11px] opacity-60">.zip</span>
+                  </a>
+                )}
+                {extTab === 'firefox' ? (
+                  <LinkCta href={DOWNLOADS.firefox} className="h-12 w-full !justify-between px-5 text-sm">
+                    <span className="flex items-center gap-2">
+                      <Download className="h-4 w-4" /> Firefox
+                    </span>
+                    <span className="font-mono text-[11px] opacity-60">.zip</span>
+                  </LinkCta>
+                ) : (
+                  <a href={DOWNLOADS.firefox} className={cn(secondaryBtn, 'justify-between')}>
+                    <span className="flex items-center gap-2">
+                      <Download className="h-4 w-4" /> Firefox
+                    </span>
+                    <span className="font-mono text-[11px] opacity-60">.zip</span>
+                  </a>
+                )}
               </div>
 
               <div className="mt-6 rounded-xl border border-border bg-background/60 p-4 sm:p-5">

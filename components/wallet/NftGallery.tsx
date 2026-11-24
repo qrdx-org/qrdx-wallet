@@ -1,7 +1,9 @@
 'use client'
 
+import { CtaButton } from '@/components/motion/CtaButton'
+import { Loading, Spinner } from '@/components/motion/Loading'
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowUpRight, ExternalLink, ImageOff, Loader2 } from 'lucide-react'
+import { ArrowUpRight, ExternalLink, ImageOff } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { getEvmProvider } from '@/src/core/ethereum'
 import { isQrdxChain } from '@/src/core/chains'
@@ -11,6 +13,7 @@ import { waitForExchangeReceipt } from '@/src/core/exchange-client'
 import { cn, formatAddress } from '@/lib/utils'
 import { Sheet, TextField } from './flow/FlowKit'
 import { ConfirmSheet } from './flow/ConfirmSheet'
+import { NftCard } from './NftCard'
 
 /** exchange_getNftsOf (qrdx-node qrdx/exchange/views.py nfts_of). */
 interface NodeNft {
@@ -85,7 +88,7 @@ function NftImage({ nft, className }: { nft: NodeNft; className?: string }) {
     return <img src={meta.image} alt={nft.name || `${nft.symbol} #${nft.token_id}`} onError={() => setBroken(true)} className={cn('h-full w-full object-cover', className)} />
   return (
     <span className={cn('flex h-full w-full flex-col items-center justify-center gap-1 bg-accent/60 text-muted-foreground', className)}>
-      {meta === null ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageOff className="h-4 w-4" />}
+      {meta === null ? <Spinner size={16} /> : <ImageOff className="h-4 w-4" />}
       <span className="font-mono text-[10px]">
         {nft.symbol} #{nft.token_id}
       </span>
@@ -138,7 +141,7 @@ export function NftGallery({ onCount }: { onCount?: (n: number) => void }) {
   if (!nfts)
     return (
       <p className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading your NFTs…
+        <Loading label="Reading your NFTs" />
       </p>
     )
   if (!nfts.length) return <Empty title="No NFTs yet" text={`NFTs this account owns on ${activeChain.name} show up here.`} />
@@ -153,12 +156,13 @@ export function NftGallery({ onCount }: { onCount?: (n: number) => void }) {
           </p>
           <div className="grid grid-cols-2 gap-2">
             {items.map((n) => (
-              <button key={n.token_id} type="button" onClick={() => setOpen(n)} className="overflow-hidden rounded-xl border border-border/60 text-left transition-colors hover:border-foreground/30">
-                <span className="block aspect-square overflow-hidden">
-                  <NftImage nft={n} />
-                </span>
-                <span className="block truncate px-2 py-1.5 text-[11px] font-medium">{n.name || `${n.symbol} #${n.token_id}`}</span>
-              </button>
+              <NftCard
+                key={n.token_id}
+                image={<NftImage nft={n} />}
+                title={n.name || `${n.symbol} #${n.token_id}`}
+                subtitle={`${n.symbol} #${n.token_id}`}
+                onOpen={() => setOpen(n)}
+              />
             ))}
           </div>
         </section>
@@ -211,8 +215,14 @@ function NftDetail({ nft, onClose, onSent }: { nft: NodeNft; onClose: () => void
 
   return (
     <Sheet title={nft.name || `${nft.symbol} #${nft.token_id}`} onClose={onClose}>
-      <div className="aspect-square overflow-hidden rounded-xl border border-border/60">
-        <NftImage nft={nft} />
+      <div className="flex justify-center">
+        <NftCard
+          lazy={false}
+          maxWidth={300}
+          image={<NftImage nft={nft} />}
+          title={nft.name || `${nft.symbol} #${nft.token_id}`}
+          subtitle={`${nft.collection_name || nft.symbol} · #${nft.token_id}`}
+        />
       </div>
       {meta?.description && <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{meta.description}</p>}
       <div className="mt-3 divide-y divide-border/60 rounded-xl border border-border/70 text-xs">
@@ -240,23 +250,20 @@ function NftDetail({ nft, onClose, onSent }: { nft: NodeNft; onClose: () => void
         >
           <ExternalLink className="h-4 w-4" /> Explorer
         </a>
-        <button
-          type="button"
+        <CtaButton
           disabled={!sendable}
           onClick={() => setSending(true)}
-          title={sendable ? undefined : 'Only NFTs held by the post-quantum account can be sent from here'}
-          className="flex h-11 items-center justify-center gap-2 rounded-xl bg-foreground text-sm font-semibold text-background hover:opacity-90 disabled:opacity-40"
-        >
+          title={sendable ? undefined : 'Only NFTs held by the post-quantum account can be sent from here'} className="h-11 text-sm" size="sm">
           <ArrowUpRight className="h-4 w-4" /> Send
-        </button>
+        </CtaButton>
       </div>
       {sending && (
         <div className="mt-4 space-y-2">
           <TextField label="Recipient address" value={to} onChange={setTo} placeholder="0xPQ… or 0x…" />
           {check && !toValid && <p className="text-[11px] text-foreground">{check.valid === false ? check.error ?? 'Not a valid address' : 'That is the current owner'}</p>}
-          <button type="button" disabled={!toValid} onClick={() => setReview(true)} className="h-11 w-full rounded-xl bg-foreground text-sm font-semibold text-background disabled:opacity-40">
+          <CtaButton disabled={!toValid} onClick={() => setReview(true)} className="h-11 w-full text-sm" size="sm">
             Review transfer
-          </button>
+          </CtaButton>
         </div>
       )}
       {review && (

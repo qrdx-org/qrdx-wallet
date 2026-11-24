@@ -1,5 +1,6 @@
 'use client'
 
+import { Loading } from '@/components/motion/Loading'
 import { useState } from 'react'
 import { dec } from '@/src/core/trade/decimal'
 import { fixed, price as fmtPrice, size as fmtSize } from '@/src/core/trade/format'
@@ -49,7 +50,7 @@ export function AccountTabs({
     <div className="rounded-xl border bg-card">
       <Tabs tabs={tabs} value={tab} onChange={setTab} className="px-1.5" />
       {!account ? (
-        <Empty>Loading your account…</Empty>
+        <Empty><Loading label="Loading your account" /></Empty>
       ) : tab === 'activity' ? (
         submissions.length ? <SubmissionList items={submissions} /> : <Empty>Orders you sign here appear with their status until a block includes them.</Empty>
       ) : tab === 'balances' ? (

@@ -9,8 +9,10 @@
  * then signs with the account's PQ key and follows the receipt to its block.
  */
 
+import { CtaButton } from '@/components/motion/CtaButton'
+import { Spinner } from '@/components/motion/Loading'
 import { useCallback, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Clock, Loader2, ShieldCheck, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, ShieldCheck, XCircle } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { describeExchangeOp, type DescribeContext } from '@/src/core/exchange-describe'
 import type { ExchangeOpName, JsonValue } from '@/src/core/exchange-tx'
@@ -178,15 +180,12 @@ function ReviewSheet({
         <button type="button" onClick={onCancel} disabled={busy} className="h-11 rounded-xl border text-sm font-medium hover:bg-accent disabled:opacity-50">
           Cancel
         </button>
-        <button
-          type="button"
+        <CtaButton
           onClick={onConfirm}
-          disabled={busy}
-          className="flex h-11 items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
-        >
-          {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+          disabled={busy} className="h-11 text-sm" size="sm">
+          {busy && <Spinner size={16} />}
           Sign and submit
-        </button>
+        </CtaButton>
       </div>
     </Sheet>
   )

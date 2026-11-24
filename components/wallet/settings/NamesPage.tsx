@@ -6,8 +6,9 @@
  * it). A name is a native NFT: whoever holds it decides where it points.
  */
 
+import { Loading } from '@/components/motion/Loading'
 import { useEffect, useState } from 'react'
-import { AtSign, Loader2 } from 'lucide-react'
+import { AtSign } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { isQrdxChain } from '@/src/core/chains'
 import { QNS_NAME, qnsGetName, qnsLengthFactor, qnsNamesOf, qnsPrice, reverseQns, type QnsNameInfo } from '@/src/core/qns'
@@ -92,7 +93,7 @@ export function NamesPage({ onBack }: { onBack: () => void }) {
         <Notice>{activeChain.name} has no QRDX names yet: its node predates them.</Notice>
       ) : supported === null ? (
         <p className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking {activeChain.name}…
+          <Loading label={`Checking ${activeChain.name}`} />
         </p>
       ) : (
         <>
@@ -102,7 +103,7 @@ export function NamesPage({ onBack }: { onBack: () => void }) {
 
           <Section title="Your names">
             {names === null ? (
-              <p className="p-3 text-xs text-muted-foreground">Loading…</p>
+              <p className="p-3"><Loading label="Reading your names" /></p>
             ) : names.length === 0 ? (
               <p className="p-3 text-xs text-muted-foreground">None yet.</p>
             ) : (

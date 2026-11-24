@@ -1,7 +1,9 @@
 'use client'
 
+import { CtaButton } from '@/components/motion/CtaButton'
+import { Spinner } from '@/components/motion/Loading'
 import { useCallback, useRef, useState, type ReactNode } from 'react'
-import { AlertTriangle, Loader2 } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sheet } from './FlowKit'
 
@@ -77,18 +79,22 @@ export function ConfirmSheet({
         >
           Cancel
         </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={busy}
-          className={cn(
-            'flex h-11 items-center justify-center gap-2 rounded-xl text-sm font-semibold transition-opacity disabled:opacity-60',
-            danger ? 'border border-foreground bg-background text-foreground hover:bg-foreground hover:text-background' : 'bg-foreground text-background hover:opacity-90'
-          )}
-        >
-          {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-          {confirmLabel}
-        </button>
+        {danger ? (
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy}
+            className="flex h-11 items-center justify-center gap-2 rounded-xl border border-foreground bg-background text-sm font-semibold text-foreground transition-opacity hover:bg-foreground hover:text-background disabled:opacity-60"
+          >
+            {busy && <Spinner size={16} />}
+            {confirmLabel}
+          </button>
+        ) : (
+          <CtaButton onClick={onConfirm} disabled={busy} className="h-11 text-sm" size="sm">
+            {busy && <Spinner size={16} />}
+            {confirmLabel}
+          </CtaButton>
+        )}
       </div>
     </Sheet>
   )
@@ -129,16 +135,19 @@ export function useConfirm(): { dialog: ReactNode; confirm: (req: ConfirmRequest
         <button type="button" onClick={() => close(false)} className="h-11 rounded-xl border border-border text-sm font-medium hover:bg-accent/50">
           Cancel
         </button>
-        <button
-          type="button"
-          onClick={() => close(true)}
-          className={cn(
-            'h-11 rounded-xl text-sm font-semibold',
-            req.danger ? 'border border-foreground bg-background text-foreground hover:bg-foreground hover:text-background' : 'bg-foreground text-background hover:opacity-90'
-          )}
-        >
-          {req.confirmLabel ?? 'Confirm'}
-        </button>
+        {req.danger ? (
+          <button
+            type="button"
+            onClick={() => close(true)}
+            className="h-11 rounded-xl border border-foreground bg-background text-sm font-semibold text-foreground hover:bg-foreground hover:text-background"
+          >
+            {req.confirmLabel ?? 'Confirm'}
+          </button>
+        ) : (
+          <CtaButton onClick={() => close(true)} className="h-11 text-sm" size="sm">
+            {req.confirmLabel ?? 'Confirm'}
+          </CtaButton>
+        )}
       </div>
     </Sheet>
   ) : null

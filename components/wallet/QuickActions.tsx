@@ -10,11 +10,12 @@ import {
   TrendingUp,
   Landmark,
   LayoutGrid,
+  ScanLine,
   X } from 'lucide-react'
 import { useBubble } from '@/components/gfx/Bubble'
 import { SoapBubbleIconButton } from '@/components/soap-bubble'
 
-export type QuickActionType = 'send' | 'receive' | 'swap' | 'buy' | 'shield' | 'trade' | 'stake'
+export type QuickActionType = 'send' | 'receive' | 'swap' | 'buy' | 'shield' | 'trade' | 'stake' | 'pay'
 
 interface QuickActionsProps {
   onAction?: (action: QuickActionType) => void
@@ -51,6 +52,12 @@ const MAIN_ACTIONS: QuickAction[] = [
 ]
 
 const FOLDER_ACTIONS: QuickAction[] = [
+  {
+    key: 'pay',
+    icon: <ScanLine className="h-5 w-5" />,
+    label: 'Pay',
+    gradient: 'from-primary to-primary/70',
+  },
   {
     key: 'shield',
     icon: <Shield className="h-5 w-5" />,

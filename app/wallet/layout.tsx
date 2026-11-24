@@ -1,5 +1,6 @@
 'use client'
 
+import { Loading } from '@/components/motion/Loading'
 import { ThemeProvider } from '@/components/theme-provider'
 import { WalletProvider } from '@/src/shared/contexts/WalletContext'
 import { PWAProvider } from '@/src/pwa/PWAProvider'
@@ -21,8 +22,8 @@ export default function WalletLayout({
     return (
       <div className="flex items-center justify-center w-full h-full min-h-screen">
         <div className="flex flex-col items-center gap-4 animate-fade-in">
-          <QrdxMark className="h-10 w-10 text-foreground animate-pulse-ring" />
-          <div className="text-sm font-medium text-muted-foreground">Loading QRDX Wallet...</div>
+          <QrdxMark className="h-10 w-10 text-foreground" />
+          <Loading label="Opening QRDX Wallet" />
         </div>
       </div>
     )

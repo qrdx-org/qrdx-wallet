@@ -1,5 +1,6 @@
 'use client'
 
+import { CtaButton } from '@/components/motion/CtaButton'
 import { useState } from 'react'
 import { Check, Copy, ExternalLink, FastForward, Repeat, UserPlus, XCircle } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -182,9 +183,9 @@ export function TransactionDetail({ tx, onClose, onSendAgain }: { tx: Transactio
             <button type="button" onClick={() => setSaving(false)} className="h-10 rounded-xl border border-border text-xs font-medium">
               Cancel
             </button>
-            <button type="button" onClick={() => void save()} disabled={!name.trim()} className="h-10 rounded-xl bg-foreground text-xs font-semibold text-background disabled:opacity-40">
+            <CtaButton onClick={() => void save()} disabled={!name.trim()} className="h-10 text-xs" size="sm">
               Save contact
-            </button>
+            </CtaButton>
           </div>
         </div>
       ) : (
@@ -203,9 +204,9 @@ export function TransactionDetail({ tx, onClose, onSendAgain }: { tx: Transactio
               <UserPlus className="h-3.5 w-3.5" /> Save contact
             </button>
           )}
-          <a href={explorer} target="_blank" rel="noreferrer" className="col-span-2 flex h-10 items-center justify-center gap-1.5 rounded-xl bg-foreground text-xs font-semibold text-background">
+          <CtaButton onClick={() => window.open(explorer, '_blank', 'noopener,noreferrer')} className="col-span-2 h-10 text-xs" size="sm">
             <ExternalLink className="h-3.5 w-3.5" /> View on the explorer
-          </a>
+          </CtaButton>
         </div>
       )}
     </Sheet>

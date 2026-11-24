@@ -1,5 +1,6 @@
 'use client'
 
+import { Loading } from '@/components/motion/Loading'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { AreaSeries, CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, createChart, type IChartApi, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts'
@@ -132,7 +133,7 @@ export function MiniBook({ book, rows = 8, onPick }: { book: OrderBook | null; r
   const bids = useMemo(() => (book?.bids ?? []).slice(0, rows), [book, rows])
   const ref = Number(book?.mid ?? book?.bestBid ?? book?.bestAsk ?? 1)
   const max = Math.max(Number(book?.asks[Math.min(rows, book.asks.length) - 1]?.[2] ?? 0), Number(book?.bids[Math.min(rows, book.bids.length) - 1]?.[2] ?? 0), 1e-18)
-  if (!book) return <div className="space-y-1 p-2">{Array.from({ length: rows * 2 }, (_, i) => <div key={i} className="h-3 animate-pulse rounded bg-muted/60" />)}</div>
+  if (!book) return <Empty><Loading label="Reading the order book" /></Empty>
   const Row = ({ l, side }: { l: [string, string, string]; side: 'bid' | 'ask' }) => (
     <button type="button" onClick={() => onPick?.(l[0])} className="relative grid h-[18px] w-full grid-cols-2 items-center px-2 text-[10.5px] num hover:bg-accent/60">
       <span className={cn('absolute inset-y-px right-0', side === 'bid' ? 'bg-bid/10' : 'bg-ask/10')} style={{ width: `${Math.min(100, (Number(l[2]) / max) * 100)}%` }} />
@@ -157,7 +158,7 @@ export function MiniBook({ book, rows = 8, onPick }: { book: OrderBook | null; r
 }
 
 export function TradesList({ data }: { data: TradesResponse | null }) {
-  if (!data) return <Empty>Loading…</Empty>
+  if (!data) return <Empty><Loading label="Reading trades" /></Empty>
   if (data.available === false) return <Empty>This network&apos;s node does not publish individual trades. The chart shows pool prices recorded every minute.</Empty>
   if (!data.trades.length) return <Empty>No trades yet.</Empty>
   const ref = Number(data.trades[0].price)

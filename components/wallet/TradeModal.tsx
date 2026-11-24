@@ -10,8 +10,9 @@
  * account's quantum-safe key and followed to their block.
  */
 
+import { Loading } from '@/components/motion/Loading'
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, BarChart3, ChevronDown, ChevronRight, ExternalLink, Layers, Loader2, Search } from 'lucide-react'
+import { ArrowLeft, BarChart3, ChevronDown, ChevronRight, ExternalLink, Layers, Search } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { isQrdxChain } from '@/src/core/chains'
 import { tradeApiBase, tradeSiteUrl, verifyTradeApi, type TradeApiStatus } from '@/src/core/trade/api'
@@ -106,7 +107,7 @@ function TradeScreen({ onClose }: TradeModalProps) {
           <Centered title="Trading runs on QRDX networks" text={`${activeChain.name} has no QRDX exchange. Switch to a QRDX network to trade with your quantum-safe account.`} />
         ) : !status ? (
           <div className="flex justify-center py-16">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <Loading label="Checking the exchange" />
           </div>
         ) : !status.ok || !api ? (
           <Centered title="Trading service unavailable" text={status.message ?? 'Try again later.'} />
@@ -193,7 +194,7 @@ function MarketList({ api, onOpen }: { api: string; onOpen: (v: View) => void })
         </div>
         {error && !data && <Empty>{error.message}</Empty>}
         {data && !rows.length && <Empty>{q ? 'Nothing matches.' : 'No markets on this network yet.'}</Empty>}
-        {!data && !error && <Empty>Loading markets…</Empty>}
+        {!data && !error && <Empty><Loading label="Loading markets" /></Empty>}
         {rows.map((r) => {
           const [b, qq] = segments(r.path)
           return (
@@ -252,7 +253,7 @@ function MarketView({ api, view, trader, onSwitch }: { api: string; view: Extrac
   const last = m ? (perp ? (m as PerpMarket).markPrice : (m as SpotMarket).last) : null
   const flash = usePriceFlash(last)
   if (market.error && !m) return <Empty>{market.error.message}</Empty>
-  if (!m) return <Empty>Loading market…</Empty>
+  if (!m) return <Empty><Loading label="Loading the market" /></Empty>
 
   const spot = !perp ? (m as SpotMarket) : null
   const pm = perp ? (m as PerpMarket) : null

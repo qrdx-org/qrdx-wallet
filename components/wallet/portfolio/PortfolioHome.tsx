@@ -5,8 +5,9 @@
  * is on, QRDX first. Pickers start Send, Receive and Swap from an asset or a network.
  */
 
+import { Loading, Spinner } from '@/components/motion/Loading'
 import { useMemo, useState, useSyncExternalStore } from 'react'
-import { ChevronDown, ChevronRight, Loader2, RefreshCw, TrendingDown, TrendingUp, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, RefreshCw, TrendingDown, TrendingUp, X } from 'lucide-react'
 import { CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { formatFiat, formatFiatPrice } from '@/src/core/fiat'
@@ -81,7 +82,7 @@ export function PortfolioSummary({
         <div className="mb-1 flex items-center justify-between">
           <span className="text-xs font-medium text-muted-foreground">All networks</span>
           <button type="button" onClick={onRefresh} aria-label="Refresh balances" className="rounded-lg p-1.5 hover:bg-accent/50">
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />}
+            {loading ? <Spinner size={14} className="text-muted-foreground" /> : <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />}
           </button>
         </div>
         <div className={cn('mb-1 text-3xl font-bold tracking-tight tabular-nums', !visible && 'privacy-blur')}><RollingText text={portfolio ? formatFiat(portfolio.usd) : '…'} /></div>
@@ -108,7 +109,7 @@ export function PortfolioSummary({
               <PortfolioChart data={history.points} change24h={rangeChange} changeLabel={range} bleed />
             ) : (
               <div className="flex h-[120px] items-center justify-center text-[11px] text-muted-foreground">
-                {historyLoading && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />} Replaying your transactions…
+                {historyLoading ? <Loading label="Replaying your transactions" /> : 'Replaying your transactions…'}
               </div>
             )}
             <RangeTabs className="mt-1" value={range} options={VALUE_RANGES} onChange={setRange} />
@@ -184,7 +185,7 @@ export function AssetList({ portfolio, onOpen, visible }: { portfolio: Portfolio
   if (!portfolio) {
     return (
       <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Reading every network…
+        <Loading label="Reading every network" />
       </div>
     )
   }
@@ -270,7 +271,7 @@ export function HoldingPicker({ title, portfolio, onPick, onClose }: { title: st
     <PickerShell title={title} onClose={onClose}>
       {!portfolio ? (
         <p className="flex items-center justify-center gap-2 p-4 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading every network…
+          <Loading label="Reading every network" />
         </p>
       ) : held.length === 0 ? (
         <p className="p-4 text-center text-xs text-muted-foreground">Nothing to send yet.</p>

@@ -5,8 +5,9 @@
  * holds something on, newest first, each marked with its network.
  */
 
+import { Loading } from '@/components/motion/Loading'
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDownLeft, ArrowUpRight, ExternalLink, Loader2, Repeat } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, ExternalLink, Repeat } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { chainFamily, isQrdxChain, type ChainConfig } from '@/src/core/chains'
 import { fetchAllTransactionHistory, type TransactionHistoryItem } from '@/src/core/history'
@@ -70,7 +71,7 @@ export function PortfolioActivity({ portfolio }: { portfolio: Portfolio | null }
   if (!items.length) {
     return (
       <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
-        {others?.key === key ? 'No activity yet.' : <><Loader2 className="h-4 w-4 animate-spin" /> Reading activity on every network…</>}
+        {others?.key === key ? 'No activity yet.' : <Loading label="Reading activity on every network" />}
       </div>
     )
   }

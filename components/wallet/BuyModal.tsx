@@ -7,6 +7,7 @@
  * from someone who has it, and swapping what the account already holds.
  */
 
+import { CtaButton } from '@/components/motion/CtaButton'
 import { BubblePanel } from '@/components/gfx/Bubble'
 import { ArrowDownLeft, ArrowLeft, ArrowLeftRight, ExternalLink, Info } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -92,9 +93,9 @@ function Option({ icon, title, text, action, onClick }: { icon: React.ReactNode;
         <p className="text-sm font-semibold">{title}</p>
       </div>
       <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{text}</p>
-      <button type="button" onClick={onClick} disabled={!onClick} className="mt-3 h-10 w-full rounded-xl bg-foreground text-sm font-semibold text-background hover:opacity-90 disabled:opacity-40">
+      <CtaButton onClick={onClick} disabled={!onClick} className="mt-3 h-10 w-full text-sm" size="sm">
         {action}
-      </button>
+      </CtaButton>
     </BubblePanel>
   )
 }

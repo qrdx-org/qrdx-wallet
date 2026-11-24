@@ -7,8 +7,9 @@
  * keep working after the Doomsday Protocol stops ECDSA.
  */
 
+import { Loading, Spinner } from '@/components/motion/Loading'
 import { useEffect, useState } from 'react'
-import { ArrowRight, CheckCircle2, Clock, KeyRound, Loader2, ShieldAlert, ShieldCheck, Siren } from 'lucide-react'
+import { ArrowRight, CheckCircle2, Clock, KeyRound, ShieldAlert, ShieldCheck, Siren } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { isQrdxChain } from '@/src/core/chains'
 import { weiToEth } from '@/src/core/ethereum'
@@ -136,7 +137,7 @@ export function QuantumSafetyPage({ onBack }: { onBack: () => void }) {
         <Notice>{readError}</Notice>
       ) : !auth || !state ? (
         <p className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading {short(classic || '0x')}…
+          <Loading label={`Reading ${short(classic || '0x')}`} />
         </p>
       ) : (
         <>
@@ -158,7 +159,7 @@ export function QuantumSafetyPage({ onBack }: { onBack: () => void }) {
           {state.kind === 'unprotected' && (
             <div className="space-y-2">
               {sent ? (
-                <Notice icon={<Loader2 className="h-4 w-4 animate-spin" />}>
+                <Notice icon={<Spinner size={16} />}>
                   Sent ({sent.slice(0, 10)}…). The binding runs at the start of the block after the one that includes it; this page updates when it shows.
                 </Notice>
               ) : triggered ? null : !canPay ? (

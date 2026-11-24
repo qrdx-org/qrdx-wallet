@@ -1,8 +1,9 @@
 'use client'
 
+import { Loading } from '@/components/motion/Loading'
 import { useEffect, useMemo, useState } from 'react'
 import { CoinLogo, isVerifiedToken } from './CoinLogo'
-import { TrendingUp, TrendingDown, ChevronRight, Loader2 } from 'lucide-react'
+import { TrendingUp, TrendingDown, ChevronRight } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { formatFiat as formatUsd } from '@/src/core/fiat'
 import { tokenImages } from '@/src/core/profiles'
@@ -153,8 +154,7 @@ export function TokenList({ pinnedSymbols, onViewAll, onSelect }: TokenListProps
   if (balancesLoading && tokens.length === 0) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-sm text-muted-foreground">Loading tokens...</span>
+        <Loading label="Loading tokens" />
       </div>
     )
   }

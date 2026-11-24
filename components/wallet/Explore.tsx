@@ -1,7 +1,8 @@
 'use client'
 
+import { Loading } from '@/components/motion/Loading'
 import { useEffect, useState } from 'react'
-import { ExternalLink, Flame, Loader2, Rocket, TrendingDown, TrendingUp } from 'lucide-react'
+import { ExternalLink, Flame, Rocket, TrendingDown, TrendingUp } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { isQrdxChain } from '@/src/core/chains'
 import { COINGECKO_API } from '@/src/core/prices'
@@ -176,7 +177,7 @@ export function Explore({ onOpenToken }: { onOpenToken: (token: Token) => void }
   if (!current)
     return (
       <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading markets…
+        <Loading label="Loading markets" />
       </div>
     )
 

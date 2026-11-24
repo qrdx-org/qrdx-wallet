@@ -36,5 +36,10 @@ export default defineConfig([
     // Installed from ReactDrops with shadcn (soap-bubble, liquid-glass-logo): kept as delivered.
     'components/soap-bubble/**',
     'components/liquid-glass-logo*',
+    // Installed from React Bits with shadcn: kept as delivered (typed by their .d.ts files).
+    'components/LatticeLoader.jsx',
+    'components/SlideCommit.jsx',
+    'components/SpecularButton.jsx',
+    'components/ReflectiveCard.jsx',
   ]),
 ])

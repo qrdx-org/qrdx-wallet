@@ -5,9 +5,10 @@
  * Revoke for each (src/core/approvals.ts).
  */
 
+import { Loading, Spinner } from '@/components/motion/Loading'
 import { BubblePanel } from '@/components/gfx/Bubble'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ExternalLink, Loader2, RefreshCw, ShieldAlert, ShieldCheck } from 'lucide-react'
+import { ExternalLink, RefreshCw, ShieldAlert, ShieldCheck } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { portfolioChains } from '@/src/core/portfolio'
 import { approvalsSupported, fetchApprovals, revokeCall, UNLIMITED, type Approval } from '@/src/core/approvals'
@@ -125,7 +126,7 @@ export function ApprovalsPage({ onBack }: { onBack: () => void }) {
             <BubblePanel className="space-y-0.5 rounded-2xl glass p-1.5" radius={20}>
               {(!s || s.status === 'loading') && (
                 <p className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading your transactions…
+                  <Loading label="Reading your transactions" />
                 </p>
               )}
               {s?.status === 'error' && <p className="p-3 text-xs text-muted-foreground">Could not read {chain.name}&apos;s explorer: {s.message}</p>}
@@ -160,7 +161,7 @@ export function ApprovalsPage({ onBack }: { onBack: () => void }) {
                           disabled={!!busy}
                           className="flex h-8 shrink-0 items-center rounded-lg border border-border px-3 text-xs font-medium hover:bg-accent/50 disabled:opacity-50"
                         >
-                          {busy === key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Revoke'}
+                          {busy === key ? <Spinner size={14} /> : 'Revoke'}
                         </button>
                       )}
                     </div>

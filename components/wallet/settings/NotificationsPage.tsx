@@ -1,5 +1,6 @@
 'use client'
 
+import { CtaButton } from '@/components/motion/CtaButton'
 import { BubblePanel } from '@/components/gfx/Bubble'
 import { useMemo, useState, type ReactNode } from 'react'
 import { BellOff, Plus, X } from 'lucide-react'
@@ -130,9 +131,9 @@ export function NotificationsPage({ header }: { header: ReactNode }) {
               aria-label="Alert price in USD"
               className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-sm tabular-nums"
             />
-            <button type="button" onClick={addAlert} disabled={!canAdd} className="flex h-10 items-center gap-1.5 rounded-xl bg-foreground px-3 text-sm font-semibold text-background disabled:opacity-40">
+            <CtaButton onClick={addAlert} disabled={!canAdd} className="h-10 px-3 text-sm" size="sm">
               <Plus className="h-4 w-4" /> Add
-            </button>
+            </CtaButton>
           </div>
           <p className="mt-1.5 text-[10px] text-muted-foreground">
             {current != null ? `${symbol} is at ${formatFiat(current)} now. ` : ''}An alert fires once, while the wallet is open; prices are compared in USD.

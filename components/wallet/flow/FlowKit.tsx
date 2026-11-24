@@ -12,6 +12,8 @@
 
 import { useBubble } from '@/components/gfx/Bubble'
 import { SoapBubbleButton } from '@/components/soap-bubble'
+import { CtaButton } from '@/components/motion/CtaButton'
+import { Spinner } from '@/components/motion/Loading'
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   AlertCircle,
@@ -21,7 +23,6 @@ import {
   Eye,
   EyeOff,
   FileJson,
-  Loader2,
   Upload,
   X,
 } from 'lucide-react'
@@ -148,7 +149,6 @@ export function PrimaryButton({
   variant?: 'primary' | 'outline' | 'danger'
 }) {
   const styles = {
-    primary: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_10px_30px_-14px_hsl(var(--foreground)/0.6)]',
     outline: 'glass border hover:bg-accent/50 hover:border-primary/30',
     danger: 'bg-red-600 hover:bg-red-600/90 text-white',
   }
@@ -161,9 +161,17 @@ export function PrimaryButton({
         disabled={disabled || loading}
         className="!flex w-full !min-h-12 items-center text-base font-semibold"
       >
-        {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+        {loading && <Spinner size={14} label="Working" className="mr-2" />}
         {children}
       </SoapBubbleButton>
+    )
+  // The normal look's main action: a specular glass button (components/motion/CtaButton.tsx).
+  if (variant === 'primary')
+    return (
+      <CtaButton type={type} onClick={onClick} disabled={disabled || loading} className="w-full h-12 text-base">
+        {loading && <Spinner size={14} label="Working" />}
+        {children}
+      </CtaButton>
     )
   return (
     <Button
@@ -176,7 +184,7 @@ export function PrimaryButton({
         styles[variant]
       )}
     >
-      {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+      {loading && <Spinner size={14} label="Working" className="mr-2" />}
       {children}
     </Button>
   )

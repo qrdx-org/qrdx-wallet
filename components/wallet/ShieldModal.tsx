@@ -11,6 +11,7 @@
  * the quantum-safe one.
  */
 
+import { CtaButton } from '@/components/motion/CtaButton'
 import { BubblePanel } from '@/components/gfx/Bubble'
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Shield, ShieldCheck, Send } from 'lucide-react'
@@ -113,13 +114,10 @@ export function ShieldModal({ onClose, onSend }: ShieldModalProps) {
               classic account to the quantum-safe one protects it now.
             </p>
             {onSend && (
-              <button
-                type="button"
-                onClick={onSend}
-                className="w-full h-10 rounded-xl bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center justify-center gap-2"
-              >
+              <CtaButton
+                onClick={onSend} className="w-full h-10 text-sm" size="sm">
                 <Send className="h-4 w-4" /> Send to my quantum-safe account
-              </button>
+              </CtaButton>
             )}
             <p className="text-[10px] text-muted-foreground mt-2 font-mono break-all">
               {currentWallet.pqAddress}

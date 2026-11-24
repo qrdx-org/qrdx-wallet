@@ -14,8 +14,10 @@
  * network; without it the swap still works on the node alone.
  */
 
+import { CtaButton } from '@/components/motion/CtaButton'
+import { Spinner } from '@/components/motion/Loading'
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDownUp, ArrowLeft, ChevronDown, Loader2, Repeat, Search, ShieldCheck } from 'lucide-react'
+import { ArrowDownUp, ArrowLeft, ChevronDown, Repeat, Search, ShieldCheck } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { isQrdxChain } from '@/src/core/chains'
 import { weiToEth } from '@/src/core/ethereum'
@@ -377,7 +379,7 @@ export function SwapModal({ onClose, initialFrom, elsewhere = [], onElsewhere }:
               </div>
               <SidePanel label="You receive" asset={to} onPick={() => setPicking('to')} usdLine={usdOf(toId, quote?.amount_out)}>
                 <div className={cn('num h-12 truncate text-right text-3xl font-semibold leading-[3rem]', quote ? 'text-foreground' : 'text-muted-foreground/40')}>
-                  {quoting ? <Loader2 className="ml-auto mt-3 h-6 w-6 animate-spin text-muted-foreground" /> : quote ? fmtSize(quote.amount_out) : '0'}
+                  {quoting ? <Spinner size={24} className="ml-auto mt-3 text-muted-foreground" /> : quote ? fmtSize(quote.amount_out) : '0'}
                 </div>
               </SidePanel>
 
@@ -428,14 +430,11 @@ export function SwapModal({ onClose, initialFrom, elsewhere = [], onElsewhere }:
                 </div>
                 {quote && Number(quote.unfilled_in) > 0 && <p className="text-[11px] text-amber-500">Only {quote.amount_in} of {amount} can fill at current liquidity.</p>}
               </div>
-              <button
-                type="button"
+              <CtaButton
                 onClick={review}
-                disabled={!!problem}
-                className="h-12 w-full rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
+                disabled={!!problem} className="h-12 w-full text-[15px]">
                 {problem ?? `Review swap`}
-              </button>
+              </CtaButton>
             </div>
 
             {error && <p className="rounded-xl bg-red-500/10 px-3 py-2 text-[11px] text-red-500">{error}</p>}

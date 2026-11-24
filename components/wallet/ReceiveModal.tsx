@@ -9,6 +9,7 @@ import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { chainFamily, isQrdxChain } from '@/src/core/chains'
 import { NetworkLogo } from './CoinLogo'
 import { usePrimaryName } from './useQnsName'
+import { WEB_WALLET, paymentLink, paymentRequest } from '@/src/core/payment-uri'
 
 interface ReceiveModalProps {
   ethAddress: string
@@ -23,7 +24,7 @@ interface ReceiveModalProps {
  * Offering an address the network cannot use would invite a lost transfer.
  */
 export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: ReceiveModalProps) {
-  const { activeChain, activeAddress } = useWallet()
+  const { activeChain, activeAddress, balances, pqBalances } = useWallet()
   const family = chainFamily(activeChain)
   const qrdx = isQrdxChain(activeChain)
   // The account's primary QRDX name: senders on QRDX can type it instead of an address.
@@ -32,18 +33,37 @@ export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: Re
   const [copied, setCopied] = useState(false)
 
   const address = family !== 'evm' ? activeAddress : qrdx && kind === 'pq' ? pqAddress : ethAddress
+
+  // Request an amount (EVM networks and QRDX): the QR becomes a payment request the payer's
+  // wallet opens with the amount, its cost and a slide to pay (src/core/payment-uri.ts).
+  const [requesting, setRequesting] = useState(false)
+  const [reqAmount, setReqAmount] = useState('')
+  const [reqToken, setReqToken] = useState('')
+  const [reqNote, setReqNote] = useState('')
+  const assets = (qrdx && kind === 'pq' ? pqBalances : balances).filter((b, i, all) => all.findIndex((x) => x.address === b.address) === i)
+  const reqAsset = assets.find((b) => b.address === reqToken)
+  const reqSymbol = reqAsset?.symbol ?? activeChain.nativeCurrency.symbol
+  const amountOk = /^\d*\.?\d+$/.test(reqAmount.trim()) && Number(reqAmount) > 0
+  const requestLink =
+    requesting && amountOk && address && family === 'evm'
+      ? paymentLink(
+          paymentRequest({ to: address, chainId: activeChain.chainId, amount: reqAmount.trim(), token: reqToken || undefined, note: reqNote }),
+          typeof location !== 'undefined' && /^https?:$/.test(location.protocol) ? `${location.origin}/wallet` : WEB_WALLET
+        )
+      : null
+  const shared = requestLink ?? address
   const noun = family === 'bitcoin' ? 'Bitcoin' : family === 'solana' ? 'Solana' : qrdx && kind === 'pq' ? 'quantum-safe' : activeChain.name
 
   const handleCopy = () => {
-    if (!address) return
-    navigator.clipboard.writeText(address)
+    if (!shared) return
+    navigator.clipboard.writeText(shared)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
   const handleShare = async () => {
-    if (!address) return
-    if (navigator.share) await navigator.share({ text: address }).catch(() => undefined)
+    if (!shared) return
+    if (navigator.share) await navigator.share(requestLink ? { text: `Pay ${reqAmount.trim()} ${reqSymbol}`, url: requestLink } : { text: address! }).catch(() => undefined)
     else handleCopy()
   }
 
@@ -116,8 +136,14 @@ export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: Re
                     </span>
                   )}
                 </div>
+                {requestLink && (
+                  <p className="mb-3 text-center text-2xl font-semibold tracking-tight tabular-nums">
+                    {reqAmount.trim()} {reqSymbol}
+                    {reqNote.trim() && <span className="block text-xs font-normal text-muted-foreground">“{reqNote.trim().slice(0, 140)}”</span>}
+                  </p>
+                )}
                 <div className="relative p-3 bg-white rounded-2xl shadow-lg">
-                  <QRCodeSVG value={address} size={180} level="M" bgColor="#ffffff" fgColor="#000000" />
+                  <QRCodeSVG value={shared!} size={requestLink ? 200 : 180} level="M" bgColor="#ffffff" fgColor="#000000" />
                   {/* The code is always black on white, so its badge is too. */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="rounded-full bg-white p-1 text-black shadow-md">
@@ -126,6 +152,7 @@ export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: Re
                   </div>
                 </div>
                 <div className="mt-4 w-full">
+                  {requestLink && <p className="mb-2 text-center text-[11px] text-muted-foreground">A payment request: scanned by QRDX Wallet (or a phone&apos;s camera), it opens with the amount and a slide to pay.</p>}
                   <p className="mb-1 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Your {noun} address</p>
                   <p className="text-center font-mono text-[11px] text-foreground/80 break-all px-2 leading-relaxed">{address}</p>
                 </div>
@@ -142,7 +169,7 @@ export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: Re
                 ) : (
                   <>
                     <Copy className="h-4 w-4 mr-2" />
-                    Copy
+                    {requestLink ? 'Copy link' : 'Copy'}
                   </>
                 )}
               </Button>
@@ -152,6 +179,54 @@ export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: Re
               </Button>
             </div>
           </>
+        )}
+
+        {address && family === 'evm' && (
+          <Card className="glass border-border/50">
+            <CardContent className="p-3">
+              <button type="button" onClick={() => setRequesting((v) => !v)} aria-expanded={requesting} className="flex w-full items-center justify-between text-sm font-semibold">
+                Request an amount
+                <span className="text-xs font-normal text-muted-foreground">{requesting ? 'Hide' : 'QR with an amount'}</span>
+              </button>
+              {requesting && (
+                <div className="mt-3 space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      value={reqAmount}
+                      onChange={(e) => setReqAmount(e.target.value.replace(/[^\d.]/g, ''))}
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      aria-label="Amount to request"
+                      className="h-11 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-base tabular-nums outline-none focus:border-foreground/40"
+                    />
+                    <select
+                      value={reqToken}
+                      onChange={(e) => setReqToken(e.target.value)}
+                      aria-label="In"
+                      className="h-11 rounded-xl border border-border bg-background px-2 text-sm"
+                    >
+                      {assets.length === 0 && <option value="">{activeChain.nativeCurrency.symbol}</option>}
+                      {assets.map((b) => (
+                        <option key={b.address || 'native'} value={b.address}>
+                          {b.symbol}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <input
+                    value={reqNote}
+                    onChange={(e) => setReqNote(e.target.value.slice(0, 140))}
+                    placeholder="Note (optional): what it is for"
+                    aria-label="Note"
+                    className="h-10 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-foreground/40"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    {amountOk ? `The QR above now asks for ${reqAmount.trim()} ${reqSymbol} on ${activeChain.name}, paid to this address.` : 'Enter an amount and the QR above becomes a request for it.'}
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         <p className="px-1 text-[11px] text-muted-foreground text-center leading-relaxed">{note}</p>

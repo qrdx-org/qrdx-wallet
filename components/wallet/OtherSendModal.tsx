@@ -5,8 +5,9 @@
  * amount, review exactly what leaves and the network fee, then sign inside the wallet.
  */
 
+import { Spinner } from '@/components/motion/Loading'
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowUpRight, CheckCircle2, ClipboardPaste, ExternalLink, Loader2 } from 'lucide-react'
+import { ArrowUpRight, CheckCircle2, ClipboardPaste, ExternalLink } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { chainFamily } from '@/src/core/chains'
 import { formatAmount, formatUnitsExact } from '@/src/core/balances'
@@ -124,7 +125,7 @@ export function OtherSendModal({ initialToken, initialRecipient, onClose }: { in
       <SettingsPage title="Sent" onBack={onClose}>
         <div className="flex flex-col items-center gap-3 py-6 text-center">
           {sent.state === 'pending' && family === 'solana' ? (
-            <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
+            <Spinner size={40} className="text-muted-foreground" />
           ) : (
             <CheckCircle2 className={cn('h-10 w-10', sent.state === 'failed' ? 'text-red-500' : 'text-green-500')} />
           )}

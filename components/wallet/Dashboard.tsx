@@ -1,5 +1,8 @@
 'use client'
 
+import { PaySheet } from './pay/PaySheet'
+import { PayScanner } from './pay/PayScanner'
+import { parsePaymentQr, type ScannedPayment } from '@/src/core/payment-uri'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Lock, Settings as SettingsIcon, Copy, Check, Eye, EyeOff, Shield, ChevronDown, ScanLine } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -76,7 +79,7 @@ export function Dashboard() {
   const qrdx = isQrdxChain(activeChain)
   // What works here: everything on QRDX; sending, receiving and funding on other EVM networks;
   // sending and receiving on Bitcoin and Solana.
-  const actions: QuickActionType[] = qrdx ? ['send', 'receive', 'swap', 'shield', 'buy', 'trade', 'stake'] : family === 'evm' ? ['send', 'receive', 'buy'] : ['send', 'receive']
+  const actions: QuickActionType[] = qrdx ? ['send', 'receive', 'swap', 'pay', 'shield', 'buy', 'trade', 'stake'] : family === 'evm' ? ['send', 'receive', 'pay', 'buy'] : ['send', 'receive']
   useWalletNotifications()
   const [showAccounts, setShowAccounts] = useState(false)
   const [settingsPage, setSettingsPage] = useState<'main' | 'wallets' | 'quantum-safety'>('main')
@@ -125,6 +128,21 @@ export function Dashboard() {
     return action === 'send' || action === 'receive' ? action : null
   })
   const [addressMode, setAddressMode] = useState<'eth' | 'pq'>('eth')
+  // Paying a request: scanning for one, or one to pay (scanned, pasted, or the ?pay= link the
+  // wallet was opened with, as a phone's camera opens a request's QR).
+  const [pay, setPay] = useState<'scan' | (ScannedPayment & { amount: string }) | null>(() => {
+    if (typeof location === 'undefined') return null
+    const code = new URLSearchParams(location.search).get('pay')
+    const p = code ? parsePaymentQr(code) : null
+    return p?.amount ? (p as ScannedPayment & { amount: string }) : null
+  })
+  useEffect(() => {
+    // Once read, the link's request is not reopened by a reload.
+    if (typeof location === 'undefined' || !new URLSearchParams(location.search).has('pay')) return
+    const url = new URL(location.href)
+    url.searchParams.delete('pay')
+    history.replaceState(null, '', url.toString())
+  }, [])
   useEffect(() => {
     if (allNetworks && !activeModal && !tradeHolding && !isQrdxChain(activeChain)) setActiveChain(homeQrdxChain.id)
   }, [allNetworks, activeModal, tradeHolding, activeChain, homeQrdxChain]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -540,8 +558,14 @@ export function Dashboard() {
 
         {/* Quick Actions */}
         <QuickActions
-          onAction={(a) => (allNetworks && (a === 'send' || a === 'receive') ? setPicker(a) : (allNetworks && a === 'swap' && setActiveChain(homeQrdxChain.id), setActiveModal(a)))}
-          available={allNetworks ? ['send', 'receive', 'swap', 'shield', 'buy', 'trade', 'stake'] : actions}
+          onAction={(a) =>
+            a === 'pay'
+              ? setPay('scan')
+              : allNetworks && (a === 'send' || a === 'receive')
+                ? setPicker(a)
+                : (allNetworks && a === 'swap' && setActiveChain(homeQrdxChain.id), setActiveModal(a))
+          }
+          available={allNetworks ? ['send', 'receive', 'swap', 'pay', 'shield', 'buy', 'trade', 'stake'] : actions}
         />
 
         {(rc.linkPairing || rc.sessions.length > 0) && (
@@ -622,6 +646,8 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+      {pay === 'scan' && <PayScanner onRequest={setPay} onClose={() => setPay(null)} />}
+      {pay && pay !== 'scan' && <PaySheet request={pay} onClose={() => setPay(null)} />}
       {picker === 'send' && <HoldingPicker title="Send what?" portfolio={portfolio} onPick={sendFrom} onClose={() => setPicker(null)} />}
       {picker === 'receive' && <ReceiveNetworkPicker chains={chains} qrdx={homeQrdxChain} showTestnets={showTestnets} onPick={receiveOn} onClose={() => setPicker(null)} />}
       {showAccounts && (

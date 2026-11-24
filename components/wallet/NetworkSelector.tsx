@@ -1,5 +1,6 @@
 'use client'
 
+import { Spinner } from '@/components/motion/Loading'
 import { BubbleButton } from '@/components/gfx/Bubble'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -8,7 +9,6 @@ import {
   RefreshCw,
   ShieldAlert,
   WifiOff,
-  Loader2,
   Layers,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -114,7 +114,7 @@ export function NetworkSelector() {
         {allNetworks ? (
           <Layers className="h-3 w-3 text-muted-foreground" />
         ) : networkStatus.state === 'checking' ? (
-          <Loader2 className="h-2.5 w-2.5 animate-spin text-muted-foreground" />
+          <Spinner size={10} className="text-muted-foreground" />
         ) : (
           <span className={`h-2 w-2 rounded-full ${dot}`} />
         )}

@@ -258,6 +258,12 @@ input[type="number"] {
 .stagger > :nth-child(8) { animation-delay: 315ms; }
 .stagger > :nth-child(n + 9) { animation-delay: 360ms; }
 
+/* The icon-sized loader (components/motion/Loading.tsx): the lattice alone, its words for screen readers only. */
+.lattice-icon .lattice-loader__label,
+.lattice-icon .lattice-loader__timer {
+  display: none;
+}
+
 /* Rows that answer the finger: a press sinks them a little. */
 .press {
   transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease;

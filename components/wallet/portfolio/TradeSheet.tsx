@@ -8,8 +8,9 @@
  * options. The DEX's own site is linked too.
  */
 
+import { Loading, Spinner } from '@/components/motion/Loading'
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowLeft, CheckCircle2, ChevronDown, ChevronRight, ExternalLink, Loader2, Waypoints } from 'lucide-react'
+import { ArrowDown, ArrowLeft, CheckCircle2, ChevronDown, ChevronRight, ExternalLink, Waypoints } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { chainFamily, type ChainToken } from '@/src/core/chains'
 import { formatAmount, formatUnitsExact } from '@/src/core/balances'
@@ -72,7 +73,7 @@ export function TradeSheet({ holding, onClose, onDone }: { holding: Holding; onC
 function BridgeOffer({ holding, route, onBridge, compact }: { holding: Holding; route: BridgeRoute | null | undefined; onBridge: () => void; compact?: boolean }) {
   const { homeQrdxChain } = useWallet()
   const chain = holding.chain
-  if (route === undefined) return compact ? null : <p className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> Checking what {homeQrdxChain.name} bridges…</p>
+  if (route === undefined) return compact ? null : <p className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground"><Loading label={`Checking what ${homeQrdxChain.name} bridges`} /></p>
   if (route)
     return (
       <button type="button" onClick={onBridge} className="flex w-full items-center gap-3 rounded-xl border border-border/60 p-3 text-left hover:bg-accent/40">
@@ -257,7 +258,7 @@ function AggregatorSwap({
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               </button>
               <div className={cn('h-12 min-w-0 flex-1 truncate text-right text-3xl font-semibold leading-[3rem] tabular-nums', quote ? 'text-foreground' : 'text-muted-foreground/40')}>
-                {busy === 'quote' ? <Loader2 className="ml-auto mt-3 h-6 w-6 animate-spin text-muted-foreground" /> : quote ? formatAmount(quote.toAmount, to.decimals, 6) : '0'}
+                {busy === 'quote' ? <Spinner size={24} className="ml-auto mt-3 text-muted-foreground" /> : quote ? formatAmount(quote.toAmount, to.decimals, 6) : '0'}
               </div>
             </div>
             <div className="mt-0.5 text-right text-[10px] text-muted-foreground tabular-nums">{quote && market.to ? `≈ ${formatFiat(out * market.to)}` : ''}</div>

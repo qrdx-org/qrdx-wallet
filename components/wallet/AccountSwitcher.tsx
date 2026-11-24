@@ -1,5 +1,6 @@
 'use client'
 
+import { CtaButton } from '@/components/motion/CtaButton'
 import { useEffect, useState } from 'react'
 import { Check, Copy, Plus, Settings2 } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -135,9 +136,9 @@ export function AccountSwitcher({ onClose, onManage }: { onClose: () => void; on
       {error && <p className="mt-3 text-xs text-foreground">{error}</p>}
       <p className="mt-2 text-[10px] text-muted-foreground">Values are the native {native.symbol} on {activeChain.name}, both addresses together.</p>
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <button type="button" onClick={() => void add()} disabled={!!busy} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-foreground text-sm font-semibold text-background hover:opacity-90 disabled:opacity-50">
+        <CtaButton onClick={() => void add()} disabled={!!busy} className="h-11 text-sm" size="sm">
           <Plus className="h-4 w-4" /> {busy === 'add' ? 'Adding…' : 'Add account'}
-        </button>
+        </CtaButton>
         <button type="button" onClick={onManage} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-border text-sm font-medium hover:bg-accent/50">
           <Settings2 className="h-4 w-4" /> Manage
         </button>

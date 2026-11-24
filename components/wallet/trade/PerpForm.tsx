@@ -1,5 +1,6 @@
 'use client'
 
+import { CtaButton } from '@/components/motion/CtaButton'
 import { useEffect, useState } from 'react'
 import { spendable } from '@/src/core/fee-reserve'
 import { dec, div, isAmount, mul, round, str } from '@/src/core/trade/decimal'
@@ -283,8 +284,7 @@ function LeverageSheet({
         <p className="text-[10.5px] text-muted-foreground">
           On chain now: {current ? `${current.leverage}× ${current.mode}` : effective ? `not set; the node applies ${round(effective, 2)}×` : 'not set; the node default applies'}.
         </p>
-        <button
-          type="button"
+        <CtaButton
           disabled={!ok}
           onClick={() =>
             ask({
@@ -293,11 +293,9 @@ function LeverageSheet({
               label: `Set ${market.id} leverage ${n}× ${mode}`,
               onDone,
             })
-          }
-          className="h-11 w-full rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50"
-        >
+          } className="h-11 w-full text-sm" size="sm">
           Set {ok ? `${n}×` : ''} {mode}
-        </button>
+        </CtaButton>
       </div>
     </Sheet>
   )
@@ -373,8 +371,7 @@ export function CollateralSheet({
           }
         />
         {perp && !perp.collateral_token && <p className="text-[11px] text-amber-500">This node has no perps collateral token configured.</p>}
-        <button
-          type="button"
+        <CtaButton
           disabled={!valid || !!over}
           onClick={() =>
             ask({
@@ -387,11 +384,9 @@ export function CollateralSheet({
                 onDone()
               },
             })
-          }
-          className="h-11 w-full rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50"
-        >
+          } className="h-11 w-full text-sm" size="sm">
           {over ? `Only ${fixed(perp!.withdrawable, 2)} is free` : dir === 'deposit' ? 'Deposit' : 'Withdraw'}
-        </button>
+        </CtaButton>
       </div>
     </Sheet>
   )

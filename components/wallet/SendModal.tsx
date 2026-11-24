@@ -1,12 +1,13 @@
 'use client'
 
+import { CtaButton } from '@/components/motion/CtaButton'
+import { Spinner } from '@/components/motion/Loading'
 import { CoinLogo, isVerifiedToken } from './CoinLogo'
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
   ArrowLeft,
   ArrowUpRight,
   AlertTriangle,
-  Loader2,
   Search,
   Fuel,
   Wallet,
@@ -646,7 +647,7 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
 
             {recipientCheck.state === 'resolving' && (
               <p className="flex items-center gap-1.5 mt-1.5 text-[10px] text-muted-foreground">
-                <Loader2 className="h-3 w-3 shrink-0 animate-spin" />
+                <Spinner size={12} className="shrink-0" />
                 <span>Looking up {typedName}</span>
               </p>
             )}
@@ -767,7 +768,7 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
             </div>
             <span className="text-[11px] font-medium">
               {txStatus === 'estimating' ? (
-                <Loader2 className="h-3 w-3 animate-spin inline" />
+                <Spinner size={12} />
               ) : gasEstimate ? (
                 <>~{gasEstimate} {activeChain.nativeCurrency?.symbol ?? 'ETH'}</>
               ) : (
@@ -850,20 +851,18 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
           </p>
         )}
 
-        <Button
+        <CtaButton
           onClick={() => setReviewing(true)}
-          disabled={!canSend}
-          className="w-full h-12 font-semibold text-base rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 disabled:opacity-40 disabled:shadow-none transition-all"
-        >
+          disabled={!canSend} className="w-full h-12 text-base">
           {txStatus === 'sending' ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
+            <Spinner size={20} />
           ) : (
             <>
               <ArrowUpRight className="h-5 w-5 mr-2" />
               Review send
             </>
           )}
-        </Button>
+        </CtaButton>
       </div>
       {reviewing && recipientCheck.state === 'valid' && quote && (
         <ConfirmSheet

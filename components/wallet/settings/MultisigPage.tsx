@@ -9,8 +9,9 @@
  * whoever holds enough signatures submits. Any member's wallet can do any step.
  */
 
+import { Spinner } from '@/components/motion/Loading'
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Circle, FileUp, KeyRound, Loader2, Plus, Send, Share2, Trash2, Users } from 'lucide-react'
+import { CheckCircle2, Circle, FileUp, KeyRound, Plus, Send, Share2, Trash2, Users } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { isQrdxChain } from '@/src/core/chains'
 import { ExchangeOp, exchangeSigningBytes, type ExchangeOpName, type JsonValue } from '@/src/core/exchange-tx'
@@ -593,7 +594,7 @@ function RequestView({
           </PrimaryButton>
         )}
         {submitted && (
-          <Notice tone={submitted.status === 'done' ? 'success' : submitted.status === 'failed' ? 'warning' : 'info'} icon={submitted.status === 'pending' ? <Loader2 className="h-4 w-4 animate-spin" /> : undefined}>
+          <Notice tone={submitted.status === 'done' ? 'success' : submitted.status === 'failed' ? 'warning' : 'info'} icon={submitted.status === 'pending' ? <Spinner size={16} /> : undefined}>
             {submitted.status === 'pending'
               ? (submitted.error ?? `Submitted (${submitted.hash.slice(0, 10)}…). Waiting for the next block.`)
               : submitted.status === 'done'
