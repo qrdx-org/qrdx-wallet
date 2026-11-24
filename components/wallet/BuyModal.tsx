@@ -7,6 +7,7 @@
  * from someone who has it, and swapping what the account already holds.
  */
 
+import { BubblePanel } from '@/components/gfx/Bubble'
 import { ArrowDownLeft, ArrowLeft, ArrowLeftRight, ExternalLink, Info } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { isQrdxChain } from '@/src/core/chains'
@@ -85,7 +86,7 @@ export function BuyModal({ onClose, onReceive, onSwap }: BuyModalProps) {
 
 function Option({ icon, title, text, action, onClick }: { icon: React.ReactNode; title: string; text: string; action: string; onClick?: () => void }) {
   return (
-    <div className="rounded-xl glass p-4">
+    <BubblePanel className="rounded-xl glass p-4" radius={16}>
       <div className="flex items-center gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent">{icon}</span>
         <p className="text-sm font-semibold">{title}</p>
@@ -94,6 +95,6 @@ function Option({ icon, title, text, action, onClick }: { icon: React.ReactNode;
       <button type="button" onClick={onClick} disabled={!onClick} className="mt-3 h-10 w-full rounded-xl bg-foreground text-sm font-semibold text-background hover:opacity-90 disabled:opacity-40">
         {action}
       </button>
-    </div>
+    </BubblePanel>
   )
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import { BubbleButton, BubblePanel } from '@/components/gfx/Bubble'
 import { explorerAddressUrl } from '@/src/core/other-chains'
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowDownLeft, ArrowLeft, ArrowLeftRight, ArrowUpRight, EyeOff, Eye, ExternalLink } from 'lucide-react'
@@ -134,13 +135,13 @@ export function TokenDetail({ token, onClose, onAction }: { token: Token; onClos
             ['receive', 'Receive', ArrowDownLeft],
             ['swap', 'Swap', ArrowLeftRight],
           ] as const).filter(([action]) => qrdx || action !== 'swap').map(([action, label, Icon]) => (
-            <button key={action} type="button" onClick={() => onAction(action, token)} className="flex flex-col items-center gap-1.5 rounded-xl border border-border/60 py-3 text-xs font-medium hover:bg-accent/40">
+            <BubbleButton key={action} onClick={() => onAction(action, token)} className="flex flex-col items-center gap-1.5 rounded-xl border border-border/60 py-3 text-xs font-medium hover:bg-accent/40">
               <Icon className="h-4 w-4" /> {label}
-            </button>
+            </BubbleButton>
           ))}
         </div>
 
-        <section className="rounded-xl glass p-3">
+        <BubblePanel className="rounded-xl glass p-3" bubbleClassName="p-3" radius={16}>
           <p className="mb-2 text-xs font-semibold">Your balance</p>
           <p className="text-xl font-bold tabular-nums">{token.value || `${token.balance} ${token.symbol}`}</p>
           {token.value && (
@@ -154,9 +155,9 @@ export function TokenDetail({ token, onClose, onAction }: { token: Token; onClos
               <Row k="EVM address" v={`${classic ? formatAmount(classic.rawBalance, classic.decimals) : '0'} ${token.symbol}`} />
             </div>
           )}
-        </section>
+        </BubblePanel>
 
-        <section className="rounded-xl glass p-3 text-[11px]">
+        <BubblePanel as="section" className="rounded-xl glass p-3 text-[11px]" radius={16}>
           <p className="mb-2 text-xs font-semibold">About</p>
           <div className="space-y-1.5 tabular-nums">
             <Row k="Network" v={activeChain.name} />
@@ -183,9 +184,9 @@ export function TokenDetail({ token, onClose, onAction }: { token: Token; onClos
               <ExternalLink className="h-3.5 w-3.5" /> View on the explorer
             </a>
           )}
-        </section>
+        </BubblePanel>
 
-        <section className="rounded-xl glass p-3">
+        <BubblePanel as="section" className="rounded-xl glass p-3" radius={16}>
           <p className="mb-2 text-xs font-semibold">Activity</p>
           {activity.length === 0 ? (
             <p className="text-[11px] text-muted-foreground">No {token.symbol} activity on this account yet.</p>
@@ -203,7 +204,7 @@ export function TokenDetail({ token, onClose, onAction }: { token: Token; onClos
               ))}
             </div>
           )}
-        </section>
+        </BubblePanel>
       </div>
     </div>
   )

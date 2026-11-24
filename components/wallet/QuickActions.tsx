@@ -9,7 +9,10 @@ import {
   Shield,
   TrendingUp,
   Landmark,
+  LayoutGrid,
   X } from 'lucide-react'
+import { useBubble } from '@/components/gfx/Bubble'
+import { SoapBubbleIconButton } from '@/components/soap-bubble'
 
 export type QuickActionType = 'send' | 'receive' | 'swap' | 'buy' | 'shield' | 'trade' | 'stake'
 
@@ -81,7 +84,41 @@ function FolderMiniIcon({ gradient }: { gradient: string }) {
   )
 }
 
+/** In the liquid bubble look: a round soap bubble holding the icon, its label underneath. */
+function BubbleTile({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-center gap-1.5 py-1.5">
+      <SoapBubbleIconButton aria-label={label} onClick={onClick} className="text-foreground" style={{ fontSize: 18 }}>
+        {children}
+      </SoapBubbleIconButton>
+      <span className="text-[10px] font-medium text-muted-foreground">{label}</span>
+    </div>
+  )
+}
+
+function ActionTile({ action, onClick }: { action: QuickAction; onClick: () => void }) {
+  const bubble = useBubble()
+  if (bubble.on)
+    return (
+      <BubbleTile label={action.label} onClick={onClick}>
+        {action.icon}
+      </BubbleTile>
+    )
+  return (
+    <button
+      onClick={onClick}
+      className="glass group flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl hover:border-primary/30 hover:bg-primary/5 transition-all"
+    >
+      <div className={`h-9 w-9 rounded-lg bg-gradient-to-br ${action.gradient} flex items-center justify-center text-primary-foreground shadow-sm group-hover:scale-105 transition-transform`}>
+        {action.icon}
+      </div>
+      <span className="text-[10px] font-medium text-muted-foreground group-hover:text-foreground transition-colors">{action.label}</span>
+    </button>
+  )
+}
+
 export function QuickActions({ onAction, available }: QuickActionsProps) {
+  const bubble = useBubble()
   const [folderOpen, setFolderOpen] = useState(false)
   const shown = (a: QuickAction) => !available || available.includes(a.key)
   // A folder of one is a detour: that action joins the main row.
@@ -95,20 +132,16 @@ export function QuickActions({ onAction, available }: QuickActionsProps) {
       {/* Main row: 3 actions + folder */}
       <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
         {main.map((action) => (
-          <button
-            key={action.key}
-            onClick={() => onAction?.(action.key)}
-            className="glass group flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl hover:border-primary/30 hover:bg-primary/5 transition-all"
-          >
-            <div className={`h-9 w-9 rounded-lg bg-gradient-to-br ${action.gradient} flex items-center justify-center text-primary-foreground shadow-sm group-hover:scale-105 transition-transform`}>
-              {action.icon}
-            </div>
-            <span className="text-[10px] font-medium text-muted-foreground group-hover:text-foreground transition-colors">{action.label}</span>
-          </button>
+          <ActionTile key={action.key} action={action} onClick={() => onAction?.(action.key)} />
         ))}
 
         {/* Folder button */}
-        {folder.length > 0 && (
+        {folder.length > 0 && bubble.on && (
+          <BubbleTile label="More" onClick={() => setFolderOpen(!folderOpen)}>
+            {folderOpen ? <X /> : <LayoutGrid />}
+          </BubbleTile>
+        )}
+        {folder.length > 0 && !bubble.on && (
         <button
           onClick={() => setFolderOpen(!folderOpen)}
           className={`glass group flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl transition-all ${
@@ -135,19 +168,14 @@ export function QuickActions({ onAction, available }: QuickActionsProps) {
       {folderOpen && (
         <div className="grid grid-cols-4 gap-1.5 px-0 animate-in slide-in-from-top-2 fade-in duration-200">
           {folder.map((action) => (
-            <button
+            <ActionTile
               key={action.key}
+              action={action}
               onClick={() => {
                 onAction?.(action.key)
                 setFolderOpen(false)
               }}
-              className="glass group flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl hover:border-primary/30 hover:bg-primary/5 transition-all"
-            >
-              <div className={`h-9 w-9 rounded-lg bg-gradient-to-br ${action.gradient} flex items-center justify-center text-primary-foreground shadow-sm group-hover:scale-105 transition-transform`}>
-                {action.icon}
-              </div>
-              <span className="text-[10px] font-medium text-muted-foreground group-hover:text-foreground transition-colors">{action.label}</span>
-            </button>
+            />
           ))}
         </div>
       )}

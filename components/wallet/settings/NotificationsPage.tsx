@@ -1,5 +1,6 @@
 'use client'
 
+import { BubblePanel } from '@/components/gfx/Bubble'
 import { useMemo, useState, type ReactNode } from 'react'
 import { BellOff, Plus, X } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -69,7 +70,7 @@ export function NotificationsPage({ header }: { header: ReactNode }) {
           </p>
         )}
 
-        <div className="rounded-xl glass p-1.5">
+        <BubblePanel className="rounded-xl glass p-1.5" radius={16}>
           <Toggle label="Transactions" description="Funds received, and your sends when they confirm or fail" checked={prefs.transactions} onChange={(v) => void toggle('transactions', v)} />
           <Toggle label="Price alerts" description="When a token crosses a price you set below" checked={prefs.priceAlerts} onChange={(v) => void toggle('priceAlerts', v)} />
           <Toggle
@@ -78,9 +79,9 @@ export function NotificationsPage({ header }: { header: ReactNode }) {
             checked={prefs.security && permission === 'granted'}
             onChange={(v) => void toggle('security', v)}
           />
-        </div>
+        </BubblePanel>
 
-        <section className="rounded-xl glass p-3">
+        <BubblePanel as="section" className="rounded-xl glass p-3" radius={16}>
           <p className="mb-2 text-xs font-semibold">Price alerts</p>
           {prefs.alerts.length === 0 ? (
             <p className="text-[11px] text-muted-foreground">No alerts set.</p>
@@ -136,7 +137,7 @@ export function NotificationsPage({ header }: { header: ReactNode }) {
           <p className="mt-1.5 text-[10px] text-muted-foreground">
             {current != null ? `${symbol} is at ${formatFiat(current)} now. ` : ''}An alert fires once, while the wallet is open; prices are compared in USD.
           </p>
-        </section>
+        </BubblePanel>
       </div>
     </div>
   )

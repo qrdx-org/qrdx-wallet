@@ -5,6 +5,7 @@
  * market), and the account's holding on each network. Send, receive and trade start here.
  */
 
+import { BubbleButton, BubblePanel } from '@/components/gfx/Bubble'
 import { useEffect, useState } from 'react'
 import { ArrowDownLeft, ArrowLeft, ArrowLeftRight, ArrowUpRight, ShieldAlert } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -118,7 +119,7 @@ export function AssetPage({
       </div>
 
       <div className="flex-1 space-y-3 px-4 py-3">
-        <div className="rounded-xl glass p-3">
+        <BubblePanel className="rounded-xl glass p-3" radius={16}>
           {price != null ? (
             <>
               <div className="text-2xl font-bold tabular-nums"><RollingText text={formatFiatPrice(price)} /></div>
@@ -153,7 +154,7 @@ export function AssetPage({
           {(qrdx || (id && asset.listed) || tradeAsset) && (
             <RangeTabs className="mt-1" value={range} options={RANGES.map(([r]) => r)} onChange={setRange} />
           )}
-        </div>
+        </BubblePanel>
 
         {!readOnly && (
           <div className="grid grid-cols-3 gap-2">
@@ -164,9 +165,9 @@ export function AssetPage({
                 ['trade', 'Trade', ArrowLeftRight, () => act('trade')],
               ] as const
             ).map(([k, label, Icon, run]) => (
-              <button key={k} type="button" onClick={run} disabled={k === 'send' && holdings.length === 0} className="flex flex-col items-center gap-1.5 rounded-xl border border-border/60 py-3 text-xs font-medium hover:bg-accent/40 disabled:opacity-40">
+              <BubbleButton key={k} onClick={run} disabled={k === 'send' && holdings.length === 0} className="flex flex-col items-center gap-1.5 rounded-xl border border-border/60 py-3 text-xs font-medium hover:bg-accent/40 disabled:opacity-40">
                 <Icon className="h-4 w-4" /> {label}
-              </button>
+              </BubbleButton>
             ))}
           </div>
         )}
@@ -204,7 +205,7 @@ export function AssetPage({
           </section>
         )}
 
-        <section className="rounded-xl glass p-3">
+        <BubblePanel as="section" className="rounded-xl glass p-3" radius={16}>
           <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Your {asset.symbol}</h2>
           {asset.holdings.map((h) => (
             <div key={`${h.chain.id}:${h.address}:${h.credential ?? ''}`} className="flex items-center gap-2.5 py-1.5 text-xs">
@@ -222,10 +223,10 @@ export function AssetPage({
               </span>
             </div>
           ))}
-        </section>
+        </BubblePanel>
 
         {market && (
-          <section className="rounded-xl glass p-3">
+          <BubblePanel as="section" className="rounded-xl glass p-3" radius={16}>
             <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Market</h2>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
               {(
@@ -247,7 +248,7 @@ export function AssetPage({
               ))}
             </dl>
             <p className="mt-2 text-[9px] text-muted-foreground">Market data: CoinGecko</p>
-          </section>
+          </BubblePanel>
         )}
       </div>
     </div>

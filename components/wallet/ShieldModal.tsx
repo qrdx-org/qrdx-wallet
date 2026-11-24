@@ -11,6 +11,7 @@
  * the quantum-safe one.
  */
 
+import { BubblePanel } from '@/components/gfx/Bubble'
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Shield, ShieldCheck, Send } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -102,7 +103,7 @@ export function ShieldModal({ onClose, onSend }: ShieldModalProps) {
         </div>
 
         {isQrdxChain(activeChain) && currentWallet && (
-          <div className="rounded-xl glass p-4">
+          <BubblePanel className="rounded-xl glass p-4" radius={16}>
             <div className="flex items-center gap-2 text-sm font-semibold mb-1">
               <ShieldCheck className="h-4 w-4 text-primary" /> Protect your QRDX today
             </div>
@@ -123,7 +124,7 @@ export function ShieldModal({ onClose, onSend }: ShieldModalProps) {
             <p className="text-[10px] text-muted-foreground mt-2 font-mono break-all">
               {currentWallet.pqAddress}
             </p>
-          </div>
+          </BubblePanel>
         )}
 
         <Notice>

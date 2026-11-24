@@ -12,8 +12,8 @@ export const metadata: Metadata = {
   creator: 'QRDX Foundation',
   publisher: 'QRDX Foundation',
   manifest: '/manifest.json',
-  // The glass mark (scripts/icon): transparent everywhere but iOS, whose home screen needs the black
-  // tile (it fills transparent pixels with black).
+  // The app icons (192, 512, iPhone) are the mark in white on the wallet's black, framed on its
+  // optical centre (scripts/icon/app-icon.svg); the favicon is the glass mark (scripts/icon).
   icons: {
     icon: [
       { url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' },

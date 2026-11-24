@@ -7,7 +7,7 @@
 
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { ChevronDown, ChevronRight, Loader2, RefreshCw, TrendingDown, TrendingUp, X } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { formatFiat, formatFiatPrice } from '@/src/core/fiat'
 import { formatAmount } from '@/src/core/balances'
@@ -17,6 +17,7 @@ import { CoinLogo, NetworkLogo } from '../CoinLogo'
 import { PortfolioChart } from '../PortfolioChart'
 import { RangeTabs } from '@/components/motion/RangeTabs'
 import { RollingText } from '@/components/motion/RollingText'
+import { BubblePanel } from '@/components/gfx/Bubble'
 import { useValueHistory, type HistorySubject } from './useValueHistory'
 import type { ValueRange } from '@/src/core/portfolio-history'
 import { onTrustChange, setShowUnverified, showUnverified } from '@/src/core/token-trust'
@@ -74,7 +75,7 @@ export function PortfolioSummary({
   const pct = portfolio && portfolio.usd - portfolio.change24hUsd > 0 ? (portfolio.change24hUsd / (portfolio.usd - portfolio.change24hUsd)) * 100 : null
 
   return (
-    <Card className="glass-clear relative overflow-hidden">
+    <BubblePanel className="glass glass-clear relative overflow-hidden rounded-lg text-card-foreground shadow-sm" bubbleClassName="relative text-card-foreground">
       <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-foreground/30 to-transparent" />
       <CardContent className="relative p-4">
         <div className="mb-1 flex items-center justify-between">
@@ -126,7 +127,7 @@ export function PortfolioSummary({
           </p>
         )}
       </CardContent>
-    </Card>
+    </BubblePanel>
   )
 }
 

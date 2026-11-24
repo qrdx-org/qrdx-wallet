@@ -1,5 +1,7 @@
 'use client'
 
+import { BubblePanel, useBubble } from '@/components/gfx/Bubble'
+import { SoapBubbleToggle } from '@/components/soap-bubble'
 import { useState, type ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { ErrorBanner, PasswordField, PrimaryButton, Sheet } from '../flow/FlowKit'
@@ -56,7 +58,7 @@ export function Section({
           {action}
         </div>
       )}
-      <div className="rounded-2xl glass p-1.5 space-y-0.5">{children}</div>
+      <BubblePanel className="rounded-2xl glass p-1.5 space-y-0.5" radius={20}>{children}</BubblePanel>
     </section>
   )
 }
@@ -110,6 +112,9 @@ export function Toggle({
   label: string
   disabled?: boolean
 }) {
+  const bubble = useBubble()
+  if (bubble.on)
+    return <SoapBubbleToggle checked={checked} onCheckedChange={onChange} aria-label={label} disabled={disabled} scale={0.75} />
   return (
     <button
       type="button"

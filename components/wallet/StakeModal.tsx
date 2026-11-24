@@ -18,6 +18,7 @@
  * parameters, the chain spec's epoch length and the head's epoch.
  */
 
+import { BubblePanel } from '@/components/gfx/Bubble'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, ChevronDown, Clock, Coins, Hourglass, Landmark, Server, ShieldAlert, Undo2 } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -210,7 +211,7 @@ export function StakeModal({ onClose }: StakeModalProps) {
             </div>
 
             {snap.mine && (snap.mine.stakes.length > 0 || snap.mine.payouts.length > 0) && (
-              <section className="rounded-xl glass p-3 space-y-2.5">
+              <BubblePanel as="section" className="rounded-xl glass p-3 space-y-2.5" radius={16}>
                 <p className="text-xs font-semibold">Your stake</p>
                 {snap.mine.stakes.map((st) => (
                   <Position
@@ -237,7 +238,7 @@ export function StakeModal({ onClose }: StakeModalProps) {
                     </div>
                   )
                 })}
-              </section>
+              </BubblePanel>
             )}
 
             <section className="space-y-2">
@@ -281,11 +282,11 @@ export function StakeModal({ onClose }: StakeModalProps) {
               )}
             </div>
 
-            <div className="rounded-xl glass p-3 text-[11px] space-y-1 tabular-nums">
+            <BubblePanel className="rounded-xl glass p-3 text-[11px] space-y-1 tabular-nums" radius={16}>
               <Row k="Earns a year" v={yearlyWei !== null ? `${formatAmount(yearlyWei, 18, 4)} QRDX` : '—'} />
               <Row k="Joins the pool" v={snap.epoch != null ? `epoch ${(snap.epoch + snap.params.warmup_epochs + 1).toLocaleString()} · ${epochsAsTime(snap.params.warmup_epochs, epochMs)}` : epochsAsTime(snap.params.warmup_epochs, epochMs)} />
               <Row k="To unstake" v={epochsAsTime(unbondEpochs, epochMs)} />
-            </div>
+            </BubblePanel>
 
             <Notice icon={<ShieldAlert className="h-4 w-4 text-foreground/70" />}>
               Delegated QRDX earns only in epochs the validator&apos;s vote is on chain, and is slashed with its pool if the validator double signs or casts conflicting votes (half the
@@ -502,7 +503,7 @@ function RunValidator({
   const amountWei = AMOUNT_RE.test(amount) ? ethToWei(amount) : null
   const amountError = amountWei === null ? 'Enter an amount' : amountWei < minWei ? `At least ${Number(params.min_validator_stake).toLocaleString()} QRDX` : amountWei > balance ? 'More than your quantum-safe balance' : null
   return (
-    <section className="rounded-xl glass">
+    <BubblePanel as="section" className="rounded-xl glass" radius={16}>
       <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2 p-3 text-left">
         <Server className="h-3.5 w-3.5 text-foreground/70" />
         <span className="text-xs font-semibold flex-1">{own ? 'Your validator' : 'Run your own validator'}</span>
@@ -553,6 +554,6 @@ function RunValidator({
           )}
         </div>
       )}
-    </section>
+    </BubblePanel>
   )
 }

@@ -33,5 +33,8 @@ export default defineConfig([
     'App.tsx',
     'metro.config.js',
     'app.config.js',
+    // Installed from ReactDrops with shadcn (soap-bubble, liquid-glass-logo): kept as delivered.
+    'components/soap-bubble/**',
+    'components/liquid-glass-logo*',
   ]),
 ])

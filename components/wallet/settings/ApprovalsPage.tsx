@@ -5,6 +5,7 @@
  * Revoke for each (src/core/approvals.ts).
  */
 
+import { BubblePanel } from '@/components/gfx/Bubble'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ExternalLink, Loader2, RefreshCw, ShieldAlert, ShieldCheck } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -121,7 +122,7 @@ export function ApprovalsPage({ onBack }: { onBack: () => void }) {
                 </button>
               )}
             </div>
-            <div className="space-y-0.5 rounded-2xl glass p-1.5">
+            <BubblePanel className="space-y-0.5 rounded-2xl glass p-1.5" radius={20}>
               {(!s || s.status === 'loading') && (
                 <p className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading your transactions…
@@ -165,7 +166,7 @@ export function ApprovalsPage({ onBack }: { onBack: () => void }) {
                     </div>
                   )
                 })}
-            </div>
+            </BubblePanel>
           </section>
         )
       })}

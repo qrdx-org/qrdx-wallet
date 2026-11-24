@@ -1,0 +1,17 @@
+<!--
+  The QRDX app icon (PWA, iPhone home screen): the mark in white on the wallet's black, opaque.
+  Framed on the mark's optical centre (30.7, 29.7): between its bounding box's centre (31.4, 30.4)
+  and its weight, which the square body pulls up and left. The mark is 54 % of the icon's width.
+  scripts/icon/render-app-icon.sh makes the PNGs.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20.45 -21.45 102.3 102.3" width="1024" height="1024">
+  <defs>
+    <mask id="cut">
+      <rect x="-30" y="-30" width="160" height="160" fill="white"/>
+      <polygon points="22,25 40,25 66,57 48,57" fill="black"/>
+    </mask>
+  </defs>
+  <rect x="-20.45" y="-21.45" width="102.3" height="102.3" fill="#080808"/>
+  <rect x="7.5" y="9.5" width="41" height="38" rx="8" fill="none" stroke="#fafafa" stroke-width="7.5" mask="url(#cut)"/>
+  <polygon points="26,27 36,27 59,55 49,55" fill="#fafafa"/>
+</svg>

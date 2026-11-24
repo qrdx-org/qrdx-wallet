@@ -1,19 +1,36 @@
+"use client"
+
 import * as React from "react"
 import { cn } from "@/lib/utils"
+import { bubbleLayout, useBubble } from "@/components/gfx/Bubble"
+import { SoapBubbleSurface } from "@/components/soap-bubble"
 
 const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    className={cn(
-      "glass rounded-lg text-card-foreground shadow-sm",
-      className
-    )}
-    {...props}
-  />
-))
+>(({ className, ...props }, ref) => {
+  // In the liquid bubble look (components/gfx/Bubble.tsx) every card is a calm soap bubble.
+  const bubble = useBubble()
+  if (bubble.on)
+    return (
+      <SoapBubbleSurface
+        ref={ref as React.Ref<HTMLElement>}
+        radius={18}
+        className={cn("text-card-foreground", bubbleLayout(className))}
+        {...props}
+      />
+    )
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        "glass rounded-lg text-card-foreground shadow-sm",
+        className
+      )}
+      {...props}
+    />
+  )
+})
 Card.displayName = "Card"
 
 const CardHeader = React.forwardRef<

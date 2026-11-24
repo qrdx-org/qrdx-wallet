@@ -1,6 +1,5 @@
 'use client'
 
-import { QrdxMark } from '@/components/QrdxMark'
 import { useEffect, useState } from 'react'
 import {
   ArrowLeft,
@@ -30,10 +29,13 @@ import {
   ShieldCheck,
   KeySquare,
   BadgeCheck,
-  Eye } from 'lucide-react'
+  Eye,
+  Droplets } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useTheme } from 'next-themes'
+import { BubbleButton, BubblePanel, useBubble } from '@/components/gfx/Bubble'
+import { SoapBubbleIconButton, SoapBubbleToggle } from '@/components/soap-bubble'
 import { THEME_OPTIONS, type ThemeValue } from '@/components/theme-provider'
 import { CHAIN_LIST } from '@/src/core/chains'
 import { CAPABILITY_LABELS } from '@/src/core/permissions'
@@ -42,6 +44,8 @@ import { validateAddress } from '@/src/core/address'
 import { getChain, isQrdxChain } from '@/src/core/chains'
 import { isQnsName, resolveQnsName } from '@/src/core/qns'
 import { AccountsPage } from './settings/AccountsPage'
+import { Toggle } from './settings/shared'
+import { AboutLogo } from './AboutLogo'
 import { SecurityPage } from './settings/SecurityPage'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 
@@ -134,6 +138,36 @@ import { ApprovalsPage } from './settings/ApprovalsPage'
 import { WatchPage } from './settings/WatchPage'
 import { NetworksPage } from './settings/NetworksPage'
 import { ScreenStack } from '../motion/ScreenStack'
+
+/**
+ * The liquid bubble look: a live sample (always bubbles, so it shows what switching on does) and
+ * the switch. Light glass on the light theme, rainbow glass on the dark one.
+ */
+function LiquidBubbleOption() {
+  const bubble = useBubble()
+  const [demo, setDemo] = useState(true)
+  return (
+    <BubblePanel className="glass rounded-xl p-3" radius={16}>
+      <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2.5" aria-hidden>
+          <SoapBubbleIconButton aria-label="Sample bubble" tabIndex={-1} className="text-foreground" style={{ fontSize: 14 }}>
+            <Droplets />
+          </SoapBubbleIconButton>
+          <SoapBubbleToggle tabIndex={-1} checked={demo} onCheckedChange={setDemo} scale={0.75} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium">Liquid bubble</div>
+          <div className="text-[11px] leading-snug text-muted-foreground">Buttons, switches and panels become soap bubbles.</div>
+        </div>
+        <Toggle checked={bubble.on} onChange={bubble.setOn} label="Liquid bubble" />
+      </div>
+      <p className="mt-2.5 text-[10px] leading-relaxed text-muted-foreground">
+        A thin film of soap: its colours come from the film&apos;s thickness as it drains and swirls, and the rims mirror the backdrop. Bubbles
+        wobble under your finger and squash when pressed. It draws with WebGL every frame, so it uses more battery.
+      </p>
+    </BubblePanel>
+  )
+}
 
 /** Settings and its pages, each change of page with the wallet's screen motion. */
 export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
@@ -234,15 +268,9 @@ function SettingsScreen({
     <div className="glass-strong sticky top-0 z-20 pt-safe">
       <div className="px-4 py-3">
         <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-lg hover:bg-accent/50"
-            onClick={goBack}
-            aria-label="Back"
-          >
+          <BubbleButton radius={9999} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-accent/50" onClick={goBack} aria-label="Back">
             <ArrowLeft className="h-4 w-4" />
-          </Button>
+          </BubbleButton>
           <h1 className="text-sm font-semibold">{title}</h1>
         </div>
       </div>
@@ -672,6 +700,13 @@ function SettingsScreen({
               to every wallet view.
             </p>
           </div>
+
+          <div className="px-1 mb-1 mt-4">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              Material
+            </span>
+          </div>
+          <LiquidBubbleOption />
         </div>
       </div>
     )
@@ -1208,7 +1243,9 @@ function SettingsScreen({
         <div className="px-4 py-3 space-y-4">
           {/* Logo & version */}
           <div className="flex flex-col items-center py-4 animate-fade-in">
-            <QrdxMark className="h-11 w-11 text-foreground mb-3" />
+            <div className="mb-2">
+              <AboutLogo />
+            </div>
             <h2 className="text-lg font-bold">QRDX Wallet</h2>
             <p className="text-xs text-muted-foreground">Version 1.0.0</p>
             <p className="text-[10px] text-muted-foreground mt-1">

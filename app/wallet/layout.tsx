@@ -6,6 +6,7 @@ import { PWAProvider } from '@/src/pwa/PWAProvider'
 import { useHydrated } from '@/lib/use-hydrated'
 import { Backdrop } from '@/components/gfx/Backdrop'
 import { QrdxMark } from '@/components/QrdxMark'
+import { BubbleProvider } from '@/components/gfx/Bubble'
 
 
 export default function WalletLayout({
@@ -35,11 +36,13 @@ export default function WalletLayout({
         disableTransitionOnChange
       >
         <WalletProvider>
+          <BubbleProvider>
           <Backdrop />
           {/* Transparent: every screen is glass over the backdrop. */}
           <div className="relative mx-auto w-full max-w-md min-h-screen">
             {children}
           </div>
+          </BubbleProvider>
         </WalletProvider>
       </ThemeProvider>
     </PWAProvider>

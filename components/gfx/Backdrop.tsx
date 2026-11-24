@@ -5,6 +5,7 @@ import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { cn } from '@/lib/utils'
 import { onThemeChange, prefersReducedMotion, tokenRgb } from '@/lib/gpu'
 import { drawStill } from './dither-field'
+import { useBubble } from './Bubble'
 import type { startDither } from './dither-scene'
 
 /**
@@ -18,6 +19,8 @@ import type { startDither } from './dither-scene'
  */
 export function Backdrop() {
   const stillRef = useRef<HTMLCanvasElement>(null)
+  // The liquid bubbles refract and mirror this still frame (components/gfx/Bubble.tsx).
+  const { backdrop } = useBubble()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const scene = useRef<ReturnType<typeof startDither> | null>(null)
   const [live, setLive] = useState(false)
@@ -89,7 +92,13 @@ export function Backdrop() {
 
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-      <canvas ref={stillRef} className="absolute inset-0 h-full w-full [image-rendering:pixelated]" />
+      <canvas
+        ref={(el) => {
+          stillRef.current = el
+          backdrop.current = el
+        }}
+        className="absolute inset-0 h-full w-full [image-rendering:pixelated]"
+      />
       <canvas
         ref={canvasRef}
         className={cn('absolute inset-0 h-full w-full transition-opacity duration-700 ease-out [image-rendering:pixelated]', live ? 'opacity-100' : 'opacity-0')}

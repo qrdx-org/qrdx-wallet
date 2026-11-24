@@ -12,6 +12,7 @@
  * vault is created, so backing out at any step leaves no trace.
  */
 
+import { BubblePanel } from '@/components/gfx/Bubble'
 import { useMemo, useState, type ReactNode } from 'react'
 import { ScreenStack } from '@/components/motion/ScreenStack'
 import { Welcome } from './Welcome'
@@ -406,7 +407,7 @@ export function Onboarding({ onDone, onCommit }: { onDone: () => void; onCommit?
         />
         <div className="space-y-3">
           {canOfferBio && (
-            <div className="rounded-xl glass p-4">
+            <BubblePanel className="rounded-xl glass p-4" radius={16}>
               <div className="flex items-start gap-3">
                 <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                   <Fingerprint className="h-5 w-5 text-primary" />
@@ -432,7 +433,7 @@ export function Onboarding({ onDone, onCommit }: { onDone: () => void; onCommit?
                   </PrimaryButton>
                 )}
               </div>
-            </div>
+            </BubblePanel>
           )}
           {platform.install !== 'none' && <InstallHint dismissible={false} />}
           {platform.storageEvictionRisk && platform.install === 'none' && (

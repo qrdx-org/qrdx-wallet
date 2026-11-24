@@ -31,3 +31,11 @@ export function Wordmark({ className }: { className?: string }) {
     </span>
   )
 }
+
+/**
+ * The mark as an image (white), framed square on its optical centre, as the app icon is
+ * (scripts/icon/app-icon.svg): for components that take an image, like the liquid glass logo.
+ */
+export const QRDX_MARK_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1.5 -2.5 64.4 64.4"><defs><mask id="c"><rect x="-10" y="-10" width="90" height="90" fill="white"/><polygon points="22,25 40,25 66,57 48,57" fill="black"/></mask></defs><rect x="7.5" y="9.5" width="41" height="38" rx="8" fill="none" stroke="#fff" stroke-width="7.5" mask="url(#c)"/><polygon points="26,27 36,27 59,55 49,55" fill="#fff"/></svg>'
+)}`

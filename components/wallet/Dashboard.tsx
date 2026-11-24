@@ -13,6 +13,8 @@ import { AllTokens } from './AllTokens'
 import { ActivityList } from './ActivityList'
 import { PortfolioChart } from './PortfolioChart'
 import { RollingText } from '@/components/motion/RollingText'
+import { BubblePanel, useBubble } from '@/components/gfx/Bubble'
+import { SoapBubbleIconButton } from '@/components/soap-bubble'
 import { Settings } from './Settings'
 import { NetworkSelector, NetworkStatusBanner } from './NetworkSelector'
 import { SendModal } from './SendModal'
@@ -45,6 +47,22 @@ import { TradeSheet } from './portfolio/TradeSheet'
 import { ScreenStack, SPRING } from '../motion/ScreenStack'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { Asset, Holding } from '@/src/core/portfolio'
+
+/** A header button: a small round soap bubble in the liquid bubble look, else a ghost button. */
+function HeaderButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  const bubble = useBubble()
+  if (bubble.on)
+    return (
+      <SoapBubbleIconButton aria-label={label} title={label} onClick={onClick} style={{ fontSize: 12 }}>
+        {children}
+      </SoapBubbleIconButton>
+    )
+  return (
+    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/50" onClick={onClick} aria-label={label} title={label}>
+      {children}
+    </Button>
+  )
+}
 
 export function Dashboard() {
   const { lock, currentWallet, balances, pqBalances, balancesLoading, activeChain, activeAddress: chainAddress, portfolioValue, portfolioChange24h, priceHistory, transactions, pqBalance, combinedNativeBalance, prices, allNetworks, homeQrdxChain, setActiveChain, chains, showTestnets } = useWallet()
@@ -399,23 +417,16 @@ export function Dashboard() {
             </div>
             <div className="flex items-center gap-1">
               {rc.available && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-lg hover:bg-accent/50"
-                  onClick={() => setShowConnect(true)}
-                  aria-label="Connect to a site"
-                  title="Connect to a site"
-                >
+                <HeaderButton label="Connect to a site" onClick={() => setShowConnect(true)}>
                   <ScanLine className="h-4 w-4 text-muted-foreground" />
-                </Button>
+                </HeaderButton>
               )}
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/50" onClick={() => setShowSettings(true)}>
+              <HeaderButton label="Settings" onClick={() => setShowSettings(true)}>
                 <SettingsIcon className="h-4 w-4 text-muted-foreground" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/50" onClick={handleLock}>
+              </HeaderButton>
+              <HeaderButton label="Lock" onClick={handleLock}>
                 <Lock className="h-4 w-4 text-muted-foreground" />
-              </Button>
+              </HeaderButton>
             </div>
           </div>
         </div>
@@ -427,10 +438,10 @@ export function Dashboard() {
         <div className="flex items-center justify-between">
           {/* Only QRDX accounts sign with a post-quantum key; elsewhere the network's own keys apply. */}
           {qrdx ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20">
+            <BubblePanel className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20" bubbleClassName="flex items-center gap-1.5 px-2.5 py-1" radius={9999}>
               <Shield className="h-3 w-3 text-primary" />
               <span className="text-[10px] font-semibold text-primary">Quantum-Safe</span>
-            </div>
+            </BubblePanel>
           ) : (
             <span className="text-[10px] text-muted-foreground">{family === 'evm' ? 'Classic 0x account' : `${activeChain.name} account`}</span>
           )}
@@ -445,7 +456,7 @@ export function Dashboard() {
         {allNetworks ? (
           <PortfolioSummary portfolio={portfolio} loading={portfolioLoading} onRefresh={refreshPortfolio} visible={balanceVisible} />
         ) : (
-        <Card className="glass-clear relative overflow-hidden">
+        <BubblePanel className="glass glass-clear relative overflow-hidden rounded-lg text-card-foreground shadow-sm" bubbleClassName="relative text-card-foreground">
           <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-foreground/30 to-transparent" />
           <CardContent className="p-4 relative">
             <div className="flex items-center justify-between mb-1">
@@ -510,7 +521,7 @@ export function Dashboard() {
             )}
             <PortfolioChart data={priceHistory} change24h={portfolioChange24h} bleed />
           </CardContent>
-        </Card>
+        </BubblePanel>
         )}
 
         {showProtect && (
@@ -554,7 +565,7 @@ export function Dashboard() {
         )}
 
         {/* Tabs: the pill slides to the chosen one. */}
-        <div className="glass flex gap-1 p-1 rounded-xl">
+        <BubblePanel className="glass flex gap-1 p-1 rounded-xl" bubbleClassName="flex gap-1 p-1" radius={16}>
           {tabs.map((t) => (
             <button
               key={t.key}
@@ -574,7 +585,7 @@ export function Dashboard() {
               )}
             </button>
           ))}
-        </div>
+        </BubblePanel>
 
         {/* Tab Content: it drifts in from the side of the tab that was chosen. */}
         <Card className="glass overflow-hidden">

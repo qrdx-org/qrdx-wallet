@@ -16,7 +16,7 @@
  * user. src/pwa/PWAProvider.tsx shows the "Update available" prompt.
  */
 
-const VERSION = 'qrdx-wallet-v3'
+const VERSION = 'qrdx-wallet-v4'
 const SHELL = [
   '/wallet',
   '/manifest.json',

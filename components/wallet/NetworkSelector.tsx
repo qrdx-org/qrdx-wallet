@@ -1,5 +1,6 @@
 'use client'
 
+import { BubbleButton } from '@/components/gfx/Bubble'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Check,
@@ -103,10 +104,11 @@ export function NetworkSelector() {
 
   return (
     <div className="relative" ref={containerRef}>
-      <button
+      <BubbleButton
         onClick={() => setOpen(o => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
+        radius={9999}
         className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/40 border border-border/50 hover:bg-accent/60 transition-colors"
       >
         {allNetworks ? (
@@ -118,7 +120,7 @@ export function NetworkSelector() {
         )}
         <span className="text-[10px] font-semibold">{allNetworks ? 'All networks' : activeChain.shortName}</span>
         <ChevronDown className="h-3 w-3 text-muted-foreground" />
-      </button>
+      </BubbleButton>
 
       {open && (
         <div

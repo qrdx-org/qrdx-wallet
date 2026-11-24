@@ -10,6 +10,8 @@
  * re-created its password fields on every keystroke.
  */
 
+import { useBubble } from '@/components/gfx/Bubble'
+import { SoapBubbleButton } from '@/components/soap-bubble'
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   AlertCircle,
@@ -150,6 +152,19 @@ export function PrimaryButton({
     outline: 'glass border hover:bg-accent/50 hover:border-primary/30',
     danger: 'bg-red-600 hover:bg-red-600/90 text-white',
   }
+  const bubble = useBubble()
+  if (bubble.on && variant !== 'danger')
+    return (
+      <SoapBubbleButton
+        type={type}
+        onClick={onClick}
+        disabled={disabled || loading}
+        className="!flex w-full !min-h-12 items-center text-base font-semibold"
+      >
+        {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+        {children}
+      </SoapBubbleButton>
+    )
   return (
     <Button
       type={type}
