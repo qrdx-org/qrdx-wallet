@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
-import { isQrdxChain, type ChainConfig } from '@/src/core/chains'
+import { isMaskedTestnet, isNetworkShown, isQrdxChain, looksLikeTestnet, type ChainConfig } from '@/src/core/chains'
 import { NetworkLogo } from './CoinLogo'
 
 /**
@@ -74,7 +74,7 @@ export function NetworkSelector() {
   // otherwise the selector would show nothing for the active network.
   const { qrdxChains, otherChains, nativeChains } = useMemo(() => {
     const visible = chains.filter(
-      c => !c.isTestnet || showTestnets || c.id === activeChain.id,
+      c => isNetworkShown(c, showTestnets) || c.id === activeChain.id,
     )
     return {
       qrdxChains: visible.filter(isQrdxChain),
@@ -94,7 +94,7 @@ export function NetworkSelector() {
 
   const statusLabel =
     networkStatus.state === 'connected'
-      ? `Chain ${networkStatus.chainId}`
+      ? isMaskedTestnet(activeChain) ? 'Connected' : `Chain ${networkStatus.chainId}`
       : networkStatus.state === 'mismatch'
         ? 'Chain ID mismatch'
         : networkStatus.state === 'unreachable'
@@ -224,14 +224,14 @@ function ChainGroup({
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
               <span className="text-xs font-medium truncate">{chain.name}</span>
-              {chain.isTestnet && (
+              {looksLikeTestnet(chain) && (
                 <span className="px-1 py-0.5 rounded bg-amber-500/15 text-amber-500 text-[8px] font-bold uppercase shrink-0">
                   Test
                 </span>
               )}
             </span>
             <span className="block text-[10px] text-muted-foreground truncate">
-              {chain.notLive ? 'Not live yet' : chain.isEvm ? `${chain.nativeCurrency.symbol} · chain ${chain.chainId}` : chain.nativeCurrency.symbol}
+              {chain.notLive ? 'Not live yet' : chain.isEvm && !isMaskedTestnet(chain) ? `${chain.nativeCurrency.symbol} · chain ${chain.chainId}` : chain.nativeCurrency.symbol}
             </span>
           </span>
           {chain.id === activeId && (

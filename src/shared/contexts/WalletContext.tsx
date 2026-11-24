@@ -17,6 +17,8 @@ import {
   DEFAULT_CHAIN,
   allChains,
   setCustomChains,
+  setIgnoreTestnets,
+  standInFor,
   getChain,
   supportsWeb3,
   isQrdxChain,
@@ -555,12 +557,20 @@ export function WalletProvider({
     }
   }
 
-  // The user's networks live in settings; load them before anything looks a chain up.
+  // The user's networks live in settings; load them before anything looks a chain up. So does
+  // ignoring test networks (Developer options), which changes how they look everywhere.
   const customKey = JSON.stringify(state?.settings.customChains ?? [])
+  const ignoreTestnets = !!(state?.settings.developerMode && state.settings.ignoreTestnets)
   const chains = useMemo(() => {
     setCustomChains(JSON.parse(customKey))
+    setIgnoreTestnets(ignoreTestnets)
     return allChains()
-  }, [customKey])
+  }, [customKey, ignoreTestnets])
+  // A mainnet with a test network standing in for it is not offered meanwhile: move to the stand-in.
+  useEffect(() => {
+    const standIn = standInFor(activeChain.id)
+    if (standIn) setActiveChain(standIn)
+  }, [ignoreTestnets, activeChain.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const restoredChainRef = useRef(false)
   useEffect(() => {

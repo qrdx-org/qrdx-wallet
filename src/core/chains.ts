@@ -937,9 +937,92 @@ export function setCustomChains(list: CustomChain[] = []): void {
   }
 }
 
-/** Every network: built in, then the user's. */
+// ─── Ignoring test networks (Developer options, for product mocks) ──────────
+
+/** Each test network's mainnet, which it stands in for while test networks are ignored. */
+export const MAINNET_OF: Record<string, string> = {
+  'qrdx-testnet': 'qrdx-mainnet',
+  'ethereum-sepolia': 'ethereum',
+  'polygon-amoy': 'polygon',
+  'arbitrum-sepolia': 'arbitrum',
+  'optimism-sepolia': 'optimism',
+  'base-sepolia': 'base',
+  'avalanche-fuji': 'avalanche',
+  'bsc-testnet': 'bsc',
+  'bitcoin-testnet': 'bitcoin',
+  'solana-devnet': 'solana',
+}
+const STAND_IN = new Map(Object.entries(MAINNET_OF).map(([test, main]) => [main, test]))
+
+let ignoreTestnets = false
+/** How each stand-in looked before: restored when test networks count again. */
+const ownLook = new Map<string, Pick<ChainConfig, 'name' | 'shortName' | 'color' | 'nativeCurrency' | 'tokens'>>()
+
+/**
+ * Ignore test networks, or stop: each test network with a mainnet takes that mainnet's name,
+ * coin name and place in the network list, nothing is marked as a test network, and every
+ * token on one counts as listed (see isListedToken). Only the look changes: a test network
+ * keeps its id, node, addresses and rules (`isTestnet` included), so nothing is read, derived
+ * or signed differently. The objects change in place, so every screen holding one follows.
+ */
+export function setIgnoreTestnets(on: boolean): void {
+  if (on === ignoreTestnets) return
+  ignoreTestnets = on
+  for (const [testId, mainId] of Object.entries(MAINNET_OF)) {
+    const test = CHAINS[testId]
+    const main = CHAINS[mainId]
+    if (on) {
+      ownLook.set(testId, { name: test.name, shortName: test.shortName, color: test.color, nativeCurrency: test.nativeCurrency, tokens: test.tokens })
+      const coin = getNativeToken(main).name
+      test.name = main.name
+      test.shortName = main.shortName
+      test.color = main.color
+      test.nativeCurrency = { ...test.nativeCurrency, name: main.nativeCurrency.name }
+      test.tokens = test.tokens.map((t) => (t.address ? t : { ...t, name: coin }))
+    } else {
+      Object.assign(test, ownLook.get(testId))
+    }
+  }
+}
+
+export function ignoringTestnets(): boolean {
+  return ignoreTestnets
+}
+
+/** Whether the wallet marks a network as a test network: never while test networks are ignored. */
+export function looksLikeTestnet(chain: Pick<ChainConfig, 'isTestnet'>): boolean {
+  return chain.isTestnet && !ignoreTestnets
+}
+
+/** A test network shown as real (test networks ignored): what gives it away, its chain id, is left out. */
+export function isMaskedTestnet(chain: Pick<ChainConfig, 'isTestnet'>): boolean {
+  return chain.isTestnet && ignoreTestnets
+}
+
+/** A network's own name, for diagnostics: a stand-in's, not the mainnet name it shows. */
+export function trueChainName(chain: Pick<ChainConfig, 'id' | 'name'>): string {
+  return ownLook.get(chain.id)?.name ?? chain.name
+}
+
+/**
+ * Whether a network is offered: mainnets always, test networks when shown, and while test
+ * networks are ignored, the ones standing in for a mainnet.
+ */
+export function isNetworkShown(chain: Pick<ChainConfig, 'id' | 'isTestnet'>, showTestnets: boolean): boolean {
+  return !chain.isTestnet || showTestnets || (ignoreTestnets && chain.id in MAINNET_OF)
+}
+
+/** The test network standing in for this mainnet while test networks are ignored, if any. */
+export function standInFor(chainId: string): string | undefined {
+  return ignoreTestnets ? STAND_IN.get(chainId) : undefined
+}
+
+/** Every network: built in, then the user's. A stand-in takes its mainnet's place. */
 export function allChains(): ChainConfig[] {
-  return [...CHAIN_LIST, ...customChains.values()]
+  const builtIn = ignoreTestnets
+    ? CHAIN_LIST.flatMap((c) => (c.id in MAINNET_OF ? [] : STAND_IN.has(c.id) ? [CHAINS[STAND_IN.get(c.id)!]] : [c]))
+    : CHAIN_LIST
+  return [...builtIn, ...customChains.values()]
 }
 
 export function isCustomChain(chain: Pick<ChainConfig, 'id'>): boolean {
@@ -1022,10 +1105,11 @@ export const QRDX_CHAINS: ChainConfig[] = CHAIN_LIST.filter(isQrdxChain)
 
 /**
  * A token the registry lists for this chain by address (or the chain's own coin). Only these
- * get a coin's logo, chart and price by symbol: anyone can name a token "USDC".
+ * get a coin's logo, chart and price by symbol: anyone can name a token "USDC". While test
+ * networks are ignored (product mocks), every token on one counts.
  */
-export function isListedToken(chain: Pick<ChainConfig, 'tokens'>, address: string): boolean {
-  if (!address) return true
+export function isListedToken(chain: Pick<ChainConfig, 'tokens'> & { isTestnet?: boolean }, address: string): boolean {
+  if (!address || (ignoreTestnets && chain.isTestnet)) return true
   const a = address.toLowerCase()
   return chain.tokens.some(t => t.address.toLowerCase() === a)
 }

@@ -11,7 +11,7 @@ import { Check as CheckBox } from '@/components/motion/Check'
 import { UndoButton } from '@/components/motion/UndoButton'
 import { Check, Plus, Trash2 } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
-import { chainFamily, customChainKey, isCustomChain, isQrdxChain, verifyCustomChain, type ChainConfig, type CustomChain } from '@/src/core/chains'
+import { chainFamily, customChainKey, ignoringTestnets, isCustomChain, isMaskedTestnet, isNetworkShown, isQrdxChain, looksLikeTestnet, verifyCustomChain, type ChainConfig, type CustomChain } from '@/src/core/chains'
 import { SettingsPage, Section, Toggle } from './shared'
 import { ErrorBanner, Notice, PrimaryButton, Sheet, TextField } from '../flow/FlowKit'
 import { NetworkLogo } from '../CoinLogo'
@@ -24,7 +24,7 @@ export function NetworksPage({ onBack }: { onBack: () => void }) {
   const [adding, setAdding] = useState(false)
   const custom = state?.settings.customChains ?? []
 
-  const visible = chains.filter((c) => !c.isTestnet || showTestnets || c.id === activeChain.id)
+  const visible = chains.filter((c) => isNetworkShown(c, showTestnets) || c.id === activeChain.id)
   const groups: [string, ChainConfig[]][] = [
     ['QRDX', visible.filter(isQrdxChain)],
     ['EVM networks', visible.filter((c) => c.isEvm && !isQrdxChain(c) && !isCustomChain(c))],
@@ -68,10 +68,10 @@ export function NetworksPage({ onBack }: { onBack: () => void }) {
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5 text-sm font-medium">
                         <span className="truncate">{c.name}</span>
-                        {c.isTestnet && <span className="rounded bg-amber-500/15 px-1 py-0.5 text-[8px] font-bold uppercase text-amber-500">Test</span>}
+                        {looksLikeTestnet(c) && <span className="rounded bg-amber-500/15 px-1 py-0.5 text-[8px] font-bold uppercase text-amber-500">Test</span>}
                       </span>
                       <span className="block truncate text-[10px] text-muted-foreground">
-                        {c.notLive ? 'Not live yet' : c.isEvm ? `${c.nativeCurrency.symbol} · chain ${c.chainId}` : c.nativeCurrency.symbol}
+                        {c.notLive ? 'Not live yet' : c.isEvm && !isMaskedTestnet(c) ? `${c.nativeCurrency.symbol} · chain ${c.chainId}` : c.nativeCurrency.symbol}
                       </span>
                     </span>
                     {c.id === activeChain.id && <Check className="h-4 w-4 shrink-0" />}
@@ -92,7 +92,11 @@ export function NetworksPage({ onBack }: { onBack: () => void }) {
         <div className="flex items-center justify-between gap-3 p-3">
           <span>
             <span className="block text-sm font-medium">Show test networks</span>
-            <span className="block text-[10px] text-muted-foreground">QRDX Testnet, Sepolia, Bitcoin Testnet4, Solana Devnet and others</span>
+            <span className="block text-[10px] text-muted-foreground">
+              {ignoringTestnets()
+                ? 'Test networks already stand in for their mainnets (Developer options). This adds the rest: a local QRDX node, and networks you added as test networks.'
+                : 'QRDX Testnet, Sepolia, Bitcoin Testnet4, Solana Devnet and others'}
+            </span>
           </span>
           <Toggle label="Show test networks" checked={showTestnets} onChange={(v) => void updateSettings({ showTestnets: v })} />
         </div>

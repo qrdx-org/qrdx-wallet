@@ -6,7 +6,8 @@
 
 import { sameAccount } from './account-id'
 
-export type RecipientKind = 'recent' | 'account' | 'contact'
+/** `previous` and `self` are a caller's own (RecipientSuggestions `previous`, `includeSelf`). */
+export type RecipientKind = 'recent' | 'account' | 'contact' | 'previous' | 'self'
 
 export interface RecipientSuggestion {
   kind: RecipientKind
@@ -62,6 +63,15 @@ export function recipientSuggestions(src: RecipientSources): RecipientSuggestion
     .map((c): RecipientSuggestion => ({ kind: 'contact', address: c.address, label: c.qnsName ? `${c.name} · ${c.qnsName}` : c.name }))
 
   return [...[...recent.values()].slice(0, RECENT), ...accounts, ...contacts]
+}
+
+/** A name the wallet knows an address by: a contact's, or one of its accounts'. */
+export function knownName(address: string, src: Pick<RecipientSources, 'contacts' | 'accounts'>): string | undefined {
+  const same = (a?: string) => !!a && (a.toLowerCase() === address.toLowerCase() || sameAccount(a, address))
+  const contact = src.contacts.find((c) => same(c.address))
+  if (contact) return contact.name
+  const account = src.accounts.find((a) => same(a.ethAddress ?? a.address) || same(a.pqAddress))
+  return account ? (isPq(address) ? `${account.name} · PQ` : account.name) : undefined
 }
 
 /** The suggestions a query matches: a name containing it, or an address starting with or containing it. */

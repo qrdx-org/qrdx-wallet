@@ -12,7 +12,7 @@ import { Loading, Spinner } from '@/components/motion/Loading'
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowLeft, CheckCircle2, ChevronDown, ChevronRight, ExternalLink, Waypoints } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
-import { chainFamily, type ChainToken } from '@/src/core/chains'
+import { chainFamily, looksLikeTestnet, type ChainToken } from '@/src/core/chains'
 import { formatAmount, formatUnitsExact } from '@/src/core/balances'
 import { formatFiat, formatFiatPrice } from '@/src/core/fiat'
 import { fetchPrices } from '@/src/core/prices'
@@ -62,7 +62,9 @@ export function TradeSheet({ holding, onClose, onDone }: { holding: Holding; onC
       <Notice>
         {family === 'bitcoin'
           ? 'Bitcoin has no exchange on its own chain. Send it to an exchange you use, or bridge it to QRDX once QRDX lists it.'
-          : `${chain.name} is a test network: aggregators quote mainnets only. Swap on QRDX instead, or send it where you trade.`}
+          : looksLikeTestnet(chain)
+            ? `${chain.name} is a test network: aggregators quote mainnets only. Swap on QRDX instead, or send it where you trade.`
+            : `There is no swap for ${holding.symbol} on ${chain.name} here. Swap on QRDX instead, or send it where you trade.`}
       </Notice>
       <BridgeOffer holding={holding} route={route} onBridge={() => setBridging(true)} />
     </SettingsPage>

@@ -139,6 +139,11 @@ export interface WalletSettings {
   /** Show testnets in the network selector. Off by default. */
   showTestnets?: boolean
   /**
+   * Developer options, for product mocks: test networks look like their mainnets (chains.ts
+   * setIgnoreTestnets). Only in effect while `developerMode` is on.
+   */
+  ignoreTestnets?: boolean
+  /**
    * Chain slug → chain ID the user explicitly accepted despite it differing
    * from the registry. Restored into `core/chain-identity.ts` at startup.
    * Only ever written through an explicit user confirmation.

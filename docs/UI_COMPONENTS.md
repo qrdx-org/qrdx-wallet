@@ -45,6 +45,7 @@ loading, `Spinner` (icon-sized, words for screen readers only) in buttons and li
 | `trade/submit.tsx` | Signing and submitting | Spinner |
 | `settings/ApprovalsPage.tsx` | Reading transactions, revoking | Loading, Spinner |
 | `settings/NamesPage.tsx` | Checking the network, reading names | Loading |
+| `settings/DevTokensPage.tsx` | Reading your tokens | Loading |
 | `settings/AccountControlPage.tsx` | Reading the account, reading guardians | Loading |
 | `settings/QuantumSafetyPage.tsx` | Reading the classic address, moving funds | Loading, Spinner |
 | `settings/MultisigPage.tsx` | A submitted transaction pending | Spinner |
@@ -100,7 +101,8 @@ travels and can be dragged across; ink when on. A soap bubble toggle in the bubb
 
 | Where | Settings |
 | --- | --- |
-| `Settings.tsx` | Developer mode, each injected API (EVM and QRDX), Material: liquid bubble |
+| `Settings.tsx` | Developer mode, Ignore testnet (Developer options), each injected API (EVM and QRDX), Material: liquid bubble |
+| `settings/DevTokensPage.tsx` | Creating a token: you can mint more, freeze holders, pause it, edit its details |
 | `settings/NotificationsPage.tsx` | Transactions, price alerts, account security |
 | `settings/NetworksPage.tsx` | Show test networks, show unverified tokens (were checkboxes) |
 | `settings/SecurityPage.tsx` | Biometric unlock |
@@ -140,6 +142,7 @@ and sell take the bid and ask colours. Its users: `settings/shared.tsx` `Segment
 | --- | --- |
 | `SwapModal.tsx` | Max slippage (none chosen while a custom value is typed), how long the swap stays valid |
 | `trade/PerpForm.tsx` | Leverage presets (none chosen when the slider sits between them) |
+| `settings/DevTokensPage.tsx` | A new token's decimals |
 
 ## ElasticSlider: leverage
 
@@ -184,6 +187,7 @@ wave; let go early and it drains. Enter or Space held does the same. The label s
 | `flow/FlowKit.tsx` `PrimaryButton variant="danger"` | Erase and restore (`Unlock.tsx`), erase everything (`settings/SecurityPage.tsx`), every password sheet marked danger (remove an account) |
 | `flow/ConfirmSheet.tsx` `danger` | Exit a stake (`StakeModal.tsx`), cancel a transaction (`TransactionDetail.tsx`), recover an account (`settings/AccountControlPage.tsx`) |
 | `flow/ConfirmSheet.tsx` `useConfirm` danger | Disconnect every site (`Settings.tsx`) |
+| `settings/DevTokenScreen.tsx` | Give up one of a token's authorities |
 
 ## FuseButton: removing what this device keeps
 
@@ -210,7 +214,7 @@ it fails. A mark that stays on screen morphs from one to the next.
 | `portfolio/PortfolioActivity.tsx` | The same, across every network |
 | `TransactionDetail.tsx` | The status row |
 | `SendModal.tsx`, `pay/PaySheet.tsx` | After sending: refreshed until the block, then confirmed |
-| `trade/submit.tsx` | Each submitted exchange operation |
+| `trade/submit.tsx` | Each submitted exchange operation (trading, names, and Developer options → Your tokens) |
 
 ## DecryptedText: secrets shown
 

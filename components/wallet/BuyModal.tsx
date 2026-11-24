@@ -11,7 +11,7 @@ import { CtaButton } from '@/components/motion/CtaButton'
 import { BubblePanel } from '@/components/gfx/Bubble'
 import { ArrowDownLeft, ArrowLeft, ArrowLeftRight, ExternalLink, Info } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
-import { isQrdxChain } from '@/src/core/chains'
+import { isQrdxChain, looksLikeTestnet } from '@/src/core/chains'
 
 interface BuyModalProps {
   onClose: () => void
@@ -64,7 +64,7 @@ export function BuyModal({ onClose, onReceive, onSwap }: BuyModalProps) {
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
           <div className="text-[11px] leading-relaxed text-muted-foreground">
             {qrdx ? (
-              activeChain.isTestnet ? (
+              looksLikeTestnet(activeChain) ? (
                 <>
                   There is no card purchase for QRDX: testnet QRDX has no value, and there is no public faucet. Testnet QRDX comes from someone who already has some, such as the
                   QRDX team.

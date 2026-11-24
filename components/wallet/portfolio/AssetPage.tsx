@@ -15,7 +15,7 @@ import { fetchPriceHistory, type PriceHistoryPoint } from '@/src/core/prices'
 import { tokenPriceHistory } from '@/src/core/trade/prices'
 import { timeAgo } from '@/src/core/trade/format'
 import { fetchMarketData, type MarketData } from '@/src/core/market'
-import { isQrdxChain, type ChainConfig } from '@/src/core/chains'
+import { isQrdxChain, looksLikeTestnet, type ChainConfig } from '@/src/core/chains'
 import type { Asset, Holding } from '@/src/core/portfolio'
 import { PortfolioChart } from '../PortfolioChart'
 import { RangeTabs } from '@/components/motion/RangeTabs'
@@ -214,7 +214,7 @@ export function AssetPage({
                 <span className="block">{h.chain.name}</span>
                 <span className="block text-[10px] text-muted-foreground">
                   {h.credential === 'pq' ? 'Quantum-safe address' : h.credential === 'classic' ? 'Classic address' : h.address ? `Token ${h.address.slice(0, 6)}…${h.address.slice(-4)}` : 'Network coin'}
-                  {h.chain.isTestnet ? ' · test network' : ''}
+                  {looksLikeTestnet(h.chain) ? ' · test network' : ''}
                 </span>
               </span>
               <span className="text-right tabular-nums">

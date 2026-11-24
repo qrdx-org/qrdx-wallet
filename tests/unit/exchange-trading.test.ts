@@ -193,6 +193,37 @@ describe('describeExchangeOp', () => {
     expect(h.headline).toMatch(/^Hand the mint authority of qBTC to /)
   })
 
+  it("names every authority a token can hand over or give up", () => {
+    const pause = describeExchangeOp('TOKEN_SET_AUTHORITY', { token_address: BTC, authority: 'pause', new_authority: '' }, { tokens })
+    expect(pause.headline).toBe('Give up the pause authority of qBTC for good')
+    expect(pause.warnings[0]).toBe('This cannot be undone: no one will ever be able to pause qBTC.')
+    const clawback = describeExchangeOp('TOKEN_SET_AUTHORITY', { token_address: BTC, authority: 'permanent_delegate', new_authority: '' }, { tokens })
+    expect(clawback.headline).toBe('Give up the clawback authority of qBTC for good')
+    const meta = describeExchangeOp('TOKEN_SET_AUTHORITY', { token_address: BTC, authority: 'metadata', new_authority: '0xPQ' + 'cd'.repeat(32) }, { tokens })
+    expect(meta.warnings[0]).toMatch(/will control the name, symbol and link of qBTC, and you will not/)
+  })
+
+  it('describes the token admin operations', () => {
+    const holder = '0xPQ' + 'ef'.repeat(32)
+    const burn = describeExchangeOp('TOKEN_BURN', { token_address: BTC, amount: '2500' }, { tokens })
+    expect(burn.headline).toBe('Burn 2,500 qBTC')
+    expect(burn.warnings[0]).toMatch(/gone|for good/)
+    const freeze = describeExchangeOp('TOKEN_FREEZE', { token_address: BTC, account: holder }, { tokens })
+    expect(freeze.headline).toMatch(/^Freeze the qBTC of 0xPQefef/)
+    expect(freeze.warnings[0]).toMatch(/can still receive/)
+    const thaw = describeExchangeOp('TOKEN_THAW', { token_address: BTC, account: holder }, { tokens })
+    expect(thaw.headline).toMatch(/^Thaw the qBTC of /)
+    expect(thaw.warnings).toEqual([])
+    expect(describeExchangeOp('TOKEN_PAUSE', { token_address: BTC }, { tokens }).warnings[0]).toMatch(/pools and order books stop/)
+    expect(describeExchangeOp('TOKEN_RESUME', { token_address: BTC }, { tokens }).headline).toBe('Resume qBTC')
+    const meta = describeExchangeOp('TOKEN_UPDATE_METADATA', { token_address: BTC, symbol: 'QBTC', uri: '', fields: { site: null } }, { tokens })
+    expect(meta.details.map((d) => `${d.label}: ${d.value}`)).toEqual([`Token: qBTC · ${BTC.slice(0, 8)}…${BTC.slice(-4)}`, 'New symbol: QBTC', 'New link: none', 'site: removed'])
+    const fee = describeExchangeOp('TOKEN_SET_TRANSFER_FEE', { token_address: BTC, transfer_fee_bps: 25, max_transfer_fee: '5' }, { tokens })
+    expect(fee.headline).toBe('Set qBTC\'s transfer fee to 0.25 %')
+    expect(fee.warnings[0]).toMatch(/100 blocks/)
+    expect(describeExchangeOp('TOKEN_WITHDRAW_FEES', { token_address: BTC }, { tokens }).headline).toBe('Withdraw the transfer fees qBTC withheld to you')
+  })
+
   it('collects every token address a request names', () => {
     expect(tokenAddressesIn({ pair: `${USDC}:${BTC}`, token_in: BTC.toUpperCase().replace('0X', '0x') }).sort()).toEqual(
       [BTC, USDC].sort()

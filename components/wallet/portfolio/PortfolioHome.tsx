@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { formatFiat, formatFiatPrice } from '@/src/core/fiat'
 import { formatAmount } from '@/src/core/balances'
 import { assetAmount, type Asset, type Holding, type Portfolio } from '@/src/core/portfolio'
-import { chainFamily, isQrdxChain, type ChainConfig } from '@/src/core/chains'
+import { chainFamily, isNetworkShown, isQrdxChain, looksLikeTestnet, type ChainConfig } from '@/src/core/chains'
 import { CoinLogo, NetworkLogo } from '../CoinLogo'
 import { PortfolioChart } from '../PortfolioChart'
 import { RangeTabs } from '@/components/motion/RangeTabs'
@@ -295,9 +295,9 @@ export function HoldingPicker({ title, portfolio, onPick, onClose }: { title: st
 
 /** Pick the network to receive on: QRDX first, then one row for every EVM network, Bitcoin, Solana. */
 export function ReceiveNetworkPicker({ chains, qrdx, showTestnets, onPick, onClose }: { chains: ChainConfig[]; qrdx: ChainConfig; showTestnets?: boolean; onPick: (c: ChainConfig) => void; onClose: () => void }) {
-  const evm = chains.filter((c) => c.isEvm && !isQrdxChain(c) && !c.isTestnet && !c.notLive)
+  const evm = chains.filter((c) => c.isEvm && !isQrdxChain(c) && !looksLikeTestnet(c) && !c.notLive)
   // Bitcoin and Solana have their own addresses per network: test ones too, when shown.
-  const native = chains.filter((c) => chainFamily(c) !== 'evm' && (showTestnets || !c.isTestnet))
+  const native = chains.filter((c) => chainFamily(c) !== 'evm' && isNetworkShown(c, !!showTestnets))
   const row = (c: ChainConfig, label: string, note: string) => (
     <button key={c.id + label} type="button" onClick={() => onPick(c)} className="flex w-full items-center gap-3 rounded-xl p-2.5 text-left hover:bg-accent/40">
       <NetworkLogo chain={c} size={32} />

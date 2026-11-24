@@ -22,6 +22,31 @@ export interface ExchangeToken {
   mint_authority: string | null
   freeze_authority: string | null
   creator: string
+  created_height?: number
+  /** Token-2022-style extensions it was deployed with (qrdx-node docs/NATIVE_TOKENS.md §7). */
+  extensions?: TokenExtensions
+  /** exchange_getToken only: how many accounts are frozen. */
+  frozen_accounts?: number
+}
+
+/** qrdx-node exchange/tokens.py NativeToken.extensions(). */
+export interface TokenExtensions {
+  metadata?: { uri: string; fields: Record<string, string>; update_authority: string | null }
+  transfer_fee?: {
+    bps: number
+    max_fee: string | null
+    pending: { bps: number; max_fee: string | null; from_height: number } | null
+    fee_authority: string | null
+    withdraw_authority: string | null
+    /** The token's own address, which holds the fees withheld until withdrawn. */
+    withheld_at: string
+  }
+  non_transferable?: boolean
+  default_frozen?: boolean
+  permanent_delegate?: string
+  pausable?: { pause_authority: string | null; paused: boolean }
+  default_operators?: string[]
+  post_doomsday_trade?: boolean
 }
 
 export interface SwapQuote {
@@ -56,8 +81,12 @@ const rpc = <T>(chain: ChainConfig, method: string, params: unknown[] = []) =>
 
 export const exchange = {
   tokens: (chain: ChainConfig) => rpc<ExchangeToken[]>(chain, 'exchange_getTokens'),
+  token: (chain: ChainConfig, token: string) => rpc<ExchangeToken | null>(chain, 'exchange_getToken', [token]),
   tokenBalance: (chain: ChainConfig, token: string, address: string) =>
     rpc<string>(chain, 'exchange_getTokenBalance', [token, address]),
+  /** A holder's balance of a token, and whether it is frozen. */
+  tokenAccount: (chain: ChainConfig, token: string, address: string) =>
+    rpc<{ balance: string; frozen: boolean }>(chain, 'exchange_getTokenAccount', [token, address]),
   quoteSwap: (
     chain: ChainConfig,
     tokenIn: string,

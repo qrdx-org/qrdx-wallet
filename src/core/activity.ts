@@ -293,13 +293,11 @@ const OP_LABELS: Record<string, string> = {
   COINBASE: 'Block reward',
 }
 
-/** The account's history from the node's index, newest first; null when the node has no index. */
-export async function fetchIndexedHistory(
-  chain: ChainConfig,
-  addresses: string[],
-  tokens: { address: string; symbol: string; decimals: number }[],
-  limit = 100
-): Promise<TransactionHistoryItem[] | null> {
+/**
+ * The rows the node's index holds for the account's addresses, each transaction once (with every
+ * role it had under either address); null when the node has no index.
+ */
+export async function fetchIndexedRows(chain: ChainConfig, addresses: string[], limit = 100): Promise<IndexedTx[] | null> {
   if (!chain.nodeApiUrl) return null
   const pages = await Promise.all(
     [...new Set(addresses.filter(Boolean))].map(async (address) => {
@@ -317,8 +315,20 @@ export async function fetchIndexedHistory(
     // The same transaction under both addresses: keep every role it had.
     seen.set(row.tx_hash, prev ? { ...prev, roles: [...new Set([...(prev.roles ?? []), ...(row.roles ?? [])])] } : row)
   }
+  return [...seen.values()]
+}
+
+/** The account's history from the node's index, newest first; null when the node has no index. */
+export async function fetchIndexedHistory(
+  chain: ChainConfig,
+  addresses: string[],
+  tokens: { address: string; symbol: string; decimals: number }[],
+  limit = 100
+): Promise<TransactionHistoryItem[] | null> {
+  const rows = await fetchIndexedRows(chain, addresses, limit)
+  if (!rows) return null
   const bySymbol = new Map(tokens.map((t) => [t.address.toLowerCase(), t]))
-  return [...seen.values()].map((row) => indexedToItem(chain, row, bySymbol)).sort((a, b) => b.blockNumber - a.blockNumber)
+  return rows.map((row) => indexedToItem(chain, row, bySymbol)).sort((a, b) => b.blockNumber - a.blockNumber)
 }
 
 export function indexedToItem(

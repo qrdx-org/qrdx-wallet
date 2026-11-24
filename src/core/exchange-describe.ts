@@ -339,7 +339,7 @@ export function describeExchangeOp(
       const ops = Array.isArray(params.default_operators) ? params.default_operators.length : str(params.default_operators).split(',').filter((o) => o.trim()).length
       if (ops) warnings.push(`${ops} default operator${ops === 1 ? '' : 's'} will be able to move every holder's ${str(params.symbol)} until the holder revokes them.`)
       if ('uri' in params || 'metadata' in params || 'metadata_authority' in params) {
-        extras.push({ label: 'Metadata', value: `${str(params.uri) || 'fields only'}${params.metadata_authority === '' ? ' (locked)' : ' (editable)'}` })
+        extras.push({ label: 'Metadata', value: `${str(params.uri) || 'no link yet'}${params.metadata_authority === '' ? ' (locked)' : ' (editable)'}` })
       }
       if (flag('post_doomsday_trade')) extras.push({ label: 'Doomsday trading', value: 'Declared backed by locked classical assets' })
       return {
@@ -401,20 +401,91 @@ export function describeExchangeOp(
 
     case 'TOKEN_SET_AUTHORITY': {
       const t = str(params.token_address)
-      const kind = str(params.authority).toLowerCase() === 'freeze' ? 'freeze' : 'mint'
+      const kind = str(params.authority).toLowerCase()
+      // What each authority controls (qrdx-node exchange/tokens.py AUTHORITIES).
+      const power: Record<string, { name: string; never: string; control: string }> = {
+        mint: { name: 'mint', never: `mint ${sym(t)} again`, control: 'minting' },
+        freeze: { name: 'freeze', never: `freeze ${sym(t)} balances`, control: 'freezing' },
+        metadata: { name: 'metadata', never: `change ${sym(t)}'s name, symbol or link`, control: 'the name, symbol and link of' },
+        fee: { name: 'fee', never: `change ${sym(t)}'s transfer fee`, control: 'the transfer fee of' },
+        withdraw: { name: 'fee withdrawal', never: `withdraw the fees ${sym(t)} withholds`, control: 'withdrawing the fees of' },
+        pause: { name: 'pause', never: `pause ${sym(t)}`, control: 'pausing' },
+        permanent_delegate: { name: 'clawback', never: `move or burn holders' ${sym(t)}`, control: "moving and burning holders'" },
+      }
+      const p = power[kind] ?? { name: kind || '?', never: `use this authority over ${sym(t)}`, control: `the ${kind} authority of` }
       const next = str(params.new_authority).trim()
       if (!next) {
-        warnings.push(
-          kind === 'mint'
-            ? `This cannot be undone: no one will ever be able to mint ${sym(t)} again.`
-            : `This cannot be undone: no one will ever be able to freeze ${sym(t)} balances.`
-        )
-        return { headline: `Give up the ${kind} authority of ${sym(t)} for good`, details: [tokenDetail('Token', t)], warnings }
+        warnings.push(`This cannot be undone: no one will ever be able to ${p.never}.`)
+        return { headline: `Give up the ${p.name} authority of ${sym(t)} for good`, details: [tokenDetail('Token', t)], warnings }
       }
-      warnings.push(`${short(next)} will control ${kind === 'mint' ? 'minting' : 'freezing'} ${sym(t)}, and you will not.`)
+      warnings.push(`${short(next)} will control ${p.control} ${sym(t)}, and you will not.`)
       return {
-        headline: `Hand the ${kind} authority of ${sym(t)} to ${short(next)}`,
+        headline: `Hand the ${p.name} authority of ${sym(t)} to ${short(next)}`,
         details: [tokenDetail('Token', t), { label: 'New authority', value: next }],
+        warnings,
+      }
+    }
+
+    case 'TOKEN_BURN': {
+      const t = str(params.token_address)
+      const from = str(params.from)
+      warnings.push(`Burning destroys the ${sym(t)} for good: the supply falls by as much.`)
+      return {
+        headline: `Burn ${groupDigits(str(params.amount))} ${sym(t)}${from ? ` from ${short(from)}` : ''}`,
+        details: [tokenDetail('Token', t), { label: 'From', value: from || 'Your account' }],
+        warnings,
+      }
+    }
+
+    case 'TOKEN_FREEZE':
+    case 'TOKEN_THAW': {
+      const t = str(params.token_address)
+      const account = str(params.account)
+      const freeze = op === 'TOKEN_FREEZE'
+      if (freeze) warnings.push(`${short(account)} will not be able to move its ${sym(t)} until it is thawed. It can still receive.`)
+      return {
+        headline: `${freeze ? 'Freeze' : 'Thaw'} the ${sym(t)} of ${short(account)}`,
+        details: [tokenDetail('Token', t), { label: 'Account', value: account }],
+        warnings,
+      }
+    }
+
+    case 'TOKEN_PAUSE':
+    case 'TOKEN_RESUME': {
+      const t = str(params.token_address)
+      const pause = op === 'TOKEN_PAUSE'
+      if (pause) warnings.push(`No one can transfer, mint or burn ${sym(t)} until it is resumed; its pools and order books stop with it.`)
+      return { headline: `${pause ? 'Pause' : 'Resume'} ${sym(t)}`, details: [tokenDetail('Token', t)], warnings }
+    }
+
+    case 'TOKEN_UPDATE_METADATA': {
+      const t = str(params.token_address)
+      const details = [tokenDetail('Token', t)]
+      if (str(params.name)) details.push({ label: 'New name', value: str(params.name) })
+      if (str(params.symbol)) details.push({ label: 'New symbol', value: str(params.symbol) })
+      if ('uri' in params) details.push({ label: 'New link', value: str(params.uri) || 'none' })
+      const fields = params.fields && typeof params.fields === 'object' && !Array.isArray(params.fields) ? Object.entries(params.fields) : []
+      for (const [k, v] of fields) details.push({ label: k, value: v === null || v === '' ? 'removed' : str(v) })
+      return { headline: `Update ${sym(t)}'s details`, details, warnings }
+    }
+
+    case 'TOKEN_SET_TRANSFER_FEE': {
+      const t = str(params.token_address)
+      const bps = Number(str(params.transfer_fee_bps))
+      warnings.push('The new fee takes effect 100 blocks after this executes, so no transfer is surprised by it.')
+      return {
+        headline: `Set ${sym(t)}'s transfer fee to ${Number.isFinite(bps) ? (bps / 100).toFixed(2) : '?'} %`,
+        details: [tokenDetail('Token', t), { label: 'Cap per transfer', value: str(params.max_transfer_fee) ? groupDigits(str(params.max_transfer_fee)) : 'None' }],
+        warnings,
+      }
+    }
+
+    case 'TOKEN_WITHDRAW_FEES': {
+      const t = str(params.token_address)
+      const to = str(params.to)
+      return {
+        headline: `Withdraw the transfer fees ${sym(t)} withheld to ${to ? short(to) : 'you'}`,
+        details: [tokenDetail('Token', t), { label: 'To', value: to || 'Your account' }],
         warnings,
       }
     }

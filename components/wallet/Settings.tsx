@@ -27,21 +27,21 @@ import {
   KeySquare,
   BadgeCheck,
   Eye,
-  Droplets } from 'lucide-react'
+  Droplets,
+  Coins } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useTheme } from 'next-themes'
 import { BubbleButton, BubblePanel, useBubble } from '@/components/gfx/Bubble'
 import { SoapBubbleIconButton, SoapBubbleToggle } from '@/components/soap-bubble'
 import { THEME_OPTIONS, type ThemeValue } from '@/components/theme-provider'
-import { CHAIN_LIST } from '@/src/core/chains'
 import { CAPABILITY_LABELS } from '@/src/core/permissions'
 import type { AddressBookEntry } from '@/src/core/address-book'
 import { validateAddress } from '@/src/core/address'
-import { getChain, isQrdxChain } from '@/src/core/chains'
+import { getChain, ignoringTestnets, isQrdxChain, trueChainName } from '@/src/core/chains'
 import { isQnsName, resolveQnsName } from '@/src/core/qns'
 import { AccountsPage } from './settings/AccountsPage'
-import { Toggle } from './settings/shared'
+import { Row, Section, Toggle } from './settings/shared'
 import { Favourite } from '@/components/motion/Favourite'
 import { Select } from '@/components/motion/Select'
 import { UndoButton } from '@/components/motion/UndoButton'
@@ -126,6 +126,7 @@ type SettingsPage =
   | 'multisig'
   | 'approvals'
   | 'watch'
+  | 'dev-tokens'
 
 // ─── Component ──────────────────────────────────────────────────────────────
 import { useConfirm } from './flow/ConfirmSheet'
@@ -137,6 +138,7 @@ import { MultisigPage } from './settings/MultisigPage'
 import { ApprovalsPage } from './settings/ApprovalsPage'
 import { WatchPage } from './settings/WatchPage'
 import { NetworksPage } from './settings/NetworksPage'
+import { DevTokensPage } from './settings/DevTokensPage'
 import { ScreenStack } from '../motion/ScreenStack'
 
 /**
@@ -173,7 +175,7 @@ function LiquidBubbleOption() {
 export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
   const [page, setPage] = useState<SettingsPage>(initialPage)
   return (
-    <ScreenStack id={page} depth={page === 'main' ? 0 : 1}>
+    <ScreenStack id={page} depth={page === 'main' ? 0 : page === 'dev-tokens' ? 2 : 1}>
       <SettingsScreen onBack={onBack} initialPage={initialPage} page={page} setPage={setPage} />
     </ScreenStack>
   )
@@ -202,6 +204,8 @@ function SettingsScreen({
     connectedSites,
     disconnectSite,
     disconnectAllSites,
+    chains,
+    homeQrdxChain,
   } = useWallet()
   // One site, one contact: removed with a moment to undo (components/motion/UndoButton.tsx).
   // Every site at once asks first, and is confirmed by holding.
@@ -557,7 +561,7 @@ function SettingsScreen({
                   <MenuItem
                     icon={Code}
                     label="Developer Options"
-                    description="Mock GUI, testnets, UI debugging"
+                    description="Product mocks, your tokens, diagnostics"
                     onClick={() => setPage('developer')}
                     gradient="from-primary to-primary/70"
                   />
@@ -1125,7 +1129,7 @@ function SettingsScreen({
                     size="md"
                     value={contactChainId}
                     onChange={setContactChainId}
-                    options={[{ value: '', label: 'Any network' }, ...CHAIN_LIST.map((c) => ({ value: String(c.id), label: c.name }))]}
+                    options={[{ value: '', label: 'Any network' }, ...chains.map((c) => ({ value: String(c.id), label: c.name }))]}
                   />
                 </div>
 
@@ -1238,8 +1242,9 @@ function SettingsScreen({
   }
 
   // ── Developer Options ─────────────────────────────────────────────────────
-  // Read-only diagnostics. Nothing here contains key material, so it is safe to
-  // copy into a bug report.
+  // Product mocks, the tokens this account deployed, and read-only diagnostics. Nothing in the
+  // diagnostics contains key material, so they are safe to copy into a bug report; they name
+  // the network as it really is, even while test networks are ignored.
   if (page === 'developer') {
     const diagnostics: [string, string][] = [
       ['Platform', `${platform.label} (${platform.target})`],
@@ -1247,9 +1252,10 @@ function SettingsScreen({
       ['Vault format', `v${state?.version ?? '–'}`],
       ['Accounts / keyrings', `${state?.wallets.length ?? 0} / ${state?.keyrings.length ?? 0}`],
       ['Passkey PRF', biometricsInfo.support],
-      ['Network', `${activeChain.name} (${activeChain.chainId})`],
+      ['Network', `${trueChainName(activeChain)} (${activeChain.chainId})`],
       ['RPC', activeChain.rpcUrl],
       ['RPC status', networkStatus.state],
+      ['Test networks', ignoringTestnets() ? 'ignored (shown as mainnets)' : 'shown as they are'],
       ['User agent', typeof navigator !== 'undefined' ? navigator.userAgent : '–'],
     ]
     const text = diagnostics.map(([k, v]) => `${k}: ${v}`).join('\n')
@@ -1257,16 +1263,39 @@ function SettingsScreen({
       <div className="min-h-screen wallet-screen">
         <Header title="Developer Options" />
         <div className="px-4 py-3 space-y-3">
-          <Card className="glass border-border/50">
-            <CardContent className="p-3 space-y-2">
+          <Section title="Product mocks">
+            <div className="flex items-center justify-between gap-3 p-3">
+              <span className="min-w-0">
+                <span className="block text-sm font-medium">Ignore testnet</span>
+                <span className="block text-[11px] leading-snug text-muted-foreground">
+                  Test networks and their tokens look real: each takes its mainnet&apos;s name and place, nothing is labelled test, and every token on one counts as
+                  verified, priced as the coin it is named after. Only the look changes: what is read, signed and sent does not.
+                </span>
+              </span>
+              <Toggle label="Ignore testnet" checked={!!state?.settings.ignoreTestnets} onChange={(v) => void updateSettings({ ignoreTestnets: v })} />
+            </div>
+          </Section>
+
+          <Section title="Tokens">
+            <Row
+              icon={<Coins className="h-4 w-4" />}
+              label="Your tokens"
+              description={`Mint, burn, freeze and run the tokens you deployed on ${homeQrdxChain.name}, or create one`}
+              onClick={() => setPage('dev-tokens')}
+              right={<ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" />}
+            />
+          </Section>
+
+          <Section title="Diagnostics">
+            <div className="p-2 space-y-2">
               {diagnostics.map(([k, v]) => (
                 <div key={k} className="flex justify-between gap-3 text-[11px]">
                   <span className="text-muted-foreground shrink-0">{k}</span>
                   <span className="font-mono text-right break-all">{v}</span>
                 </div>
               ))}
-            </CardContent>
-          </Card>
+            </div>
+          </Section>
           <Button variant="outline" className="w-full glass" onClick={() => navigator.clipboard.writeText(text)}>
             Copy diagnostics
           </Button>
@@ -1274,6 +1303,9 @@ function SettingsScreen({
       </div>
     )
   }
+
+  // ── Developer Options → Your tokens ──────────────────────────────────────
+  if (page === 'dev-tokens') return <DevTokensPage onBack={() => setPage('developer')} />
 
   return null
 }

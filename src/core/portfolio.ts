@@ -12,7 +12,7 @@
  * and folded away unless the user shows unverified tokens.
  */
 
-import { chainFamily, isListedToken, isQrdxChain, type ChainConfig, type ChainToken } from './chains'
+import { chainFamily, isListedToken, isNetworkShown, isQrdxChain, looksLikeTestnet, type ChainConfig, type ChainToken } from './chains'
 import type { TokenBalance } from './ethereum'
 import type { WalletAccount } from './types'
 import { fetchBalances } from './tx-service'
@@ -72,7 +72,7 @@ export interface Portfolio {
 
 /** The networks a portfolio covers: the account's QRDX network first, every mainnet, and test networks when shown. */
 export function portfolioChains(all: ChainConfig[], qrdx: ChainConfig, showTestnets: boolean): ChainConfig[] {
-  return [qrdx, ...all.filter((c) => !isQrdxChain(c) && !c.notLive && (showTestnets || !c.isTestnet))]
+  return [qrdx, ...all.filter((c) => !isQrdxChain(c) && !c.notLive && isNetworkShown(c, showTestnets))]
 }
 
 /**
@@ -85,7 +85,8 @@ export function priceIdFor(chain: ChainConfig, address: string, symbol: string, 
   if (listed?.coingeckoId) return listed.coingeckoId
   if (!address) return isQrdxChain(chain) ? undefined : symbolToCoingeckoId(chain.nativeCurrency.symbol)
   if (verified) return symbolToCoingeckoId(verified.symbol)
-  if (listed || trusted) return symbolToCoingeckoId(symbol)
+  // (isListedToken: every token on a test network, while test networks are ignored.)
+  if (listed || trusted || isListedToken(chain, address)) return symbolToCoingeckoId(symbol)
   return undefined
 }
 
@@ -179,7 +180,7 @@ export function groupHoldings(holdings: Holding[]): Asset[] {
     const a = byKey.get(key) ?? ({ key, symbol: h.symbol, name: h.name, listed: h.listed, holdings: [], price: h.price, usd: 0, testnet: true } as Asset)
     a.holdings.push(h)
     a.usd += h.usd ?? 0
-    if (!h.chain.isTestnet) {
+    if (!looksLikeTestnet(h.chain)) {
       a.testnet = false
       // The mainnet holding names the asset (ETH, not Sepolia ETH).
       a.name = h.name

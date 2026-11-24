@@ -9,7 +9,7 @@ import { Select } from '@/components/motion/Select'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
-import { chainFamily, isQrdxChain } from '@/src/core/chains'
+import { chainFamily, isQrdxChain, looksLikeTestnet } from '@/src/core/chains'
 import { NetworkLogo } from './CoinLogo'
 import { usePrimaryName } from './useQnsName'
 import { WEB_WALLET, paymentLink, paymentRequest } from '@/src/core/payment-uri'
@@ -75,9 +75,9 @@ export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: Re
 
   const note =
     family === 'bitcoin'
-      ? `Send only bitcoin${activeChain.isTestnet ? ' on testnet4' : ''} to this address. This is a native SegWit (bc1…) address; any Bitcoin wallet can pay it.`
+      ? `Send only bitcoin${looksLikeTestnet(activeChain) ? ' on testnet4' : ''} to this address. This is a native SegWit (${activeChain.isTestnet ? 'tb1' : 'bc1'}…) address; any Bitcoin wallet can pay it.`
       : family === 'solana'
-        ? `Send only SOL and Solana tokens${activeChain.isTestnet ? ' on devnet' : ''} to this address.`
+        ? `Send only SOL and Solana tokens${looksLikeTestnet(activeChain) ? ' on devnet' : ''} to this address.`
         : qrdx && kind === 'pq'
           ? 'Your quantum-safe address on QRDX. Trading, staking and swaps use it. Senders on QRDX can also use your QRDX name.'
           : qrdx

@@ -71,8 +71,31 @@ literal old-format fixture.
 - **Extension:** inspect the service worker from `chrome://extensions`. The
   popup and approval windows are normal pages (right-click → Inspect).
 - **iPhone PWA:** Safari on a Mac → Develop → *your iPhone* → the web app.
-- **Settings → Developer** shows platform, backend, vault version, passkey
-  support and RPC status. You can copy it into bug reports; it contains no secrets.
+- **Settings → Developer Options** (turn on Developer Mode under About first)
+  shows platform, backend, vault version, passkey support and RPC status. You can
+  copy it into bug reports; it contains no secrets. It names the network as it
+  is, even while test networks are ignored.
+
+## Developer options
+
+- **Ignore testnet**, for product mocks and screenshots: test networks look
+  like their mainnets (`setIgnoreTestnets` in `src/core/chains.ts`). Each test
+  network in `MAINNET_OF` takes its mainnet's name, short name and coin name in
+  place, and its mainnet's position in `allChains()`; the mainnet itself is
+  left out (`standInFor`), so nothing is listed twice. `isTestnet`, the chain
+  id, the node and every rule stay the test network's: code that decides
+  behaviour keeps reading `isTestnet`, and code that only marks a test network
+  reads `looksLikeTestnet`, `isMaskedTestnet` or `isNetworkShown`. Every token
+  on a test network counts as listed (`isListedToken`), so it is shown,
+  verified and priced by its symbol. It follows `developerMode`: off with it.
+- **Your tokens** (`components/wallet/settings/DevTokensPage.tsx`,
+  `src/core/dev-tokens.ts`): the native tokens the account deployed or holds an
+  authority over, and everything those authorities allow (mint, burn, freeze,
+  pause, metadata, transfer fee, fee withdrawal, handing over or giving up an
+  authority), through the same review sheet as trading
+  (`components/wallet/trade/submit.tsx`). Recipients are picked with
+  `AddressField`, which checks them as Send does and offers where the token was
+  minted before (the node's `/get_address_history`).
 
 ## Trading screen and the trade API
 

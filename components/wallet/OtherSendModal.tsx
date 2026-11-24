@@ -9,7 +9,7 @@ import { Spinner } from '@/components/motion/Loading'
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowUpRight, CheckCircle2, ClipboardPaste, ExternalLink } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
-import { chainFamily } from '@/src/core/chains'
+import { chainFamily, looksLikeTestnet } from '@/src/core/chains'
 import { formatAmount, formatUnitsExact } from '@/src/core/balances'
 import { formatFiat } from '@/src/core/fiat'
 import {
@@ -222,7 +222,7 @@ export function OtherSendModal({ initialToken, initialRecipient, onClose }: { in
             <input
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              placeholder={family === 'bitcoin' ? (activeChain.isTestnet ? 'tb1…' : 'bc1…, 1… or 3…') : 'Solana address'}
+              placeholder={family === 'bitcoin' ? (looksLikeTestnet(activeChain) ? 'tb1…' : activeChain.isTestnet ? 'Bitcoin address' : 'bc1…, 1… or 3…') : 'Solana address'}
               aria-label="Recipient address"
               spellCheck={false}
               autoCapitalize="off"
