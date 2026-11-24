@@ -16,10 +16,11 @@
  * user. src/pwa/PWAProvider.tsx shows the "Update available" prompt.
  */
 
-const VERSION = 'qrdx-wallet-v2'
+const VERSION = 'qrdx-wallet-v3'
 const SHELL = [
   '/wallet',
   '/manifest.json',
+  '/icons/favicon-32.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/apple-touch-icon.png',

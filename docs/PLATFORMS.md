@@ -22,6 +22,8 @@ tab and as the iPhone app when launched from the home screen.
 | Install | browser install prompt | Share → Add to Home Screen | the zips on wallet.qrdx.org (CI's `extension` release): Load unpacked / Load Temporary Add-on |
 | Storage eviction risk | yes (Safari deletes after 7 days unused) | no (installed apps are exempt) | no |
 | Offline | app shell cached | app shell cached | bundled |
+| Live dithered backdrop (WebGPU) | where the browser has WebGPU | Safari 26+ | Chrome (WebGPU in the popup); Firefox where it has WebGPU; elsewhere the same frame, still |
+| Icon | glass mark, no background | glass mark on a black tile (iOS fills transparency with black) | glass mark, no background; smoked glass at 16 and 48 px |
 
 All three share the onboarding, accounts, send/receive, swap and staking flows,
 security settings, and the same vault format. A recovery phrase or keystore

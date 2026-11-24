@@ -324,7 +324,7 @@ export function SwapModal({ onClose, initialFrom, elsewhere = [], onElsewhere }:
             : null
 
   return (
-    <div className="flex min-h-screen flex-col mono-backdrop">
+    <div className="flex min-h-screen flex-col wallet-screen">
       <div className="glass-strong sticky top-0 z-20 pt-safe">
         <div className="flex items-center gap-3 px-4 py-3">
           <button type="button" onClick={onClose} aria-label="Back" className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-accent/50">

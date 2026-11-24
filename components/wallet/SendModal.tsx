@@ -410,7 +410,7 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
   /* ─── Step 1: Token Selection ─── */
   if (step === 'select-token') {
     return (
-      <div className="min-h-screen mono-backdrop flex flex-col">
+      <div className="min-h-screen wallet-screen flex flex-col">
         {/* Header */}
         <div className="glass-strong sticky top-0 z-20 pt-safe">
           <div className="px-4 py-3">
@@ -516,7 +516,7 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
   const token = selectedToken!
 
   return (
-    <div className="min-h-screen mono-backdrop flex flex-col">
+    <div className="min-h-screen wallet-screen flex flex-col">
       {/* Header */}
       <div className="glass-strong sticky top-0 z-20 pt-safe">
         <div className="px-4 py-3">

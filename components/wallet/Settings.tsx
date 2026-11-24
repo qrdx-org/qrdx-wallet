@@ -133,9 +133,24 @@ import { MultisigPage } from './settings/MultisigPage'
 import { ApprovalsPage } from './settings/ApprovalsPage'
 import { WatchPage } from './settings/WatchPage'
 import { NetworksPage } from './settings/NetworksPage'
+import { ScreenStack } from '../motion/ScreenStack'
 
+/** Settings and its pages, each change of page with the wallet's screen motion. */
 export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
   const [page, setPage] = useState<SettingsPage>(initialPage)
+  return (
+    <ScreenStack id={page} depth={page === 'main' ? 0 : 1}>
+      <SettingsScreen onBack={onBack} initialPage={initialPage} page={page} setPage={setPage} />
+    </ScreenStack>
+  )
+}
+
+function SettingsScreen({
+  onBack,
+  initialPage = 'main',
+  page,
+  setPage,
+}: SettingsProps & { page: SettingsPage; setPage: (p: SettingsPage) => void }) {
   const { theme, setTheme } = useTheme()
   const {
     allWallets,
@@ -343,7 +358,7 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
   // ── Main ──────────────────────────────────────────────────────────────────
   if (page === 'main') {
     return (
-      <div className="min-h-screen mono-backdrop">
+      <div className="min-h-screen wallet-screen">
         <Header title="Settings" />
         <div className="px-4 py-3 space-y-2">
           {/* General section */}
@@ -550,7 +565,7 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
     const currentTheme = (theme as ThemeValue) || 'dark'
 
     return (
-      <div className="min-h-screen mono-backdrop">
+      <div className="min-h-screen wallet-screen">
         <Header title="Theme" />
         <div className="px-4 py-3 space-y-3">
           <div className="px-1 mb-1">
@@ -666,7 +681,7 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
   // ── Currency ──────────────────────────────────────────────────────────────
   if (page === 'currency') {
     return (
-      <div className="min-h-screen mono-backdrop">
+      <div className="min-h-screen wallet-screen">
         <Header title="Currency" />
         <div className="px-4 py-3">
           <Card className="glass border-border/50">
@@ -705,7 +720,7 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
   // ── Connected Sites ───────────────────────────────────────────────────────
   if (page === 'connected-sites') {
     return (
-      <div className="min-h-screen mono-backdrop">
+      <div className="min-h-screen wallet-screen">
         {confirmDialog}
         <Header title="Connected Sites" />
         <div className="px-4 py-3 space-y-3">
@@ -807,7 +822,7 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
     }
 
     return (
-      <div className="min-h-screen mono-backdrop">
+      <div className="min-h-screen wallet-screen">
         <Header title="Injected APIs" />
         <div className="px-4 py-3 space-y-3">
           <div className="px-1">
@@ -1022,7 +1037,7 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
     )
 
     return (
-      <div className="min-h-screen mono-backdrop">
+      <div className="min-h-screen wallet-screen">
         {confirmDialog}
         <Header title="Address Book" />
         <div className="px-4 py-3 space-y-3">
@@ -1188,7 +1203,7 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
   // ── About ─────────────────────────────────────────────────────────────────
   if (page === 'about') {
     return (
-      <div className="min-h-screen mono-backdrop">
+      <div className="min-h-screen wallet-screen">
         <Header title="About" />
         <div className="px-4 py-3 space-y-4">
           {/* Logo & version */}
@@ -1272,7 +1287,7 @@ export function Settings({ onBack, initialPage = 'main' }: SettingsProps) {
     ]
     const text = diagnostics.map(([k, v]) => `${k}: ${v}`).join('\n')
     return (
-      <div className="min-h-screen mono-backdrop">
+      <div className="min-h-screen wallet-screen">
         <Header title="Developer Options" />
         <div className="px-4 py-3 space-y-3">
           <Card className="glass border-border/50">

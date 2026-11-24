@@ -1,18 +1,22 @@
 'use client'
 
-import { useTheme } from 'next-themes'
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { TrendingUp, TrendingDown } from 'lucide-react'
-import { createChart, ColorType, AreaSeries, CrosshairMode } from 'lightweight-charts'
-import type { IChartApi } from 'lightweight-charts'
 import type { PriceHistoryPoint } from '@/src/core/prices'
 import { formatFiatPrice } from '@/src/core/fiat'
+import { cn } from '@/lib/utils'
+import { ditherChart, type ChartFrame } from '@/components/gfx/dither-chart'
+import { RollingText } from '@/components/motion/RollingText'
+
+const HEIGHT = 112
 
 interface PortfolioChartProps {
   data?: PriceHistoryPoint[]
   change24h?: number
   /** What the change covers (the token page's chart shows ranges). */
   changeLabel?: string
+  /** Run the chart out to the card's edges (it sits in a card with 1rem of padding). */
+  bleed?: boolean
 }
 
 /**
@@ -24,173 +28,79 @@ interface PortfolioChartProps {
  * screen people use to make financial decisions. When there is no price history
  * — a new chain, an unpriced token, an offline oracle — the honest answer is to
  * say so.
+ *
+ * The line is drawn in the backdrop's dots (components/gfx/dither-chart.ts). Scrubbing it shows
+ * that moment's price, time and change since the range opened, in place of the range's change.
  */
-export function PortfolioChart({ data, change24h = 0, changeLabel = '24h' }: PortfolioChartProps) {
-  const { resolvedTheme } = useTheme()
-  const chartContainerRef = useRef<HTMLDivElement>(null)
-  const chartInstanceRef = useRef<IChartApi | null>(null)
-  const seriesRef = useRef<any>(null)
-  const isPositive = change24h > 0
-  const [ready, setReady] = useState(false)
-  const [hoverData, setHoverData] = useState<{ price: string; time: string } | null>(null)
+export function PortfolioChart({ data, change24h = 0, changeLabel = '24h', bleed = false }: PortfolioChartProps) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const endRef = useRef<HTMLSpanElement>(null)
+  const summaryRef = useRef<HTMLDivElement>(null)
+  const readoutRef = useRef<HTMLDivElement>(null)
+  const priceRef = useRef<HTMLSpanElement>(null)
+  const timeRef = useRef<HTMLSpanElement>(null)
+  const deltaRef = useRef<HTMLSpanElement>(null)
+  const chart = useRef<ReturnType<typeof ditherChart> | null>(null)
+  const dataRef = useRef(data)
+  const shownIndex = useRef(-1)
 
   const hasData = !!data && data.length > 0
+  const isPositive = change24h > 0
 
-  const setupChart = useCallback(() => {
-    const container = chartContainerRef.current
-    if (!container || !hasData) return
+  useEffect(() => {
+    const wrap = wrapRef.current
+    const canvas = canvasRef.current
+    if (!hasData || !wrap || !canvas) return
 
-    // Destroy previous instance if exists
-    if (chartInstanceRef.current) {
-      try { chartInstanceRef.current.remove() } catch {}
-      chartInstanceRef.current = null
-      seriesRef.current = null
-    }
-
-    // Ensure container has real dimensions
-    const rect = container.getBoundingClientRect()
-    const w = Math.max(rect.width, 200)
-    const h = 90
-
-    const chart = createChart(container, {
-      width: w,
-      height: h,
-      layout: {
-        background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: 'transparent',
-        fontFamily: 'Inter, sans-serif',
-        attributionLogo: false,
-      },
-      grid: {
-        vertLines: { visible: false },
-        horzLines: { visible: false },
-      },
-      crosshair: {
-        mode: CrosshairMode.Magnet,
-        vertLine: {
-          visible: true,
-          labelVisible: false,
-          width: 1,
-          color: 'rgba(128, 128, 128, 0.45)',
-          style: 0,
-        },
-        horzLine: {
-          visible: true,
-          labelVisible: false,
-          width: 1,
-          color: 'rgba(128, 128, 128, 0.25)',
-          style: 2,
-        },
-      },
-      rightPriceScale: { visible: false, borderVisible: false },
-      leftPriceScale: { visible: false, borderVisible: false },
-      timeScale: { visible: false, borderVisible: false },
-      handleScroll: false,
-      handleScale: false,
-      watermark: { visible: false },
-    } as any)
-
-    // Monochrome: the line is ink (white in dark mode, black in light); the % change carries direction.
-    const dark = resolvedTheme ? resolvedTheme === 'dark' : document.documentElement.classList.contains('dark')
-    const lineColor = dark ? '#fafafa' : '#0a0a0a'
-
-    const series = chart.addSeries(AreaSeries, {
-      lineColor,
-      topColor: dark ? 'rgba(250, 250, 250, 0.16)' : 'rgba(10, 10, 10, 0.10)',
-      bottomColor: 'transparent',
-      lineWidth: 2,
-      crosshairMarkerVisible: true,
-      crosshairMarkerRadius: 5,
-      crosshairMarkerBorderColor: lineColor,
-      crosshairMarkerBorderWidth: 2,
-      crosshairMarkerBackgroundColor: dark ? '#080808' : '#ffffff',
-      priceLineVisible: false,
-      lastValueVisible: false,
-    })
-
-    const data_ = data!
-    series.setData(
-      data!.map(p => ({
-        time: Math.floor(p.timestamp / 1000) as any,
-        value: p.price,
-      })),
-    )
-    chart.timeScale().fitContent()
-
-    chartInstanceRef.current = chart
-    seriesRef.current = series
-    setReady(true)
-
-    // Show price tooltip on hover
-    chart.subscribeCrosshairMove((param) => {
-      if (!param.time || !param.seriesData.size) {
-        setHoverData(null)
-        return
+    // Positions and text that follow every frame are set here, not through React state.
+    const onFrame = ({ end, scrub }: ChartFrame) => {
+      const dot = endRef.current
+      if (dot) {
+        dot.style.opacity = end ? String(1 - (scrub?.alpha ?? 0)) : '0'
+        if (end) dot.style.transform = `translate(${end[0]}px, ${end[1]}px)`
       }
-      const data = param.seriesData.get(series) as any
-      if (data?.value !== undefined) {
-        // In the chosen currency; with the date when the chart spans more than a day.
-        const price = formatFiatPrice(data.value)
-        const date = new Date((param.time as number) * 1000)
-        const span = data_.length > 1 ? data_[data_.length - 1].timestamp - data_[0].timestamp : 0
-        const time =
+      const a = scrub?.alpha ?? 0
+      if (summaryRef.current) summaryRef.current.style.opacity = String(1 - a)
+      if (readoutRef.current) readoutRef.current.style.opacity = String(a)
+      const points = dataRef.current
+      if (!scrub || !points?.length || scrub.index === shownIndex.current) return
+      shownIndex.current = scrub.index
+      const p = points[Math.min(scrub.index, points.length - 1)]
+      const span = points.length > 1 ? points[points.length - 1].timestamp - points[0].timestamp : 0
+      const date = new Date(p.timestamp)
+      // In the chosen currency; with the date when the chart spans more than a day.
+      if (priceRef.current) priceRef.current.textContent = formatFiatPrice(p.price)
+      if (timeRef.current)
+        timeRef.current.textContent =
           span > 36 * 3_600_000
             ? date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
             : date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
-        setHoverData({ price, time })
-      }
-    })
-
-    // Hide TradingView attribution link only (do NOT hide tables — lightweight-charts uses them internally)
-    requestAnimationFrame(() => {
-      const tvLinks = container.querySelectorAll('a[href*="tradingview"]')
-      tvLinks.forEach((el) => {
-        ;(el as HTMLElement).style.display = 'none'
-      })
-    })
-  }, [data, hasData, resolvedTheme])
-
-  useEffect(() => {
-    const container = chartContainerRef.current
-    if (!container) return
-
-    // Use ResizeObserver to detect when the container has real dimensions,
-    // then initialize the chart. This is more reliable than setTimeout in
-    // extension popups where layout may be deferred.
-    let initialized = false
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0]
-      if (!entry) return
-      const { width } = entry.contentRect
-      if (width > 0 && !initialized) {
-        initialized = true
-        observer.disconnect()
-        setupChart()
-      } else if (width > 0 && chartInstanceRef.current) {
-        // Handle subsequent resizes
-        chartInstanceRef.current.applyOptions({ width })
-      }
-    })
-    observer.observe(container)
-
-    // Fallback: if ResizeObserver doesn't fire within 200ms, force init
-    const fallback = setTimeout(() => {
-      if (!initialized) {
-        initialized = true
-        observer.disconnect()
-        setupChart()
-      }
-    }, 200)
-
-    return () => {
-      clearTimeout(fallback)
-      observer.disconnect()
-      if (chartInstanceRef.current) {
-        try { chartInstanceRef.current.remove() } catch {}
-        chartInstanceRef.current = null
+      if (deltaRef.current) {
+        const open = points[0].price
+        const pct = open > 0 ? ((p.price - open) / open) * 100 : 0
+        deltaRef.current.textContent = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`
+        deltaRef.current.className = cn('tabular-nums', Math.abs(pct) < 0.005 ? 'text-muted-foreground' : pct > 0 ? 'text-green-500' : 'text-red-500')
       }
     }
-  }, [setupChart])
+
+    const c = ditherChart(canvas, { height: HEIGHT, onFrame })
+    chart.current = c
+    c.resize(wrap.clientWidth)
+    const observer = new ResizeObserver(([entry]) => entry && c.resize(entry.contentRect.width))
+    observer.observe(wrap)
+    return () => {
+      observer.disconnect()
+      c.dispose()
+      chart.current = null
+    }
+  }, [hasData])
+
+  useEffect(() => {
+    dataRef.current = data
+    shownIndex.current = -1
+    if (data?.length) chart.current?.setData(data.map((p) => p.price))
+  }, [data])
 
   if (!hasData) {
     return (
@@ -207,52 +117,46 @@ export function PortfolioChart({ data, change24h = 0, changeLabel = '24h' }: Por
     )
   }
 
+  const flat = Math.abs(change24h) < 0.005
+  const scrubAt = (e: React.PointerEvent) => chart.current?.scrub(e.clientX - e.currentTarget.getBoundingClientRect().left)
+  // A mouse leaves by leaving; a finger by lifting.
+  const release = (e: React.PointerEvent) => e.pointerType !== 'mouse' && chart.current?.scrub(null)
+
   return (
-    <div className="space-y-2 mt-2">
-      <div className="flex items-center gap-2">
-        {Math.abs(change24h) < 0.005 ? (
-          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted">
-            <span className="text-xs font-semibold text-muted-foreground">0.00%</span>
+    <div className="mt-2 space-y-2">
+      <div className="relative h-6">
+        <div ref={summaryRef} className="absolute inset-0 flex items-center gap-2">
+          <div
+            className={cn(
+              'flex items-center gap-1 rounded-full px-2 py-0.5 transition-colors duration-500',
+              flat ? 'bg-muted text-muted-foreground' : isPositive ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
+            )}
+          >
+            {!flat && (isPositive ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />)}
+            <RollingText className="text-xs font-semibold" text={`${isPositive ? '+' : ''}${(flat ? 0 : change24h).toFixed(2)}%`} />
           </div>
-        ) : isPositive ? (
-          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10">
-            <TrendingUp className="h-3.5 w-3.5 text-green-500" />
-            <span className="text-xs font-semibold text-green-500">
-              +{change24h.toFixed(2)}%
-            </span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/10">
-            <TrendingDown className="h-3.5 w-3.5 text-red-500" />
-            <span className="text-xs font-semibold text-red-500">
-              {change24h.toFixed(2)}%
-            </span>
-          </div>
-        )}
-        <span className="text-xs text-muted-foreground">{changeLabel}</span>
+          <span className="text-xs text-muted-foreground">{changeLabel}</span>
+        </div>
+        <div ref={readoutRef} className="pointer-events-none absolute inset-0 flex items-center gap-2 text-xs opacity-0" aria-hidden>
+          <span ref={priceRef} className="text-sm font-semibold tabular-nums text-foreground" />
+          <span ref={deltaRef} className="tabular-nums" />
+          <span ref={timeRef} className="text-[10px] text-muted-foreground" />
+        </div>
       </div>
 
       <div
-        className="w-full relative"
-        onMouseLeave={() => setHoverData(null)}
+        ref={wrapRef}
+        className={cn('relative cursor-crosshair touch-pan-y select-none', bleed && '-mx-4')}
+        style={{ height: HEIGHT }}
+        onPointerDown={scrubAt}
+        onPointerMove={scrubAt}
+        onPointerUp={release}
+        onPointerCancel={() => chart.current?.scrub(null)}
+        onPointerLeave={() => chart.current?.scrub(null)}
       >
-        {/* Price tooltip on hover */}
-        {hoverData && (
-          <div className="absolute top-0 left-0 z-10 flex items-center gap-2 pointer-events-none">
-            <span className="text-sm font-semibold text-foreground">{hoverData.price}</span>
-            <span className="text-[10px] text-muted-foreground">{hoverData.time}</span>
-          </div>
-        )}
-        <div
-          ref={chartContainerRef}
-          className="w-full relative"
-          style={{
-            height: 90,
-            minWidth: 200,
-            opacity: ready ? 1 : 0,
-            transition: 'opacity 0.3s ease',
-          }}
-        />
+        <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
+        {/* The newest price, live: a dot that breathes. */}
+        <span ref={endRef} className="chart-live pointer-events-none absolute left-0 top-0 opacity-0 transition-opacity duration-300" aria-hidden />
       </div>
     </div>
   )

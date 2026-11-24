@@ -70,6 +70,8 @@
     border-color: hsl(var(--border));
   }
   
+  /* On body alone, so it becomes the page canvas's colour: on html as well, body would paint
+     its own box over the backdrop (components/gfx/Backdrop.tsx). */
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
@@ -172,6 +174,15 @@ input[type="number"] {
   animation: fade-in 0.4s ease-out forwards;
 }
 
+/* Sheets rise from the bottom edge and settle, like the wallet's screen spring. */
+@keyframes sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+.animate-sheet-in {
+  animation: sheet-in 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 /* Gradient text: ink that fades a little toward the end, like light on metal. */
 .gradient-text {
   background: linear-gradient(135deg, hsl(var(--foreground)) 30%, hsl(var(--foreground) / 0.55) 100%);
@@ -180,19 +191,80 @@ input[type="number"] {
   background-clip: text;
 }
 
-/* Glass effect */
+/*
+ * Glass: the wallet's surfaces over the dithered backdrop, which the blur melts into soft grey.
+ * (The prefixed property comes first: the CSS minifier keeps only the last of the pair, and
+ * Chrome needs the standard one.)
+ */
 .glass {
   background: hsl(var(--card) / 0.6);
-  backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
   border: 1px solid hsl(var(--border) / 0.5);
 }
 
 .glass-strong {
   background: hsl(var(--card) / 0.85);
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
   border: 1px solid hsl(var(--border) / 0.6);
+}
+
+/* Clear glass: the balance card, whose chart is printed in the backdrop's dots; the orb shows
+   through it, softened. */
+.glass-clear {
+  background: linear-gradient(180deg, hsl(var(--card) / 0.34), hsl(var(--card) / 0.12));
+  -webkit-backdrop-filter: blur(7px) saturate(1.2);
+  backdrop-filter: blur(7px) saturate(1.2);
+  border: 1px solid hsl(var(--foreground) / 0.09);
+  box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.07);
+}
+
+/* A chart's newest price: a dot that breathes, its ring spreading out and fading. */
+.chart-live {
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 9999px;
+  background: hsl(var(--foreground));
+}
+.chart-live::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid hsl(var(--foreground));
+  animation: chart-live 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+@keyframes chart-live {
+  from { transform: scale(1); opacity: 0.8; }
+  to { transform: scale(4.5); opacity: 0; }
+}
+
+/* Children rise into place one after another when they first appear (a screen, a list). */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+.stagger > * {
+  animation: rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.stagger > :nth-child(2) { animation-delay: 45ms; }
+.stagger > :nth-child(3) { animation-delay: 90ms; }
+.stagger > :nth-child(4) { animation-delay: 135ms; }
+.stagger > :nth-child(5) { animation-delay: 180ms; }
+.stagger > :nth-child(6) { animation-delay: 225ms; }
+.stagger > :nth-child(7) { animation-delay: 270ms; }
+.stagger > :nth-child(8) { animation-delay: 315ms; }
+.stagger > :nth-child(n + 9) { animation-delay: 360ms; }
+
+/* Rows that answer the finger: a press sinks them a little. */
+.press {
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease;
+}
+.press:active {
+  transform: scale(0.985);
+  transition-duration: 0.08s;
 }
 
 /* ── Installed-app (PWA) safe areas ─────────────────────────────────────────
@@ -236,7 +308,13 @@ input[type="number"] {
 
 /* ── Monochrome surfaces ───────────────────────────────────────────────────── */
 
-/* A faint spotlight from the top and fine grain, so flat black or white has depth. */
+/* A wallet screen: transparent, so the dithered backdrop shows through; its panels are .glass. */
+.wallet-screen {
+  background-color: transparent;
+}
+
+/* A faint spotlight from the top and fine grain, so flat black or white has depth (pages
+   without the backdrop: the landing page). */
 .mono-backdrop {
   background-color: hsl(var(--background));
   background-image:
@@ -260,7 +338,8 @@ input[type="number"] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-float, .animate-glow, .animate-pulse-ring, .animate-shimmer { animation: none; }
+  .animate-float, .animate-glow, .animate-pulse-ring, .animate-shimmer, .animate-sheet-in, .stagger > *, .chart-live::after { animation: none; }
+  .press:active { transform: none; }
 }
 
 /* Prices that just moved: a brief wash of their direction. */

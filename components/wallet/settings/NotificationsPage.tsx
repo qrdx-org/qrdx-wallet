@@ -54,7 +54,7 @@ export function NotificationsPage({ header }: { header: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen mono-backdrop">
+    <div className="min-h-screen wallet-screen">
       {header}
       <div className="space-y-3 px-4 py-3">
         {permission === 'denied' && (

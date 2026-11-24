@@ -15,6 +15,8 @@ import { formatAmount } from '@/src/core/balances'
 import { getEvmProvider } from '@/src/core/ethereum'
 import { cn, formatAddress } from '@/lib/utils'
 import { PortfolioChart } from './PortfolioChart'
+import { RangeTabs } from '@/components/motion/RangeTabs'
+import { RollingText } from '@/components/motion/RollingText'
 import type { Token } from './TokenList'
 
 const RANGES: HistoryRange[] = ['1H', '1D', '1W', '1M']
@@ -100,7 +102,7 @@ export function TokenDetail({ token, onClose, onAction }: { token: Token; onClos
   const activity = transactions.filter((t) => (isNative ? !t.tokenSymbol : t.tokenSymbol?.toUpperCase() === token.symbol.toUpperCase())).slice(0, 8)
 
   return (
-    <div className="min-h-screen mono-backdrop flex flex-col">
+    <div className="min-h-screen wallet-screen flex flex-col">
       {confirmDialog}
       <div className="glass-strong sticky top-0 z-20 pt-safe">
         <div className="flex items-center gap-3 px-4 py-3">
@@ -117,23 +119,12 @@ export function TokenDetail({ token, onClose, onAction }: { token: Token; onClos
 
       <div className="flex-1 space-y-3 px-4 py-3">
         <div>
-          <p className="text-3xl font-bold tracking-tight tabular-nums">{price ? formatUsd(price.usd) : '—'}</p>
+          <p className="text-3xl font-bold tracking-tight tabular-nums">{price ? <RollingText text={formatUsd(price.usd)} /> : '—'}</p>
           <p className="text-xs tabular-nums text-muted-foreground">
             {rangeChange != null ? `${rangeChange >= 0 ? '+' : ''}${rangeChange.toFixed(2)}% · ${range}` : price ? 'no change data' : 'No USD price for this token'}
           </p>
           <PortfolioChart data={history ?? []} change24h={rangeChange ?? 0} changeLabel={range} />
-          <div className="mt-2 flex gap-1 rounded-xl bg-accent/30 p-1">
-            {RANGES.map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRange(r)}
-                className={cn('flex-1 rounded-lg py-1.5 text-xs font-medium transition-colors', range === r ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
+          <RangeTabs className="mt-2" value={range} options={RANGES} onChange={setRange} />
           {history !== null && history.length === 0 && <p className="mt-1 text-center text-[10px] text-muted-foreground">No market chart for {token.symbol} on {activeChain.name} yet.</p>}
         </div>
 

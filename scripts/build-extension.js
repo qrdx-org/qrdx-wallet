@@ -361,20 +361,27 @@ function createExtensionScripts(targetDir, browser) {
 }
 
 function createIcons(targetDir) {
-  log('Creating resized icons from logo.png...');
+  log('Copying the extension icons...');
   const iconsDir = path.join(targetDir, 'icons');
   fs.mkdirSync(iconsDir, { recursive: true });
   
   const logoPath = path.join(rootDir, 'assets', 'logo.png');
   
-  if (!fs.existsSync(logoPath)) {
-    log('Warning: logo.png not found in assets/');
-    return;
-  }
-  
   const sizes = [16, 48, 128];
   sizes.forEach(size => {
     const iconPath = path.join(iconsDir, `icon${size}.png`);
+    // The glass mark, rendered for each size (scripts/icon/README.md): denser glass at 16 and 48
+    // so it reads on light toolbars and dark.
+    const rendered = path.join(rootDir, 'assets', 'icon', `extension-${size}.png`);
+    if (fs.existsSync(rendered)) {
+      fs.copyFileSync(rendered, iconPath);
+      log(`Copied icon${size}.png`);
+      return;
+    }
+    if (!fs.existsSync(logoPath)) {
+      log(`Warning: no icon for ${size}px (assets/icon/extension-${size}.png or assets/logo.png)`);
+      return;
+    }
     try {
       // Use ImageMagick convert to resize the logo
       execSync(

@@ -98,7 +98,7 @@ export function QuickActions({ onAction, available }: QuickActionsProps) {
           <button
             key={action.key}
             onClick={() => onAction?.(action.key)}
-            className="group flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl bg-background/50 border border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all"
+            className="glass group flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl hover:border-primary/30 hover:bg-primary/5 transition-all"
           >
             <div className={`h-9 w-9 rounded-lg bg-gradient-to-br ${action.gradient} flex items-center justify-center text-primary-foreground shadow-sm group-hover:scale-105 transition-transform`}>
               {action.icon}
@@ -111,10 +111,8 @@ export function QuickActions({ onAction, available }: QuickActionsProps) {
         {folder.length > 0 && (
         <button
           onClick={() => setFolderOpen(!folderOpen)}
-          className={`group flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl border transition-all ${
-            folderOpen
-              ? 'bg-primary/10 border-primary/30'
-              : 'bg-background/50 border-border/50 hover:border-primary/30 hover:bg-primary/5'
+          className={`glass group flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl transition-all ${
+            folderOpen ? 'bg-primary/10 border-primary/30' : 'hover:border-primary/30 hover:bg-primary/5'
           }`}
         >
           <div className="h-9 w-9 rounded-lg bg-muted/80 border border-border/50 flex items-center justify-center group-hover:scale-105 transition-transform overflow-hidden">
@@ -143,7 +141,7 @@ export function QuickActions({ onAction, available }: QuickActionsProps) {
                 onAction?.(action.key)
                 setFolderOpen(false)
               }}
-              className="group flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl bg-background/50 border border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all"
+              className="glass group flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl hover:border-primary/30 hover:bg-primary/5 transition-all"
             >
               <div className={`h-9 w-9 rounded-lg bg-gradient-to-br ${action.gradient} flex items-center justify-center text-primary-foreground shadow-sm group-hover:scale-105 transition-transform`}>
                 {action.icon}

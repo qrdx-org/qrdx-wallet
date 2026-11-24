@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Onboarding } from './wallet/onboarding/Onboarding'
 import { Unlock } from './wallet/Unlock'
 import { Dashboard } from './wallet/Dashboard'
@@ -8,6 +8,7 @@ import { ApprovalScreen } from './wallet/approval/ApprovalScreen'
 import { approvalIdFromLocation } from '@/src/extension/provider/approval-protocol'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { RemoteConnectProvider } from './wallet/connect/RemoteConnect'
+import { ScreenStack } from './motion/ScreenStack'
 
 /** QRDX Connect wraps everything, so a ?connect= link survives onboarding and unlocking. */
 export function WalletHome() {
@@ -27,9 +28,18 @@ function WalletHomeInner() {
   // Extension approval windows open the same page with #approval=<id>.
   const [approvalId] = useState(() => approvalIdFromLocation())
 
+  // Loading, onboarding, unlocking and the wallet itself change over with one motion.
+  const screen = (id: string, depth: number, el: ReactNode) => (
+    <ScreenStack id={id} depth={depth}>
+      {el}
+    </ScreenStack>
+  )
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center w-full h-full min-h-screen bg-background">
+    return screen(
+      'loading',
+      0,
+      <div className="flex items-center justify-center w-full h-full min-h-screen">
         <div className="flex flex-col items-center gap-4 animate-fade-in">
           <div className="relative">
             <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-primary/60 animate-pulse-ring" />
@@ -43,10 +53,10 @@ function WalletHomeInner() {
 
   if (approvalId && initialized) {
     // Unlock first when needed; the approval screen also resolves "unlock" requests.
-    return locked ? <Unlock /> : <ApprovalScreen id={approvalId} />
+    return locked ? screen('unlock', 1, <Unlock />) : screen('approval', 2, <ApprovalScreen id={approvalId} />)
   }
   if (onboarding || !initialized)
-    return <Onboarding onCommit={() => setOnboarding(true)} onDone={() => setOnboarding(false)} />
-  if (locked) return <Unlock />
-  return <Dashboard />
+    return screen('onboarding', 1, <Onboarding onCommit={() => setOnboarding(true)} onDone={() => setOnboarding(false)} />)
+  if (locked) return screen('unlock', 1, <Unlock />)
+  return screen('wallet', 2, <Dashboard />)
 }

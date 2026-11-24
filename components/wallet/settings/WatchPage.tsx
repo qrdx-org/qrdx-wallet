@@ -133,7 +133,7 @@ function WatchedPortfolio({ watched, onBack }: { watched: WatchedAddress; onBack
   if (asset) return <AssetPage asset={asset} onClose={() => setAsset(null)} onSend={() => undefined} onReceive={() => undefined} onTrade={() => undefined} readOnly />
 
   return (
-    <div className="min-h-screen mono-backdrop">
+    <div className="min-h-screen wallet-screen">
       <div className="glass-strong sticky top-0 z-20 pt-safe">
         <div className="flex items-center gap-3 px-4 py-3">
           <button type="button" onClick={onBack} aria-label="Back" className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-accent/50">

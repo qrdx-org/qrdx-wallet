@@ -13,7 +13,8 @@
  */
 
 import { QrdxMark } from '@/components/QrdxMark'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { ScreenStack } from '@/components/motion/ScreenStack'
 import {
   ArrowRight,
   Check,
@@ -55,16 +56,8 @@ import {
 } from '../flow/FlowKit'
 
 type ImportMethod = 'phrase' | 'key' | 'keystore'
-type Step =
-  | 'welcome'
-  | 'create-password'
-  | 'create-phrase'
-  | 'create-verify'
-  | 'import-method'
-  | 'import-secret'
-  | 'import-password'
-  | 'secure'
-  | 'done'
+const STEPS = ['welcome', 'create-password', 'create-phrase', 'create-verify', 'import-method', 'import-secret', 'import-password', 'secure', 'done'] as const
+type Step = (typeof STEPS)[number]
 
 export function Onboarding({ onDone, onCommit }: { onDone: () => void; onCommit?: () => void }) {
   const wallet = useWallet()
@@ -94,6 +87,12 @@ export function Onboarding({ onDone, onCommit }: { onDone: () => void; onCommit?
     setError(null)
     setStep(s)
   }
+  // Each step changes over with the wallet's screen motion, forward or back by STEPS' order.
+  const screen = (el: ReactNode) => (
+    <ScreenStack id={step} depth={STEPS.indexOf(step)}>
+      {el}
+    </ScreenStack>
+  )
 
   const startCreate = (count: 12 | 24 = wordCount) => {
     setMnemonic(wallet.generateMnemonic(count))
@@ -172,7 +171,7 @@ export function Onboarding({ onDone, onCommit }: { onDone: () => void; onCommit?
 
   // ── Welcome ───────────────────────────────────────────────────────────────
   if (step === 'welcome') {
-    return (
+    return screen(
       <FlowScreen className="justify-center">
         <div className="text-center mb-6 animate-slide-up">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/60 mb-4 shadow-lg shadow-primary/25">
@@ -219,7 +218,7 @@ export function Onboarding({ onDone, onCommit }: { onDone: () => void; onCommit?
   // ── Create: password ──────────────────────────────────────────────────────
   if (step === 'create-password' || step === 'import-password') {
     const creating = step === 'create-password'
-    return (
+    return screen(
       <FlowScreen>
         <StepHeader
           title={creating ? 'Create a password' : 'Protect your wallet'}
@@ -270,7 +269,7 @@ export function Onboarding({ onDone, onCommit }: { onDone: () => void; onCommit?
 
   // ── Create: phrase ────────────────────────────────────────────────────────
   if (step === 'create-phrase') {
-    return (
+    return screen(
       <FlowScreen>
         <StepHeader
           title="Your recovery phrase"
@@ -317,7 +316,7 @@ export function Onboarding({ onDone, onCommit }: { onDone: () => void; onCommit?
 
   // ── Create: verify ────────────────────────────────────────────────────────
   if (step === 'create-verify') {
-    return (
+    return screen(
       <FlowScreen>
         <StepHeader
           title="Check your backup"
@@ -348,7 +347,7 @@ export function Onboarding({ onDone, onCommit }: { onDone: () => void; onCommit?
       setMethod(m)
       go('import-secret')
     }
-    return (
+    return screen(
       <FlowScreen>
         <StepHeader
           title="Import a wallet"
@@ -394,7 +393,7 @@ export function Onboarding({ onDone, onCommit }: { onDone: () => void; onCommit?
       key: 'Enter your private key',
       keystore: 'Choose your keystore',
     }
-    return (
+    return screen(
       <FlowScreen>
         <StepHeader
           title={titles[method]}
@@ -439,7 +438,7 @@ export function Onboarding({ onDone, onCommit }: { onDone: () => void; onCommit?
   // ── Secure ────────────────────────────────────────────────────────────────
   if (step === 'secure') {
     const canOfferBio = biometrics.support !== 'unsupported'
-    return (
+    return screen(
       <FlowScreen>
         <StepHeader
           title="Secure this device"
@@ -496,7 +495,7 @@ export function Onboarding({ onDone, onCommit }: { onDone: () => void; onCommit?
   }
 
   // ── Done ──────────────────────────────────────────────────────────────────
-  return (
+  return screen(
     <FlowScreen className="justify-center items-center text-center">
       <div className="h-16 w-16 rounded-2xl bg-green-500/15 flex items-center justify-center mb-4">
         <Sparkles className="h-8 w-8 text-green-500" />

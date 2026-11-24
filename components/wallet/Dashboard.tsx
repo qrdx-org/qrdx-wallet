@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Lock, Settings as SettingsIcon, Copy, Check, Eye, EyeOff, Shield, ChevronDown, ScanLine } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,7 @@ import { TokenList } from './TokenList'
 import { AllTokens } from './AllTokens'
 import { ActivityList } from './ActivityList'
 import { PortfolioChart } from './PortfolioChart'
+import { RollingText } from '@/components/motion/RollingText'
 import { Settings } from './Settings'
 import { NetworkSelector, NetworkStatusBanner } from './NetworkSelector'
 import { SendModal } from './SendModal'
@@ -41,6 +42,8 @@ import { AssetList, HoldingPicker, PortfolioSummary, ReceiveNetworkPicker } from
 import { PortfolioActivity } from './portfolio/PortfolioActivity'
 import { AssetPage } from './portfolio/AssetPage'
 import { TradeSheet } from './portfolio/TradeSheet'
+import { ScreenStack, SPRING } from '../motion/ScreenStack'
+import { AnimatePresence, motion } from 'framer-motion'
 import type { Asset, Holding } from '@/src/core/portfolio'
 
 export function Dashboard() {
@@ -87,7 +90,13 @@ export function Dashboard() {
       /* storage unavailable: this visit only */
     }
   }
-  const [activeTab, setActiveTab] = useState<'tokens' | 'nfts' | 'activity' | 'explore'>('tokens')
+  const [activeTab, setActiveTabState] = useState<'tokens' | 'nfts' | 'activity' | 'explore'>('tokens')
+  // The tab before the current one, so its content can come in from the right side.
+  const [prevTab, setPrevTab] = useState(activeTab)
+  const setActiveTab = (t: typeof activeTab) => {
+    setPrevTab(activeTab)
+    setActiveTabState(t)
+  }
   const [showSettings, setShowSettings] = useState(false)
   const [showConnect, setShowConnect] = useState(false)
   const rc = useRemoteConnect()
@@ -214,20 +223,28 @@ export function Dashboard() {
     await lock()
   }
 
+  // Home and every screen opened from it change over with one motion (home is the shallowest).
+  const screen = (id: string, el: ReactNode) => (
+    <ScreenStack id={id} depth={id === 'home' ? 0 : 1}>
+      {el}
+    </ScreenStack>
+  )
+
   // Show settings page
   if (showSettings) {
-    return <Settings initialPage={settingsPage} onBack={() => { setShowSettings(false); setSettingsPage('main') }} />
+    return screen('settings', <Settings initialPage={settingsPage} onBack={() => { setShowSettings(false); setSettingsPage('main') }} />)
   }
 
   // Show action modals
   if (showConnect) {
-    return <ConnectSheet onClose={() => setShowConnect(false)} />
+    return screen('connect', <ConnectSheet onClose={() => setShowConnect(false)} />)
   }
   if (activeModal === 'send' && family !== 'evm') {
-    return <OtherSendModal initialToken={sendToken} initialRecipient={sendTo} onClose={() => (setActiveModal(null), setSendToken(undefined), setSendTo(undefined))} />
+    return screen('send-other', <OtherSendModal initialToken={sendToken} initialRecipient={sendTo} onClose={() => (setActiveModal(null), setSendToken(undefined), setSendTo(undefined))} />)
   }
   if (activeModal === 'send') {
-    return (
+    return screen(
+      'send',
       <SendModal
         ethAddress={ethAddress}
         pqAddress={pqAddress}
@@ -239,10 +256,11 @@ export function Dashboard() {
     )
   }
   if (activeModal === 'receive') {
-    return <ReceiveModal ethAddress={ethAddress} pqAddress={pqAddress} accountName={accountName} onClose={() => setActiveModal(null)} />
+    return screen('receive', <ReceiveModal ethAddress={ethAddress} pqAddress={pqAddress} accountName={accountName} onClose={() => setActiveModal(null)} />)
   }
   if (activeModal === 'swap') {
-    return (
+    return screen(
+      'swap',
       <SwapModal
         initialFrom={swapFrom}
         elsewhere={allNetworks ? (portfolio?.assets ?? []).flatMap((a) => a.holdings).filter((h) => !isQrdxChain(h.chain) && h.raw > 0n && h.listed) : []}
@@ -252,27 +270,28 @@ export function Dashboard() {
     )
   }
   if (activeModal === 'buy') {
-    return <BuyModal onClose={() => setActiveModal(null)} onReceive={() => setActiveModal('receive')} onSwap={() => setActiveModal('swap')} />
+    return screen('buy', <BuyModal onClose={() => setActiveModal(null)} onReceive={() => setActiveModal('receive')} onSwap={() => setActiveModal('swap')} />)
   }
   if (activeModal === 'shield') {
-    return <ShieldModal onClose={() => setActiveModal(null)} onSend={() => setActiveModal('send')} />
+    return screen('shield', <ShieldModal onClose={() => setActiveModal(null)} onSend={() => setActiveModal('send')} />)
   }
   if (activeModal === 'trade') {
-    return <TradeModal onClose={() => setActiveModal(null)} />
+    return screen('trade', <TradeModal onClose={() => setActiveModal(null)} />)
   }
   if (activeModal === 'stake') {
-    return <StakeModal onClose={() => setActiveModal(null)} />
+    return screen('stake', <StakeModal onClose={() => setActiveModal(null)} />)
   }
 
   if (tradeHolding) {
-    return <TradeSheet holding={tradeHolding} onClose={() => setTradeHolding(null)} onDone={refreshPortfolio} />
+    return screen('trade-holding', <TradeSheet holding={tradeHolding} onClose={() => setTradeHolding(null)} onDone={refreshPortfolio} />)
   }
   if (openAsset && allNetworks) {
-    return <AssetPage asset={openAsset} onClose={() => setOpenAsset(null)} onSend={sendFrom} onReceive={receiveOn} onTrade={tradeFrom} />
+    return screen('asset', <AssetPage asset={openAsset} onClose={() => setOpenAsset(null)} onSend={sendFrom} onReceive={receiveOn} onTrade={tradeFrom} />)
   }
 
   if (openToken) {
-    return (
+    return screen(
+      'token',
       <TokenDetail
         token={openToken}
         onClose={() => setOpenToken(null)}
@@ -287,7 +306,8 @@ export function Dashboard() {
 
   // Show all tokens view
   if (showAllTokens) {
-    return (
+    return screen(
+      'all-tokens',
       <AllTokens
         pinnedSymbols={pinnedSymbols}
         favoritedSymbols={favoritedSymbols}
@@ -307,9 +327,11 @@ export function Dashboard() {
     ...(family === 'evm' ? [{ key: 'explore' as const, label: 'Explore', count: 0 }] : []),
   ]
   const tab = tabs.some((t) => t.key === activeTab) ? activeTab : 'tokens'
+  const tabDir = tabs.findIndex((t) => t.key === tab) >= tabs.findIndex((t) => t.key === prevTab) ? 1 : -1
 
-  return (
-    <div className="min-h-screen mono-backdrop">
+  return screen(
+    'home',
+    <div className="min-h-screen wallet-screen">
       {/* Header */}
       <div className="glass-strong sticky top-0 z-20 pt-safe">
         <div className="px-4 py-3">
@@ -400,7 +422,7 @@ export function Dashboard() {
       </div>
 
       {/* Main Content */}
-      <div className="px-4 py-3 space-y-3">
+      <div className="stagger px-4 py-3 space-y-3">
         {/* Network badge + selector */}
         <div className="flex items-center justify-between">
           {/* Only QRDX accounts sign with a post-quantum key; elsewhere the network's own keys apply. */}
@@ -423,7 +445,7 @@ export function Dashboard() {
         {allNetworks ? (
           <PortfolioSummary portfolio={portfolio} loading={portfolioLoading} onRefresh={refreshPortfolio} visible={balanceVisible} />
         ) : (
-        <Card className="glass metal-card relative overflow-hidden border-border/70">
+        <Card className="glass-clear relative overflow-hidden">
           <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-foreground/30 to-transparent" />
           <CardContent className="p-4 relative">
             <div className="flex items-center justify-between mb-1">
@@ -446,7 +468,7 @@ export function Dashboard() {
               </Button>
             </div>
             <div className={cn('text-3xl font-bold tracking-tight mb-1 tabular-nums', !balanceVisible && 'privacy-blur')} aria-hidden={!balanceVisible}>
-              {totalBalance}
+              <RollingText text={totalBalance} />
             </div>
             {usdFirst && (
               <div className={cn('flex items-center gap-2 text-xs tabular-nums text-muted-foreground', !balanceVisible && 'privacy-blur')}>
@@ -486,7 +508,7 @@ export function Dashboard() {
               </button>
             </div>
             )}
-            <PortfolioChart data={priceHistory} change24h={portfolioChange24h} />
+            <PortfolioChart data={priceHistory} change24h={portfolioChange24h} bleed />
           </CardContent>
         </Card>
         )}
@@ -531,18 +553,19 @@ export function Dashboard() {
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="flex gap-1 p-1 bg-accent/30 rounded-xl">
+        {/* Tabs: the pill slides to the chosen one. */}
+        <div className="glass flex gap-1 p-1 rounded-xl">
           {tabs.map((t) => (
             <button
               key={t.key}
               onClick={() => setActiveTab(t.key)}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${
-                tab === t.key
-                  ? 'bg-background shadow-sm text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
+              className={`relative isolate flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors ${
+                tab === t.key ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
+              {tab === t.key && (
+                <motion.span layoutId="home-tab" transition={SPRING} className="absolute inset-0 -z-10 rounded-lg bg-background/80 shadow-sm ring-1 ring-foreground/10" />
+              )}
               {t.label}
               {t.count > 0 && tab === t.key && (
                 <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">
@@ -553,9 +576,18 @@ export function Dashboard() {
           ))}
         </div>
 
-        {/* Tab Content */}
-        <Card className="glass border-border/50">
+        {/* Tab Content: it drifts in from the side of the tab that was chosen. */}
+        <Card className="glass overflow-hidden">
           <CardContent className="p-2">
+            <AnimatePresence initial={false} mode="popLayout" custom={tabDir}>
+            <motion.div
+              key={tab}
+              custom={tabDir}
+              initial={{ opacity: 0, x: tabDir * 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: tabDir * -24 }}
+              transition={SPRING}
+            >
             {tab === 'tokens' &&
               (allNetworks ? (
                 <AssetList portfolio={portfolio} onOpen={setOpenAsset} visible={balanceVisible} />
@@ -574,6 +606,8 @@ export function Dashboard() {
               />
             )}
             {tab === 'explore' && <Explore onOpenToken={setOpenToken} />}
+            </motion.div>
+            </AnimatePresence>
           </CardContent>
         </Card>
       </div>

@@ -78,7 +78,7 @@ function TradeScreen({ onClose }: TradeModalProps) {
   const back = view.kind === 'list' ? onClose : () => setView({ kind: 'list' })
 
   return (
-    <div className="flex min-h-screen flex-col mono-backdrop">
+    <div className="flex min-h-screen flex-col wallet-screen">
       <div className="glass-strong sticky top-0 z-20 pt-safe">
         <div className="flex items-center gap-2 px-3 py-2.5">
           <button type="button" onClick={back} aria-label="Back" className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-accent/50">

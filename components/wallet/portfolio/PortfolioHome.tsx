@@ -15,6 +15,8 @@ import { assetAmount, type Asset, type Holding, type Portfolio } from '@/src/cor
 import { chainFamily, isQrdxChain, type ChainConfig } from '@/src/core/chains'
 import { CoinLogo, NetworkLogo } from '../CoinLogo'
 import { PortfolioChart } from '../PortfolioChart'
+import { RangeTabs } from '@/components/motion/RangeTabs'
+import { RollingText } from '@/components/motion/RollingText'
 import { useValueHistory, type HistorySubject } from './useValueHistory'
 import type { ValueRange } from '@/src/core/portfolio-history'
 import { onTrustChange, setShowUnverified, showUnverified } from '@/src/core/token-trust'
@@ -72,7 +74,7 @@ export function PortfolioSummary({
   const pct = portfolio && portfolio.usd - portfolio.change24hUsd > 0 ? (portfolio.change24hUsd / (portfolio.usd - portfolio.change24hUsd)) * 100 : null
 
   return (
-    <Card className="glass metal-card relative overflow-hidden border-border/70">
+    <Card className="glass-clear relative overflow-hidden">
       <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-foreground/30 to-transparent" />
       <CardContent className="relative p-4">
         <div className="mb-1 flex items-center justify-between">
@@ -81,7 +83,7 @@ export function PortfolioSummary({
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" /> : <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />}
           </button>
         </div>
-        <div className={cn('mb-1 text-3xl font-bold tracking-tight tabular-nums', !visible && 'privacy-blur')}>{portfolio ? formatFiat(portfolio.usd) : '…'}</div>
+        <div className={cn('mb-1 text-3xl font-bold tracking-tight tabular-nums', !visible && 'privacy-blur')}><RollingText text={portfolio ? formatFiat(portfolio.usd) : '…'} /></div>
         <div className={cn('flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground', !visible && 'privacy-blur')}>
           {portfolio && portfolio.change24hUsd !== 0 && (
             <span className="text-foreground/80">
@@ -102,19 +104,13 @@ export function PortfolioSummary({
         {portfolio && portfolio.usd > 0 && (
           <div className={cn(!visible && 'privacy-blur')}>
             {history ? (
-              <PortfolioChart data={history.points} change24h={rangeChange} changeLabel={range} />
+              <PortfolioChart data={history.points} change24h={rangeChange} changeLabel={range} bleed />
             ) : (
               <div className="flex h-[120px] items-center justify-center text-[11px] text-muted-foreground">
                 {historyLoading && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />} Replaying your transactions…
               </div>
             )}
-            <div className="mt-1 flex justify-center gap-1">
-              {VALUE_RANGES.map((r) => (
-                <button key={r} type="button" onClick={() => setRange(r)} className={cn('rounded-md px-2.5 py-1 text-[10px] font-semibold', range === r ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-accent/50')}>
-                  {r}
-                </button>
-              ))}
-            </div>
+            <RangeTabs className="mt-1" value={range} options={VALUE_RANGES} onChange={setRange} />
             {history && (history.partial.length > 0 || history.truncated.length > 0 || history.unpricedHistory.length > 0) && (
               <p className="mt-1.5 text-[10px] leading-relaxed text-muted-foreground">
                 {history.partial.length > 0 && <>Transactions on {history.partial.map((c) => c.shortName).join(', ')} could not be read: those holdings are drawn as they are today. </>}
@@ -146,7 +142,7 @@ function AssetRow({ asset, onOpen, visible }: { asset: Asset; onOpen: (a: Asset)
   const amount = assetAmount(asset)
   const value = asset.usd
   return (
-    <button type="button" onClick={() => onOpen(asset)} className="flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors hover:bg-accent/30">
+    <button type="button" onClick={() => onOpen(asset)} className="press flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-accent/30">
       <CoinLogo symbol={asset.symbol} verified={asset.listed && !h.trusted} size={36} network={single && h.address ? h.chain : undefined} />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5 text-sm font-semibold">
@@ -194,7 +190,7 @@ export function AssetList({ portfolio, onOpen, visible }: { portfolio: Portfolio
   const main = portfolio.assets.filter((a) => inMainList(a, showAll))
   const unlisted = portfolio.assets.filter((a) => !main.includes(a))
   return (
-    <div className="space-y-0.5">
+    <div className="stagger space-y-0.5">
       {main.map((a) => (
         <AssetRow key={a.key} asset={a} onOpen={onOpen} visible={visible} />
       ))}
@@ -227,8 +223,8 @@ export function AssetList({ portfolio, onOpen, visible }: { portfolio: Portfolio
 
 function PickerShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center" onClick={onClose}>
-      <div className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-border/60 bg-background p-3 pb-safe sm:rounded-2xl" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm animate-fade-in sm:items-center" onClick={onClose}>
+      <div className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-t-2xl glass-strong p-3 pb-safe animate-sheet-in sm:rounded-2xl" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
         <div className="mb-2 flex items-center justify-between px-1">
           <h2 className="text-sm font-semibold">{title}</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 hover:bg-accent/50">

@@ -171,7 +171,7 @@ export function StakeModal({ onClose }: StakeModalProps) {
   }
 
   return (
-    <div className="min-h-screen mono-backdrop flex flex-col">
+    <div className="min-h-screen wallet-screen flex flex-col">
       <div className="glass-strong sticky top-0 z-20 pt-safe">
         <div className="px-4 py-3 flex items-center gap-3">
           <button type="button" onClick={onClose} aria-label="Back" className="h-8 w-8 rounded-lg hover:bg-accent/50 flex items-center justify-center">

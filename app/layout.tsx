@@ -12,8 +12,13 @@ export const metadata: Metadata = {
   creator: 'QRDX Foundation',
   publisher: 'QRDX Foundation',
   manifest: '/manifest.json',
+  // The glass mark (scripts/icon): transparent everywhere but iOS, whose home screen needs the black
+  // tile (it fills transparent pixels with black).
   icons: {
-    icon: '/icons/icon-192.png',
+    icon: [
+      { url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
     apple: '/icons/apple-touch-icon.png',
   },
   formatDetection: { telephone: false, address: false, email: false },
@@ -31,7 +36,7 @@ export const metadata: Metadata = {
 // focusing one never zooms).
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: dark)', color: '#030711' },
+    { media: '(prefers-color-scheme: dark)', color: '#080808' },
     { media: '(prefers-color-scheme: light)', color: '#ffffff' },
   ],
   width: 'device-width',

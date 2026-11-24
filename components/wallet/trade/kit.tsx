@@ -215,7 +215,7 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal aria-label={title}>
       <button type="button" aria-label="Close" className="absolute inset-0 bg-black/50 backdrop-blur-[3px] animate-fade-in" onClick={onClose} />
-      <div className="relative w-full max-w-md animate-slide-up rounded-t-2xl border-t bg-card pb-safe shadow-2xl">
+      <div className="relative w-full max-w-md animate-sheet-in rounded-t-2xl glass-strong pb-safe shadow-2xl">
         <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/30" />
         <div className="flex items-center justify-between px-4 pb-2 pt-3">
           <h2 className="text-sm font-semibold">{title}</h2>

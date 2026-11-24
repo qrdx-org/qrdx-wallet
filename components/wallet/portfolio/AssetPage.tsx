@@ -16,8 +16,9 @@ import { timeAgo } from '@/src/core/trade/format'
 import { fetchMarketData, type MarketData } from '@/src/core/market'
 import { isQrdxChain, type ChainConfig } from '@/src/core/chains'
 import type { Asset, Holding } from '@/src/core/portfolio'
-import { cn } from '@/lib/utils'
 import { PortfolioChart } from '../PortfolioChart'
+import { RangeTabs } from '@/components/motion/RangeTabs'
+import { RollingText } from '@/components/motion/RollingText'
 import { CoinLogo, NetworkLogo } from '../CoinLogo'
 import { Change } from './PortfolioHome'
 import { setTokenTrusted } from '@/src/core/token-trust'
@@ -99,7 +100,7 @@ export function AssetPage({
   }
 
   return (
-    <div className="min-h-screen mono-backdrop flex flex-col">
+    <div className="min-h-screen wallet-screen flex flex-col">
       <div className="glass-strong sticky top-0 z-20 pt-safe">
         <div className="flex items-center gap-3 px-4 py-3">
           <button type="button" onClick={onClose} aria-label="Back" className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-accent/50">
@@ -120,7 +121,7 @@ export function AssetPage({
         <div className="rounded-xl glass p-3">
           {price != null ? (
             <>
-              <div className="text-2xl font-bold tabular-nums">{formatFiatPrice(price)}</div>
+              <div className="text-2xl font-bold tabular-nums"><RollingText text={formatFiatPrice(price)} /></div>
               <div className="flex flex-wrap gap-x-3 text-[11px] text-muted-foreground">
                 <span>
                   24h <Change pct={market?.change24h ?? asset.price?.usd_24h_change} />
@@ -150,13 +151,7 @@ export function AssetPage({
           )}
           {points && points.length > 1 && <PortfolioChart data={points} change24h={market?.change24h ?? asset.price?.usd_24h_change ?? 0} changeLabel={range} />}
           {(qrdx || (id && asset.listed) || tradeAsset) && (
-            <div className="mt-1 flex justify-center gap-1">
-              {RANGES.map(([r]) => (
-                <button key={r} type="button" onClick={() => setRange(r)} className={cn('rounded-md px-2.5 py-1 text-[10px] font-semibold', range === r ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-accent/50')}>
-                  {r}
-                </button>
-              ))}
-            </div>
+            <RangeTabs className="mt-1" value={range} options={RANGES.map(([r]) => r)} onChange={setRange} />
           )}
         </div>
 

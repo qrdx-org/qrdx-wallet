@@ -59,7 +59,7 @@ export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: Re
             : `Send only ${activeChain.name} assets to this address: ${activeChain.nativeCurrency.symbol} and tokens on ${activeChain.name}. The same address works on every EVM network, so check which network the sender uses.`
 
   return (
-    <div className="min-h-screen mono-backdrop">
+    <div className="min-h-screen wallet-screen">
       <div className="glass-strong sticky top-0 z-20 pt-safe">
         <div className="px-4 py-3">
           <div className="flex items-center gap-3">

@@ -32,7 +32,7 @@ import { isValidMnemonic } from '@/src/core/crypto'
 
 export function FlowScreen({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className="min-h-screen flex flex-col mono-backdrop relative overflow-hidden">
+    <div className="min-h-screen flex flex-col wallet-screen relative overflow-hidden">
       {/* Safe-area insets on a wrapper so they add to the screen's own padding. */}
       <div className="flex-1 flex flex-col relative z-10 pt-safe pb-safe">
         <div className={cn('flex-1 flex flex-col px-5 py-6', className)}>{children}</div>
@@ -704,12 +704,12 @@ export function Sheet({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in"
       role="dialog"
       aria-modal
       aria-label={title}
     >
-      <div className="w-full max-w-md max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-background border border-border pb-safe animate-slide-up">
+      <div className="w-full max-w-md max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl glass-strong pb-safe animate-sheet-in">
         <div className="p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-bold">{title}</h3>
