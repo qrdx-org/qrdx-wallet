@@ -12,24 +12,19 @@
  * vault is created, so backing out at any step leaves no trace.
  */
 
-import { QrdxMark } from '@/components/QrdxMark'
 import { useMemo, useState, type ReactNode } from 'react'
 import { ScreenStack } from '@/components/motion/ScreenStack'
+import { Welcome } from './Welcome'
 import {
   ArrowRight,
   Check,
-  ChevronRight,
-  Download,
   FileJson,
   Fingerprint,
   Key,
   KeyRound,
   Lock,
-  Plus,
-  Shield,
   ShieldCheck,
   Sparkles,
-  Zap,
 } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { InstallHint } from '@/src/pwa/install'
@@ -172,45 +167,8 @@ export function Onboarding({ onDone, onCommit }: { onDone: () => void; onCommit?
   // ── Welcome ───────────────────────────────────────────────────────────────
   if (step === 'welcome') {
     return screen(
-      <FlowScreen className="justify-center">
-        <div className="text-center mb-6 animate-slide-up">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/60 mb-4 shadow-lg shadow-primary/25">
-            <QrdxMark className="h-8 w-8 text-primary-foreground" />
-          </div>
-          <h1 className="text-2xl font-bold gradient-text mb-1.5">QRDX Wallet</h1>
-          <p className="text-sm text-muted-foreground">Quantum-resistant self-custody</p>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2 mb-6">
-          {[
-            { icon: Shield, title: 'Quantum-safe', desc: 'ML-DSA-65 keys alongside classic ones' },
-            { icon: Zap, title: 'Multi-chain', desc: 'QRDX, Ethereum and EVM networks' },
-            { icon: Key, title: 'Self-custody', desc: 'Keys never leave this device' },
-          ].map((f) => (
-            <div key={f.title} className="rounded-xl glass p-2.5">
-              <f.icon className="h-4 w-4 text-primary mb-1.5" />
-              <div className="text-xs font-semibold mb-0.5">{f.title}</div>
-              <div className="text-[10px] text-muted-foreground leading-tight">{f.desc}</div>
-            </div>
-          ))}
-        </div>
-
-        <div className="space-y-3">
-          <PrimaryButton onClick={() => startCreate()}>
-            <Plus className="h-5 w-5 mr-2" /> Create a new wallet{' '}
-            <ChevronRight className="h-4 w-4 ml-auto" />
-          </PrimaryButton>
-          <PrimaryButton variant="outline" onClick={() => go('import-method')}>
-            <Download className="h-5 w-5 mr-2" /> I already have a wallet{' '}
-            <ChevronRight className="h-4 w-4 ml-auto" />
-          </PrimaryButton>
-        </div>
-
-        {platform.install !== 'none' && (
-          <div className="mt-5">
-            <InstallHint compact />
-          </div>
-        )}
+      <FlowScreen>
+        <Welcome onCreate={() => startCreate()} onImport={() => go('import-method')} install={platform.install !== 'none'} />
       </FlowScreen>
     )
   }

@@ -146,8 +146,7 @@ export function PrimaryButton({
   variant?: 'primary' | 'outline' | 'danger'
 }) {
   const styles = {
-    primary:
-      'bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 text-primary-foreground',
+    primary: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_10px_30px_-14px_hsl(var(--foreground)/0.6)]',
     outline: 'glass border hover:bg-accent/50 hover:border-primary/30',
     danger: 'bg-red-600 hover:bg-red-600/90 text-white',
   }
