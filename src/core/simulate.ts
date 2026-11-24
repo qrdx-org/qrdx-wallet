@@ -65,8 +65,18 @@ export async function simulateTransaction(chainId: string, tx: SimulationInput, 
   const action = market?.action
 
   const provider = getEvmProvider(chainId)
+  // A deployment has no `to`, which QRDX's eth_call does not take: its gas estimate runs the
+  // creation instead, and answers at the block limit or above for one that fails at any gas.
+  if (!tx.to) {
+    try {
+      const gas = BigInt(await provider.rpc<string>('eth_estimateGas', [{ from: tx.from, value: toHex(value), data: tx.data || '0x' }]))
+      return gas < 1_000_000n ? { ok: true, changes, action } : { ok: false, reason: 'the deployment fails at any gas', changes, action }
+    } catch (e) {
+      return { ok: false, reason: revertReason(e), changes, action }
+    }
+  }
   try {
-    await provider.rpc<string>('eth_call', [{ from: tx.from, to: tx.to ?? undefined, value: toHex(value), data: tx.data || '0x' }, 'latest'])
+    await provider.rpc<string>('eth_call', [{ from: tx.from, to: tx.to, value: toHex(value), data: tx.data || '0x' }, 'latest'])
     return { ok: true, changes, action }
   } catch (e) {
     // QRDX nodes run eth_call without the value (qrdx-node main.py eth_call_handler), so a call

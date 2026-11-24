@@ -227,6 +227,32 @@ describe('transactions', () => {
     expect(raw.slice(0, 4)).toBe('0x51')
   })
 
+  it('deploys a contract from the classic key when `to` is left out', async () => {
+    const code = '0x6080604052348015600e575f80fd5b50'
+    await router.handle(SITE, { method: 'eth_sendTransaction', params: [{ from: ADDR0, data: code }] })
+    const approval = approvals.at(-1) as Extract<ApprovalRequest, { kind: 'transaction' }>
+    expect(approval.tx.to).toBeNull()
+    const estimate = rpcCalls.find((c) => c.method === 'eth_estimateGas')!.params[0] as Record<string, unknown>
+    expect(estimate).not.toHaveProperty('to')
+    const raw = rpcCalls.find((c) => c.method === 'eth_sendRawTransaction')!.params[0] as string
+    const fields = rlpDecode(hexToBytes(raw.slice(2))).data as { data: Uint8Array }[]
+    // The recipient field is empty: a creation.
+    expect(fields[3].data).toHaveLength(0)
+    expect(Buffer.from(fields[5].data).toString('hex')).toBe(code.slice(2))
+  })
+
+  it('refuses a deployment without code', async () => {
+    await expect(router.handle(SITE, { method: 'eth_sendTransaction', params: [{ from: ADDR0 }] })).rejects.toMatchObject({ code: -32602 })
+  })
+
+  it('deploys a contract from the post-quantum account when `to` is left out', async () => {
+    await router.handle(SITE, { method: 'qrdx_sendPQTransaction', params: [{ data: '0x6080604052' }] })
+    const approval = approvals.at(-1) as Extract<ApprovalRequest, { kind: 'transaction' }>
+    expect(approval.credential).toBe('pq')
+    expect(approval.tx.to).toBeNull()
+    expect(approval.tx.toAccountId).toBeNull()
+  })
+
   it('refuses a from-address the site was not granted', async () => {
     await expect(
       router.handle(SITE, {

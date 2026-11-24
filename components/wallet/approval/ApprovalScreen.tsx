@@ -388,14 +388,17 @@ export function ApprovalScreen(
             const chain = getChain(request.chain)
             const sym = chain?.nativeCurrency.symbol ?? 'QRDX'
             const dec = chain?.nativeCurrency.decimals ?? 18
-            const decoded = decodeCalldata(request.tx.data)
+            // No recipient: the data is a new contract's code and constructor arguments.
+            const decoded = request.tx.to
+              ? decodeCalldata(request.tx.data)
+              : { label: 'Deploys a contract', detail: `${((request.tx.data.length - 2) / 2).toLocaleString()} bytes of code and constructor arguments`, warning: undefined }
             return (
               <div className="rounded-xl glass p-3">
                 <Field label="From">
                   {account?.name} · {request.credential === 'pq' ? 'quantum-safe' : 'classic'}
                 </Field>
                 <Field label="To">
-                  {request.tx.to ? shortenAddress(request.tx.to, 6) : 'New contract'}
+                  {request.tx.to ? shortenAddress(request.tx.to, 6) : 'A new contract'}
                 </Field>
                 {request.tx.toAccountId && (
                   <Field label="Ledger account">{shortenAddress(request.tx.toAccountId, 6)}</Field>
@@ -426,7 +429,9 @@ export function ApprovalScreen(
                   ) : (
                     <>
                       <p className="text-[11px] text-muted-foreground">
-                        {simulation.ok ? 'The call succeeds.' : `The call fails: ${simulation.reason}. You would still pay the fee.`}
+                        {request.tx.to
+                          ? simulation.ok ? 'The call succeeds.' : `The call fails: ${simulation.reason}. You would still pay the fee.`
+                          : simulation.ok ? 'The contract deploys.' : `The deployment fails: ${simulation.reason}. You would still pay the fee.`}
                       </p>
                       {simulation.changes.map((c) => (
                         <Field key={c.symbol + c.amount} label={c.approval ? `Allowance for ${shortenAddress(c.approval.spender, 4)}` : 'Your balance'}>

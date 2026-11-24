@@ -544,11 +544,13 @@ export class ProviderRouter {
       throw Errors.invalidParams('eth_sendTransaction expects a transaction object')
     const account = await this.accountFor(origin, req.from)
     const chain = await this.activeChain()
+    // No `to`: a contract deployment, whose `data` is the contract's code and constructor arguments.
     const to = req.to ? String(req.to) : null
-    if (!to) throw Errors.unsupported('contract deployment from a dApp')
-    if (!/^0x[0-9a-fA-F]{40}$/.test(to)) throw Errors.invalidParams('`to` must be a 0x address')
+    if (to !== null && !/^0x[0-9a-fA-F]{40}$/.test(to)) throw Errors.invalidParams('`to` must be a 0x address')
     const value = BigInt(req.value ?? '0x0')
     const data = req.data ?? (req as { input?: string }).input ?? '0x'
+    if (to === null && !/^0x([0-9a-fA-F]{2})+$/.test(data))
+      throw Errors.invalidParams('A contract deployment needs the contract code in `data`')
 
     const [nonce, gasPrice, chainId] = await Promise.all([
       this.d
@@ -563,7 +565,7 @@ export class ProviderRouter {
       ? BigInt(req.gas)
       : ((await this.d
           .rpc<string>(chain, 'eth_estimateGas', [
-            { from: account.ethAddress, to, value: hex(value), data },
+            { from: account.ethAddress, ...(to ? { to } : {}), value: hex(value), data },
           ])
           .then(BigInt)) *
           120n) /
@@ -592,7 +594,7 @@ export class ProviderRouter {
     // QRDX accepts only legacy envelopes; EIP-1559 fields from the dApp are folded into gasPrice.
     const tx: EthTransactionRequest = {
       from: account.ethAddress,
-      to,
+      to: to ?? '',
       value: hex(value),
       data,
       nonce: hex(nonce),
@@ -615,7 +617,7 @@ export class ProviderRouter {
         track: 'evm',
         credential: 'classic',
         from: account.ethAddress,
-        to,
+        to: to ?? '',
         value: `${weiToEth(value, chain.nativeCurrency.decimals)} ${chain.nativeCurrency.symbol}`,
         origin,
       })

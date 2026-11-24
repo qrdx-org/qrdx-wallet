@@ -58,3 +58,28 @@ describe('NFT market calls', () => {
     vi.restoreAllMocks()
   })
 })
+
+describe('contract deployments', () => {
+  it('are simulated by the gas estimate, not eth_call (which needs a `to`)', async () => {
+    const { vi } = await import('vitest')
+    const eth = await import('../../src/core/ethereum')
+    const calls: string[] = []
+    let estimate = '0x30d40'
+    vi.spyOn(eth, 'getEvmProvider').mockReturnValue({
+      rpc: async (method: string) => {
+        calls.push(method)
+        if (method === 'eth_call') throw new Error("'to'")
+        return estimate
+      },
+    } as never)
+    const { simulateTransaction } = await import('../../src/core/simulate')
+    const tx = { from: '0x' + 'aa'.repeat(20), to: null, value: '0', data: '0x6080604052' }
+    const native = { symbol: 'QRDX', decimals: 18, fee: '1000' }
+    expect((await simulateTransaction('qrdx-testnet', tx, native)).ok).toBe(true)
+    expect(calls).toEqual(['eth_estimateGas'])
+    // A creation that fails at any gas estimates at the block limit or above.
+    estimate = '0xf4240'
+    expect((await simulateTransaction('qrdx-testnet', tx, native)).ok).toBe(false)
+    vi.restoreAllMocks()
+  })
+})
