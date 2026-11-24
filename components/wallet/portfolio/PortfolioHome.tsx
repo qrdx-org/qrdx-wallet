@@ -5,6 +5,7 @@
  * is on, QRDX first. Pickers start Send, Receive and Swap from an asset or a network.
  */
 
+import { Tip } from '@/components/motion/Tip'
 import { Loading, Spinner } from '@/components/motion/Loading'
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { ChevronDown, ChevronRight, RefreshCw, TrendingDown, TrendingUp, X } from 'lucide-react'
@@ -81,9 +82,11 @@ export function PortfolioSummary({
       <CardContent className="relative p-4">
         <div className="mb-1 flex items-center justify-between">
           <span className="text-xs font-medium text-muted-foreground">All networks</span>
-          <button type="button" onClick={onRefresh} aria-label="Refresh balances" className="rounded-lg p-1.5 hover:bg-accent/50">
-            {loading ? <Spinner size={14} className="text-muted-foreground" /> : <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />}
-          </button>
+          <Tip content="Refresh balances" side="left">
+            <button type="button" onClick={onRefresh} aria-label="Refresh balances" className="rounded-lg p-1.5 hover:bg-accent/50">
+              {loading ? <Spinner size={14} className="text-muted-foreground" /> : <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />}
+            </button>
+          </Tip>
         </div>
         <div className={cn('mb-1 text-3xl font-bold tracking-tight tabular-nums', !visible && 'privacy-blur')}><RollingText text={portfolio ? formatFiat(portfolio.usd) : '…'} /></div>
         <div className={cn('flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground', !visible && 'privacy-blur')}>

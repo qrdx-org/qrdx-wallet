@@ -48,6 +48,8 @@ import { PortfolioActivity } from './portfolio/PortfolioActivity'
 import { AssetPage } from './portfolio/AssetPage'
 import { TradeSheet } from './portfolio/TradeSheet'
 import { ScreenStack, SPRING } from '../motion/ScreenStack'
+import { Segment } from '../motion/Segment'
+import { Tip, TipGroup } from '../motion/Tip'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { Asset, Holding } from '@/src/core/portfolio'
 
@@ -61,9 +63,11 @@ function HeaderButton({ label, onClick, children }: { label: string; onClick: ()
       </SoapBubbleIconButton>
     )
   return (
-    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/50" onClick={onClick} aria-label={label} title={label}>
-      {children}
-    </Button>
+    <Tip content={label}>
+      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/50" onClick={onClick} aria-label={label}>
+        {children}
+      </Button>
+    </Tip>
   )
 }
 
@@ -433,6 +437,7 @@ export function Dashboard() {
                 </div>
               </div>
             </div>
+            <TipGroup>
             <div className="flex items-center gap-1">
               {rc.available && (
                 <HeaderButton label="Connect to a site" onClick={() => setShowConnect(true)}>
@@ -446,14 +451,16 @@ export function Dashboard() {
                 <Lock className="h-4 w-4 text-muted-foreground" />
               </HeaderButton>
             </div>
+            </TipGroup>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="stagger px-4 py-3 space-y-3">
-        {/* Network badge + selector */}
-        <div className="flex items-center justify-between">
+        {/* Network badge + selector. Each row here keeps its entrance transform (.stagger), so
+            each is its own layer: this one sits above the rest so the network menu opens over them. */}
+        <div className="relative z-30 flex items-center justify-between">
           {/* Only QRDX accounts sign with a post-quantum key; elsewhere the network's own keys apply. */}
           {qrdx ? (
             <BubblePanel className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20" bubbleClassName="flex items-center gap-1.5 px-2.5 py-1" radius={9999}>
@@ -481,20 +488,21 @@ export function Dashboard() {
               <span className="text-xs text-muted-foreground font-medium">
                 Total Balance
               </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 rounded-lg"
-                onClick={() => setBalanceVisible(!balanceVisible)}
-                aria-label={balanceVisible ? 'Hide balances' : 'Show balances'}
-                title={balanceVisible ? 'Hide balances' : 'Show balances'}
-              >
-                {balanceVisible ? (
-                  <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-                ) : (
-                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                )}
-              </Button>
+              <Tip content={balanceVisible ? 'Hide balances' : 'Show balances'} side="left">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-lg"
+                  onClick={() => setBalanceVisible(!balanceVisible)}
+                  aria-label={balanceVisible ? 'Hide balances' : 'Show balances'}
+                >
+                  {balanceVisible ? (
+                    <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                  ) : (
+                    <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                  )}
+                </Button>
+              </Tip>
             </div>
             <div className={cn('text-3xl font-bold tracking-tight mb-1 tabular-nums', !balanceVisible && 'privacy-blur')} aria-hidden={!balanceVisible}>
               <RollingText text={totalBalance} />
@@ -588,27 +596,24 @@ export function Dashboard() {
           </div>
         )}
 
-        {/* Tabs: the pill slides to the chosen one. */}
-        <BubblePanel className="glass flex gap-1 p-1 rounded-xl" bubbleClassName="flex gap-1 p-1" radius={16}>
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setActiveTab(t.key)}
-              className={`relative isolate flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors ${
-                tab === t.key ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {tab === t.key && (
-                <motion.span layoutId="home-tab" transition={SPRING} className="absolute inset-0 -z-10 rounded-lg bg-background/80 shadow-sm ring-1 ring-foreground/10" />
-              )}
-              {t.label}
-              {t.count > 0 && tab === t.key && (
-                <span className="px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">
-                  {t.count}
-                </span>
-              )}
-            </button>
-          ))}
+        {/* Tabs: a rubber thumb (components/motion/Segment.tsx) that stretches to the chosen one. */}
+        <BubblePanel className="glass p-1 rounded-xl" bubbleClassName="p-1" radius={16}>
+          <Segment
+            label="Home"
+            size="md"
+            quiet
+            value={tab}
+            onChange={setActiveTab}
+            options={tabs.map((t) => ({
+              value: t.key,
+              label: (
+                <>
+                  {t.label}
+                  {t.count > 0 && tab === t.key && <span className="text-[10px] font-semibold tabular-nums opacity-60">{t.count}</span>}
+                </>
+              ),
+            }))}
+          />
         </BubblePanel>
 
         {/* Tab Content: it drifts in from the side of the tab that was chosen. */}

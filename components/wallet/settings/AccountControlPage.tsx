@@ -145,6 +145,7 @@ export function AccountControlPage({ onBack }: { onBack: () => void }) {
           <Section title="Delay on changes signed here">
             <div className="space-y-2 p-2">
               <Segmented
+                label="Delay on changes"
                 value={(DELAYS.find((d) => Number(d.value) === auth.delay)?.value ?? '0') as (typeof DELAYS)[number]['value']}
                 options={DELAYS.map((d) => ({ value: d.value, label: d.label }))}
                 onChange={(v) => Number(v) !== auth.delay && policy({ action: 'delay', seconds: Number(v) }, `Make changes signed here wait ${v === '0' ? 'no time' : span(Number(v))}`)}

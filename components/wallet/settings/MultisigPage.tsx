@@ -10,6 +10,9 @@
  */
 
 import { Spinner } from '@/components/motion/Loading'
+import { Check } from '@/components/motion/Check'
+import { Select } from '@/components/motion/Select'
+import { UndoButton } from '@/components/motion/UndoButton'
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, Circle, FileUp, KeyRound, Plus, Send, Share2, Trash2, Users } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -230,10 +233,7 @@ function CreateSheet({ ownKey, onClose, onSave }: { ownKey: string; onClose: () 
           </label>
           <textarea id="ms-keys" className={textareaClass} value={keys} onChange={(e) => setKeys(e.target.value)} placeholder="Each member copies theirs from Settings → Multisig" />
         </div>
-        <label className="flex items-center gap-2 text-xs">
-          <input type="checkbox" checked={includeMe} onChange={(e) => setIncludeMe(e.target.checked)} className="h-4 w-4 accent-current" />
-          Include this account as a member
-        </label>
+        <Check checked={includeMe} onChange={setIncludeMe} label="Include this account as a member" />
         <TextField label={`Signatures needed (of ${all.length || 'n'})`} value={threshold} onChange={(v) => setThreshold(v.replace(/[^0-9]/g, ''))} />
         {result?.keyset && (
           <Notice>
@@ -368,18 +368,15 @@ function MultisigDetail({ multisig, onBack, onForget, onRequest }: { multisig: S
 
       <Section title="New request">
         <div className="space-y-2 p-2">
-          <label className="block text-xs font-medium text-muted-foreground" htmlFor="ms-for">
-            Signs for
-          </label>
-          <select id="ms-for" value={actFor} onChange={(e) => setActFor(e.target.value)} className="h-11 w-full rounded-xl border border-border bg-background px-2 text-sm">
-            <option value={multisig.address}>The multisig itself</option>
-            {controls.map((c) => (
-              <option key={c} value={c}>
-                {short(c)} (it controls)
-              </option>
-            ))}
-          </select>
+          <span className="block text-xs font-medium text-muted-foreground">Signs for</span>
+          <Select
+            label="Signs for"
+            value={actFor}
+            onChange={setActFor}
+            options={[{ value: multisig.address, label: 'The multisig itself' }, ...controls.map((c) => ({ value: c, label: `${short(c)} (it controls)` }))]}
+          />
           <Segmented<Action>
+            label="Action"
             value={action}
             onChange={setAction}
             options={[
@@ -397,23 +394,22 @@ function MultisigDetail({ multisig, onBack, onForget, onRequest }: { multisig: S
           )}
           {action === 'controller' && (
             <>
-              <Segmented<'add' | 'remove'> value={bind} onChange={setBind} options={[{ value: 'add', label: 'Bind' }, { value: 'remove', label: 'Unbind' }]} />
+              <Segmented<'add' | 'remove'> label="Bind or unbind" value={bind} onChange={setBind} options={[{ value: 'add', label: 'Bind' }, { value: 'remove', label: 'Unbind' }]} />
               <TextField label="Controller (0xPQ… or 0xPQMS…)" value={controller} onChange={setController} placeholder="0xPQ…" />
             </>
           )}
           {action === 'own_key' && (
-            <Segmented<'off' | 'on'> value={keyOn} onChange={setKeyOn} options={[{ value: 'off', label: 'Turn off' }, { value: 'on', label: 'Turn on' }]} />
+            <Segmented<'off' | 'on'> label="Own key" value={keyOn} onChange={setKeyOn} options={[{ value: 'off', label: 'Turn off' }, { value: 'on', label: 'Turn on' }]} />
           )}
           {action === 'cancel' &&
             (target?.pending_changes.length ? (
-              <select value={changeId} onChange={(e) => setChangeId(e.target.value)} aria-label="Waiting change" className="h-11 w-full rounded-xl border border-border bg-background px-2 text-sm">
-                <option value="">Choose a waiting change</option>
-                {target.pending_changes.map((c) => (
-                  <option key={c.change_id} value={c.change_id}>
-                    {c.action.replace(/_/g, ' ')} · {new Date(Number(c.due) * 1000).toLocaleString()}
-                  </option>
-                ))}
-              </select>
+              <Select
+                label="Waiting change"
+                placeholder="Choose a waiting change"
+                value={changeId}
+                onChange={setChangeId}
+                options={target.pending_changes.map((c) => ({ value: c.change_id, label: `${c.action.replace(/_/g, ' ')} · ${new Date(Number(c.due) * 1000).toLocaleString()}` }))}
+              />
             ) : (
               <p className="px-1 text-[11px] text-muted-foreground">{target ? 'Nothing is waiting on this account.' : 'Reading…'}</p>
             ))}
@@ -427,9 +423,9 @@ function MultisigDetail({ multisig, onBack, onForget, onRequest }: { multisig: S
         </div>
       </Section>
 
-      <button type="button" onClick={onForget} className="flex w-full items-center justify-center gap-1.5 py-2 text-[11px] text-muted-foreground hover:text-red-500">
-        <Trash2 className="h-3.5 w-3.5" /> Remove from this device
-      </button>
+      <div className="flex justify-center py-1">
+        <UndoButton label="Remove from this device" icon={<Trash2 className="h-3.5 w-3.5" />} onRemove={onForget} />
+      </div>
     </SettingsPage>
   )
 }
@@ -630,9 +626,9 @@ function RequestView({
         </Section>
       )}
 
-      <button type="button" onClick={onDone} className="flex w-full items-center justify-center gap-1.5 py-2 text-[11px] text-muted-foreground hover:text-red-500">
-        <Trash2 className="h-3.5 w-3.5" /> Remove this request
-      </button>
+      <div className="flex justify-center py-1">
+        <UndoButton label="Remove this request" icon={<Trash2 className="h-3.5 w-3.5" />} onRemove={onDone} />
+      </div>
     </SettingsPage>
   )
 }

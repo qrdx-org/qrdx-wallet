@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTheme } from 'next-themes'
-import { AlertTriangle, CheckCircle2, ExternalLink } from 'lucide-react'
+import { AlertTriangle, ExternalLink } from 'lucide-react'
 import SlideCommit from '@/components/SlideCommit'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { CHAIN_LIST, chainFamily, isQrdxChain } from '@/src/core/chains'
@@ -14,6 +14,8 @@ import type { SendQuote } from '@/src/core/tx-service'
 import { cn } from '@/lib/utils'
 import { Spinner } from '@/components/motion/Loading'
 import { CtaButton } from '@/components/motion/CtaButton'
+import { Segment } from '@/components/motion/Segment'
+import { TxStatus } from '@/components/motion/TxStatus'
 import { Sheet } from '../flow/FlowKit'
 import { NetworkLogo } from '../CoinLogo'
 
@@ -34,7 +36,7 @@ const SLIDE = {
  * and the payment is the wallet's ordinary send.
  */
 export function PaySheet({ request, onClose }: { request: ScannedPayment & { amount: string }; onClose: () => void }) {
-  const { activeChain, setActiveChain, balances, pqBalances, balancesLoading, quoteSend, send, prices, networkStatus } = useWallet()
+  const { activeChain, setActiveChain, balances, pqBalances, balancesLoading, quoteSend, send, prices, networkStatus, transactions, refreshTransactions } = useWallet()
   const { resolvedTheme } = useTheme()
   const target = request.chainId ? CHAIN_LIST.find((c) => c.chainId === request.chainId && chainFamily(c) === 'evm') : chainFamily(activeChain) === 'evm' ? activeChain : undefined
   const onChain = !!target && target.id === activeChain.id
@@ -53,6 +55,16 @@ export function PaySheet({ request, onClose }: { request: ScannedPayment & { amo
     if (target && target.id !== activeChain.id) setActiveChain(target.id)
   }, [target, activeChain.id, setActiveChain])
   useEffect(() => setCredential(qrdx ? 'pq' : 'classic'), [qrdx])
+
+  // Paid: the payment's mark spins until its block, then ticks (or crosses); read from the
+  // account's activity, refreshed while it waits.
+  const sent = hash ? transactions.find((t) => t.hash.toLowerCase() === hash.toLowerCase()) : undefined
+  const sentState = sent?.status ?? 'pending'
+  useEffect(() => {
+    if (!hash || sentState !== 'pending') return
+    const t = setInterval(() => void refreshTransactions(), 5000)
+    return () => clearInterval(t)
+  }, [hash, sentState, refreshTransactions])
 
   // A QRDX name pays the address it points to, shown.
   const named = isQnsName(request.to)
@@ -172,24 +184,17 @@ export function PaySheet({ request, onClose }: { request: ScannedPayment & { amo
           </Row>
           {qrdx && onChain && (
             <Row k="Pay from">
-              <span className="inline-flex rounded-lg border border-border/70 p-0.5">
-                {(
-                  [
-                    ['pq', 'Quantum-safe'],
-                    ['classic', 'Classic'],
-                  ] as const
-                ).map(([k, label]) => (
-                  <button
-                    key={k}
-                    type="button"
-                    disabled={!!hash}
-                    onClick={() => setCredential(k)}
-                    className={cn('rounded-md px-2 py-0.5 text-[11px] font-medium', credential === k ? 'bg-foreground text-background' : 'text-muted-foreground')}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </span>
+              <Segment<'pq' | 'classic'>
+                label="Pay from"
+                fill={false}
+                disabled={!!hash}
+                value={credential}
+                onChange={setCredential}
+                options={[
+                  { value: 'pq', label: 'Quantum-safe' },
+                  { value: 'classic', label: 'Classic' },
+                ]}
+              />
             </Row>
           )}
           <Row k="Network fee">
@@ -225,8 +230,9 @@ export function PaySheet({ request, onClose }: { request: ScannedPayment & { amo
 
         {hash ? (
           <div className="space-y-3 text-center">
-            <p className="flex items-center justify-center gap-2 text-sm font-semibold">
-              <CheckCircle2 className="h-5 w-5 text-green-500" /> Sent. Confirming on {activeChain.name}.
+            <p className="flex items-center justify-center gap-2 text-sm font-semibold" aria-live="polite">
+              <TxStatus status={sentState} size={20} />
+              {sentState === 'confirmed' ? `Paid. Confirmed on ${activeChain.name}.` : sentState === 'failed' ? `It failed on ${activeChain.name}.` : `Sent. Confirming on ${activeChain.name}.`}
             </p>
             <a href={`${activeChain.explorerUrl}/tx/${hash}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground underline">
               {hash.slice(0, 18)}… <ExternalLink className="h-3 w-3" />

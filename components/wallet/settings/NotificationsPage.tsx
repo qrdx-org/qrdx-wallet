@@ -1,6 +1,10 @@
 'use client'
 
 import { CtaButton } from '@/components/motion/CtaButton'
+import { Segment } from '@/components/motion/Segment'
+import { Select } from '@/components/motion/Select'
+import { Switch } from '@/components/motion/Switch'
+import { UndoButton } from '@/components/motion/UndoButton'
 import { BubblePanel } from '@/components/gfx/Bubble'
 import { useMemo, useState, type ReactNode } from 'react'
 import { BellOff, Plus, X } from 'lucide-react'
@@ -15,7 +19,6 @@ import {
   type PriceAlert,
 } from '@/src/core/notify'
 import { formatFiat } from '@/src/core/fiat'
-import { cn } from '@/lib/utils'
 
 /**
  * What the wallet notifies about (src/core/notify.ts): the account's transactions, and price
@@ -93,34 +96,25 @@ export function NotificationsPage({ header }: { header: ReactNode }) {
                   <span>
                     <span className="font-semibold">{a.symbol}</span> {a.direction} {formatFiat(a.price)}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setPrefs({ ...prefs, alerts: prefs.alerts.filter((x) => x.id !== a.id) })}
-                    aria-label="Remove alert"
-                    className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+                  <UndoButton label="Remove" what={`${a.symbol} alert`} icon={<X className="h-3.5 w-3.5" />} onRemove={() => setPrefs({ ...prefs, alerts: prefs.alerts.filter((x) => x.id !== a.id) })} />
                 </div>
               ))}
             </div>
           )}
 
           <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
-            <select value={symbol} onChange={(e) => setSymbol(e.target.value)} className="h-10 rounded-xl border border-border bg-background px-2 text-sm" aria-label="Token">
-              {(priced.length ? priced : ['QRDX']).map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            <div className="flex overflow-hidden rounded-xl border border-border">
-              {(['above', 'below'] as const).map((d) => (
-                <button key={d} type="button" onClick={() => setDirection(d)} className={cn('px-3 text-xs font-medium capitalize', direction === d ? 'bg-foreground text-background' : 'text-muted-foreground')}>
-                  {d}
-                </button>
-              ))}
-            </div>
+            <Select label="Token" size="md" value={symbol} onChange={setSymbol} options={(priced.length ? priced : ['QRDX']).map((s) => ({ value: s, label: s }))} />
+            <Segment<PriceAlert['direction']>
+              label="Alert when the price is"
+              size="sm"
+              fill={false}
+              value={direction}
+              onChange={setDirection}
+              options={[
+                { value: 'above', label: 'Above' },
+                { value: 'below', label: 'Below' },
+              ]}
+            />
           </div>
           <div className="mt-2 flex gap-2">
             <input
@@ -144,16 +138,15 @@ export function NotificationsPage({ header }: { header: ReactNode }) {
   )
 }
 
+/** A setting's row: its words, and its switch (components/motion/Switch.tsx). Tapping the words flips it too. */
 function Toggle({ label, description, checked, onChange }: { label: string; description: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <button type="button" onClick={() => onChange(!checked)} className="flex w-full items-center gap-3 rounded-lg p-3 text-left hover:bg-accent/30" role="switch" aria-checked={checked}>
-      <span className="min-w-0 flex-1">
+    <div className="flex w-full items-center gap-3 rounded-lg p-3 hover:bg-accent/30">
+      <span className="min-w-0 flex-1 cursor-pointer" onClick={() => onChange(!checked)}>
         <span className="block text-sm font-medium">{label}</span>
         <span className="block text-[11px] text-muted-foreground">{description}</span>
       </span>
-      <span className={cn('relative h-5 w-9 shrink-0 rounded-full transition-colors', checked ? 'bg-foreground' : 'bg-muted')}>
-        <span className={cn('absolute top-0.5 h-4 w-4 rounded-full bg-background shadow transition-all', checked ? 'left-[18px]' : 'left-0.5')} />
-      </span>
-    </button>
+      <Switch label={label} checked={checked} onChange={onChange} />
+    </div>
   )
 }

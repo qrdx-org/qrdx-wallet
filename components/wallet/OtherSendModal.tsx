@@ -27,6 +27,7 @@ import { SettingsPage, Section } from './settings/shared'
 import { ErrorBanner, Notice, PrimaryButton } from './flow/FlowKit'
 import { CoinLogo, isVerifiedToken } from './CoinLogo'
 import { cn } from '@/lib/utils'
+import { Segment } from '@/components/motion/Segment'
 
 const SPEEDS: { key: FeeSpeed; label: string; eta: string }[] = [
   { key: 'fast', label: 'Fast', eta: '~10 min' },
@@ -279,21 +280,25 @@ export function OtherSendModal({ initialToken, initialRecipient, onClose }: { in
 
       {family === 'bitcoin' && (
         <Section title="Speed">
-          <div className="grid grid-cols-3 gap-1.5 p-2">
-            {SPEEDS.map((s) => (
-              <button
-                key={s.key}
-                type="button"
-                onClick={() => setSpeed(s.key)}
-                className={cn('rounded-xl border px-2 py-2 text-left', speed === s.key ? 'border-foreground/40 bg-accent' : 'border-border/60 hover:bg-accent/50')}
-              >
-                <span className="block text-xs font-semibold">{s.label}</span>
-                <span className="block text-[10px] text-muted-foreground">
-                  {s.eta}
-                  {rates ? ` · ${rates[s.key]} sat/vB` : ''}
-                </span>
-              </button>
-            ))}
+          <div className="p-2">
+            <Segment<FeeSpeed>
+              label="Speed"
+              size="lg"
+              value={speed}
+              onChange={setSpeed}
+              options={SPEEDS.map((s) => ({
+                value: s.key,
+                label: (
+                  <span className="flex flex-col items-center gap-0.5 leading-tight">
+                    <span className="text-xs font-semibold">{s.label}</span>
+                    <span className="text-[10px] font-normal opacity-60">
+                      {s.eta}
+                      {rates ? ` · ${rates[s.key]} sat/vB` : ''}
+                    </span>
+                  </span>
+                ),
+              }))}
+            />
           </div>
         </Section>
       )}

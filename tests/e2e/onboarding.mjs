@@ -98,7 +98,8 @@ console.log('Create a wallet')
   await page.getByRole('button', { name: /Continue/ }).click()
 
   await page.getByRole('button', { name: /Tap to reveal/ }).click()
-  const words = await page.locator('ol li span.font-mono').allTextContents()
+  // Each word decrypts into place (components/motion/SecretText.tsx); the word itself is data-word.
+  const words = await page.locator('ol li [data-word]').evaluateAll((els) => els.map((el) => el.getAttribute('data-word')))
   check(
     '12-word phrase shown',
     words.length === 12 && words.every((w) => /^[a-z]+$/.test(w)),

@@ -26,6 +26,7 @@ import {
 import { cn } from '@/lib/utils'
 import { QrdxMark } from '@/components/QrdxMark'
 import { CtaButton } from '@/components/motion/CtaButton'
+import { Segment } from '@/components/motion/Segment'
 import { LandingOrb } from './LandingOrb'
 import { DOWNLOADS, REPO_URL } from './downloads'
 
@@ -107,24 +108,8 @@ function CopyAddress({ value }: { value: string }) {
   )
 }
 
-function Tabs<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { id: T; label: string }[] }) {
-  return (
-    <div className="inline-flex rounded-lg border border-border bg-background p-0.5 text-xs font-medium">
-      {options.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          onClick={() => onChange(o.id)}
-          className={cn(
-            'rounded-md px-3 py-1.5 transition-colors',
-            value === o.id ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground',
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  )
+function Tabs<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: { id: T; label: string }[]; label: string }) {
+  return <Segment label={label} size="md" fill={false} value={value} onChange={onChange} options={options.map((o) => ({ value: o.id, label: o.label }))} />
 }
 
 const secondaryBtn =
@@ -447,6 +432,7 @@ export function LandingPage() {
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <span className="text-sm font-semibold">Install it</span>
                   <Tabs
+                    label="Browser"
                     value={extTab}
                     onChange={setTab}
                     options={[
@@ -515,6 +501,7 @@ export function LandingPage() {
                 <div className="mt-5 flex items-center justify-between gap-3">
                   <span className="text-sm font-semibold">Install it</span>
                   <Tabs
+                    label="Phone"
                     value={phone}
                     onChange={setPhoneTab}
                     options={[

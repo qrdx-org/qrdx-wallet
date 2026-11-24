@@ -11,8 +11,9 @@
 
 import { CtaButton } from '@/components/motion/CtaButton'
 import { Spinner } from '@/components/motion/Loading'
+import { TxStatus } from '@/components/motion/TxStatus'
 import { useCallback, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Clock, ShieldCheck, XCircle } from 'lucide-react'
+import { AlertTriangle, ShieldCheck } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { describeExchangeOp, type DescribeContext } from '@/src/core/exchange-describe'
 import type { ExchangeOpName, JsonValue } from '@/src/core/exchange-tx'
@@ -197,13 +198,8 @@ export function SubmissionList({ items }: { items: Submission[] }) {
     <ul className="divide-y divide-border/60">
       {items.map((s) => (
         <li key={s.id} className="flex items-start gap-2 px-3 py-2 text-[11px]">
-          {s.status === 'pending' ? (
-            <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-          ) : s.status === 'done' ? (
-            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-bid" />
-          ) : (
-            <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ask" />
-          )}
+          {/* One mark per submission: it spins in the mempool, then ticks or crosses when its block lands. */}
+          <TxStatus status={s.status === 'done' ? 'confirmed' : s.status} size={14} className="mt-0.5 shrink-0" />
           <span className="min-w-0 flex-1">
             <span className="block truncate">{s.label}</span>
             <span className={cn('block', s.status === 'failed' ? 'text-ask' : 'text-muted-foreground')}>

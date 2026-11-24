@@ -72,6 +72,7 @@ export function SecurityPage({ onBack }: { onBack: () => void }) {
             Lock after this long without activity
           </div>
           <Segmented
+            label="Auto-lock"
             value={AUTO_LOCK.some((o) => o.value === autoLockValue) ? autoLockValue : '900000'}
             options={[...AUTO_LOCK]}
             onChange={(v) =>
@@ -95,6 +96,7 @@ export function SecurityPage({ onBack }: { onBack: () => void }) {
                 : 'When you switch tabs or minimise the browser'}
             </div>
             <Segmented
+              label="Lock when hidden"
               value={hideValue}
               options={[...HIDE_LOCK]}
               onChange={(v) =>

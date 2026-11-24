@@ -7,13 +7,14 @@
  */
 
 import { useState } from 'react'
+import { Check as CheckBox } from '@/components/motion/Check'
+import { UndoButton } from '@/components/motion/UndoButton'
 import { Check, Plus, Trash2 } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { chainFamily, customChainKey, isCustomChain, isQrdxChain, verifyCustomChain, type ChainConfig, type CustomChain } from '@/src/core/chains'
-import { SettingsPage, Section } from './shared'
+import { SettingsPage, Section, Toggle } from './shared'
 import { ErrorBanner, Notice, PrimaryButton, Sheet, TextField } from '../flow/FlowKit'
 import { NetworkLogo } from '../CoinLogo'
-import { useConfirm } from '../flow/ConfirmSheet'
 import { useShowUnverified } from '../portfolio/PortfolioHome'
 import { cn } from '@/lib/utils'
 
@@ -21,7 +22,6 @@ export function NetworksPage({ onBack }: { onBack: () => void }) {
   const { chains, activeChain, setActiveChain, showTestnets, updateSettings, state } = useWallet()
   const [showAll, setShowAll] = useShowUnverified()
   const [adding, setAdding] = useState(false)
-  const { dialog, confirm } = useConfirm()
   const custom = state?.settings.customChains ?? []
 
   const visible = chains.filter((c) => !c.isTestnet || showTestnets || c.id === activeChain.id)
@@ -32,15 +32,14 @@ export function NetworksPage({ onBack }: { onBack: () => void }) {
     ['Your networks', chains.filter(isCustomChain)],
   ]
 
+  // It leaves the list (funds untouched; add it again any time), with a moment to undo.
   const remove = async (chain: ChainConfig) => {
-    if (!(await confirm({ title: `Remove ${chain.name}`, message: 'It leaves your network list. Your funds on it are untouched; add it again any time.', confirmLabel: 'Remove' }))) return
     if (activeChain.id === chain.id) setActiveChain('qrdx-testnet')
     await updateSettings({ customChains: custom.filter((c) => customChainKey(c.chainId) !== chain.id) })
   }
 
   return (
     <SettingsPage title="Networks" onBack={onBack}>
-      {dialog}
       {groups.map(([title, list]) =>
         list.length === 0 && title !== 'Your networks' ? null : (
           <Section
@@ -78,9 +77,9 @@ export function NetworksPage({ onBack }: { onBack: () => void }) {
                     {c.id === activeChain.id && <Check className="h-4 w-4 shrink-0" />}
                   </button>
                   {isCustomChain(c) && (
-                    <button type="button" onClick={() => remove(c)} aria-label={`Remove ${c.name}`} className="p-3 text-muted-foreground hover:text-red-500">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <span className="pr-2">
+                      <UndoButton label="Remove" what={c.name} icon={<Trash2 className="h-3.5 w-3.5" />} onRemove={() => void remove(c)} />
+                    </span>
                   )}
                 </div>
               ))
@@ -90,20 +89,20 @@ export function NetworksPage({ onBack }: { onBack: () => void }) {
       )}
 
       <Section>
-        <label className="flex cursor-pointer items-center justify-between p-3">
+        <div className="flex items-center justify-between gap-3 p-3">
           <span>
             <span className="block text-sm font-medium">Show test networks</span>
             <span className="block text-[10px] text-muted-foreground">QRDX Testnet, Sepolia, Bitcoin Testnet4, Solana Devnet and others</span>
           </span>
-          <input type="checkbox" checked={showTestnets} onChange={(e) => void updateSettings({ showTestnets: e.target.checked })} className="h-4 w-4 accent-primary" />
-        </label>
-        <label className="flex cursor-pointer items-center justify-between border-t border-border/40 p-3">
+          <Toggle label="Show test networks" checked={showTestnets} onChange={(v) => void updateSettings({ showTestnets: v })} />
+        </div>
+        <div className="flex items-center justify-between gap-3 border-t border-border/40 p-3">
           <span>
             <span className="block text-sm font-medium">Show unverified tokens</span>
             <span className="block text-[10px] text-muted-foreground">List every token you hold, not only verified ones and the ones you trust. They stay unpriced.</span>
           </span>
-          <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} className="h-4 w-4 accent-primary" />
-        </label>
+          <Toggle label="Show unverified tokens" checked={showAll} onChange={setShowAll} />
+        </div>
       </Section>
 
       {adding && (
@@ -181,9 +180,7 @@ function AddNetworkSheet({ onClose, onAdd }: { onClose: () => void; onAdd: (n: C
         <TextField label="Name" value={name} onChange={setName} placeholder="My network" maxLength={40} />
         <TextField label="Currency symbol" value={symbol} onChange={setSymbol} placeholder="ETH" maxLength={11} />
         <TextField label="Explorer (optional)" value={explorerUrl} onChange={setExplorerUrl} placeholder="https://…" />
-        <label className="flex items-center gap-2 text-xs">
-          <input type="checkbox" checked={isTestnet} onChange={(e) => setIsTestnet(e.target.checked)} className="accent-primary" /> It is a test network
-        </label>
+        <CheckBox checked={isTestnet} onChange={setIsTestnet} label="It is a test network" />
         <Notice>The RPC sees your address and what you look up, and could show you wrong balances. Add only one you trust.</Notice>
         <ErrorBanner error={error} />
         <PrimaryButton loading={busy} disabled={!rpcUrl || !chainId || !name || !symbol || !!known} onClick={add}>

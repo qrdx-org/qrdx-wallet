@@ -1,5 +1,6 @@
 'use client'
 
+import { TxStatus as TxMark } from '@/components/motion/TxStatus'
 import { CtaButton } from '@/components/motion/CtaButton'
 import { Spinner } from '@/components/motion/Loading'
 import { CoinLogo, isVerifiedToken } from './CoinLogo'
@@ -94,7 +95,7 @@ type TxStatus = 'idle' | 'estimating' | 'sending' | 'success' | 'error'
  * quote the transaction is then built with.
  */
 export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initialRecipient, initialCredential }: SendModalProps) {
-  const { balances, pqBalances, activeChain, quoteSend, send, addressBook, addContact, networkStatus, prices, currentWallet, transactions } = useWallet()
+  const { balances, pqBalances, activeChain, quoteSend, send, addressBook, addContact, networkStatus, prices, currentWallet, transactions, refreshTransactions } = useWallet()
   // Nothing is signed from the form: Review opens the confirmation, which signs.
   const [reviewing, setReviewing] = useState(false)
   const qrdx = isQrdxChain(activeChain)
@@ -107,6 +108,14 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
   const [txStatus, setTxStatus] = useState<TxStatus>('idle')
   const [txError, setTxError] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
+  // Sent: its mark spins until its block, then ticks (or crosses), read from the account's
+  // activity, refreshed while it waits.
+  const sentState = (txHash && transactions.find((t) => t.hash.toLowerCase() === txHash.toLowerCase())?.status) || 'pending'
+  useEffect(() => {
+    if (!txHash || sentState !== 'pending') return
+    const t = setInterval(() => void refreshTransactions(), 5000)
+    return () => clearInterval(t)
+  }, [txHash, sentState, refreshTransactions])
   // Start on the address that holds funds: on QRDX that is usually the post-quantum
   // one, where exchange tokens live; until the reader picks one themselves.
   const [addressType, setAddressTypeState] = useState<Credential>(() => (qrdx && initialCredential) || defaultCredential(balances, pqBalances, qrdx))
@@ -809,10 +818,10 @@ export function SendModal({ ethAddress, pqAddress, onClose, initialToken, initia
         )}
 
         {txStatus === 'success' && (
-          <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-green-500/10 border border-green-500/20">
-            <CheckCircle2 className="h-3.5 w-3.5 text-green-400 shrink-0 mt-0.5" />
-            <div className="text-[10px] text-green-400/90 leading-relaxed min-w-0">
-              <p className="font-medium">Transaction sent successfully!</p>
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl border border-border bg-foreground/[0.04]" aria-live="polite">
+            <TxMark status={sentState} size={16} className="mt-px shrink-0" />
+            <div className="text-[10px] leading-relaxed min-w-0">
+              <p className="font-medium">{sentState === 'confirmed' ? `Confirmed on ${activeChain.name}.` : sentState === 'failed' ? `It failed on ${activeChain.name}.` : `Sent. Confirming on ${activeChain.name}.`}</p>
               {txHash && (
                 <a
                   href={`${activeChain.explorerUrl}/tx/${txHash}`}

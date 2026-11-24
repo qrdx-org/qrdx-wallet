@@ -13,6 +13,8 @@
 import { useBubble } from '@/components/gfx/Bubble'
 import { SoapBubbleButton } from '@/components/soap-bubble'
 import { CtaButton } from '@/components/motion/CtaButton'
+import { HoldConfirm } from '@/components/motion/HoldConfirm'
+import { SecretText } from '@/components/motion/SecretText'
 import { Spinner } from '@/components/motion/Loading'
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
@@ -150,7 +152,6 @@ export function PrimaryButton({
 }) {
   const styles = {
     outline: 'glass border hover:bg-accent/50 hover:border-primary/30',
-    danger: 'bg-red-600 hover:bg-red-600/90 text-white',
   }
   const bubble = useBubble()
   if (bubble.on && variant !== 'danger')
@@ -164,6 +165,14 @@ export function PrimaryButton({
         {loading && <Spinner size={14} label="Working" className="mr-2" />}
         {children}
       </SoapBubbleButton>
+    )
+  // What cannot be undone (erase, remove) is confirmed by holding, in either look.
+  if (variant === 'danger')
+    return (
+      <HoldConfirm onConfirm={() => onClick?.()} disabled={disabled || loading} className="w-full">
+        {loading && <Spinner size={14} label="Working" />}
+        Hold to {typeof children === 'string' ? children.charAt(0).toLowerCase() + children.slice(1) : children}
+      </HoldConfirm>
     )
   // The normal look's main action: a specular glass button (components/motion/CtaButton.tsx).
   if (variant === 'primary')
@@ -181,7 +190,7 @@ export function PrimaryButton({
       variant={variant === 'outline' ? 'outline' : 'default'}
       className={cn(
         'w-full h-12 text-base font-semibold transition-all disabled:opacity-50',
-        styles[variant]
+        styles.outline
       )}
     >
       {loading && <Spinner size={14} label="Working" className="mr-2" />}
@@ -442,7 +451,9 @@ export function PhraseGrid({
             className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-background/60 px-2 py-2"
           >
             <span className="text-[10px] text-muted-foreground w-4 text-right">{i + 1}</span>
-            <span className="text-sm font-mono font-medium">{revealed ? w : '•••••'}</span>
+            <span className="text-sm font-mono font-medium" data-word={revealed ? w : undefined}>
+              {revealed ? <SecretText text={w} /> : '•••••'}
+            </span>
           </li>
         ))}
       </ol>

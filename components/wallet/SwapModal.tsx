@@ -15,6 +15,7 @@
  */
 
 import { CtaButton } from '@/components/motion/CtaButton'
+import { Chips } from '@/components/motion/Segment'
 import { Spinner } from '@/components/motion/Loading'
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowDownUp, ArrowLeft, ChevronDown, Repeat, Search, ShieldCheck } from 'lucide-react'
@@ -395,14 +396,16 @@ export function SwapModal({ onClose, initialFrom, elsewhere = [], onElsewhere }:
                   v={route ? [route.hops[0].from.symbol, ...route.hops.map((h) => h.to.symbol)].join(' → ') : quote ? (quote.source === 'clob' ? 'Order book' : `Pool ${quote.pool_id?.slice(0, 8) ?? ''}`) : '—'}
                 />
                 <Line k="Fee" v={route ? route.hops.map((h) => `${fmtSize(h.fee)} ${h.from.symbol}`).join(' + ') : quote && from ? `${fmtSize(quote.fee)} ${from.symbol}` : '—'} />
-                <div className="flex items-center justify-between gap-2 text-[11px]">
+                <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px]">
                   <span className="text-muted-foreground">Max slippage</span>
                   <span className="flex items-center gap-0.5">
-                    {SLIPPAGE.map((s) => (
-                      <button key={s} type="button" onClick={() => (setSettings({ slippage: s }), setCustomSlippage(''))} className={cn('rounded-md px-1.5 py-0.5 text-[10px] font-medium', slippage === s && !customSlippage ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-accent')}>
-                        {s}%
-                      </button>
-                    ))}
+                    <Chips
+                      label="Max slippage"
+                      size="xs"
+                      value={SLIPPAGE.includes(slippage as '0.5') && !customSlippage ? (slippage as (typeof SLIPPAGE)[number]) : ''}
+                      onChange={(s) => (setSettings({ slippage: s }), setCustomSlippage(''))}
+                      options={SLIPPAGE.map((s) => ({ value: s, label: `${s}%` }))}
+                    />
                     <input
                       inputMode="decimal"
                       value={customSlippage || (SLIPPAGE.includes(slippage as '0.5') ? '' : slippage)}
@@ -420,13 +423,13 @@ export function SwapModal({ onClose, initialFrom, elsewhere = [], onElsewhere }:
                 {Number(slippage) >= 5 && <p className="text-[10px] text-muted-foreground">High slippage: the swap may fill well below the quote.</p>}
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-muted-foreground">Valid for</span>
-                  <span className="flex gap-0.5">
-                    {DEADLINES.map((d) => (
-                      <button key={d} type="button" onClick={() => setSettings({ deadlineMin: d })} className={cn('rounded-md px-1.5 py-0.5 text-[10px] font-medium', settings.deadlineMin === d ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-accent')}>
-                        {d} min
-                      </button>
-                    ))}
-                  </span>
+                  <Chips
+                    label="Valid for"
+                    size="xs"
+                    value={String(settings.deadlineMin)}
+                    onChange={(d) => setSettings({ deadlineMin: Number(d) as (typeof DEADLINES)[number] })}
+                    options={DEADLINES.map((d) => ({ value: String(d), label: `${d} min` }))}
+                  />
                 </div>
                 {quote && Number(quote.unfilled_in) > 0 && <p className="text-[11px] text-amber-500">Only {quote.amount_in} of {amount} can fill at current liquidity.</p>}
               </div>

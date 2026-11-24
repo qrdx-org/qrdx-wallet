@@ -10,6 +10,7 @@
  */
 
 import { Loading } from '@/components/motion/Loading'
+import { Check as CheckBox } from '@/components/motion/Check'
 import { useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle,
@@ -290,12 +291,12 @@ export function ApprovalScreen(
                   key={a.id}
                   className="flex items-center gap-2 p-2 rounded-lg hover:bg-accent/30"
                 >
-                  <input
-                    type="checkbox"
+                  <CheckBox
+                    aria={a.name}
                     checked={selected.has(a.id)}
-                    onChange={(e) => {
+                    onChange={(on) => {
                       const n = new Set(selected)
-                      if (e.target.checked) n.add(a.id)
+                      if (on) n.add(a.id)
                       else n.delete(a.id)
                       setPicked(n)
                     }}

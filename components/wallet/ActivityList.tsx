@@ -1,6 +1,7 @@
 'use client'
 
 import { Loading, Spinner } from '@/components/motion/Loading'
+import { TxStatus } from '@/components/motion/TxStatus'
 import { useState } from 'react'
 import { ArrowUpRight, ArrowDownLeft, RefreshCw, FileCode2, ChevronRight } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -162,11 +163,7 @@ export function ActivityList({ onSendAgain }: { onSendAgain?: (to: string, token
         >
           <div className="flex items-center gap-3">
             <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${getIconStyle(tx.type)}`}>
-              {tx.status === 'pending' ? (
-                <Spinner size={16} />
-              ) : (
-                getIcon(tx.type)
-              )}
+              {tx.status === 'confirmed' ? getIcon(tx.type) : <TxStatus status={tx.status} size={18} />}
             </div>
             <div>
               <div className="font-medium text-sm capitalize flex items-center gap-1.5">

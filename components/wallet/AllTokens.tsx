@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useMemo, useRef } from 'react'
+import { Favourite } from '@/components/motion/Favourite'
+import { Tip } from '@/components/motion/Tip'
 import {
   ArrowLeft,
   Search,
@@ -121,6 +123,7 @@ export function AllTokens({
               size="icon"
               className="h-8 w-8 rounded-lg hover:bg-accent/50"
               onClick={onClose}
+              aria-label="Back"
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
@@ -331,19 +334,10 @@ export function AllTokens({
                 {/* Actions */}
                 <div className="flex items-center gap-0.5 shrink-0">
                   {/* Favorite */}
-                  <button
-                    onClick={() => toggleFavorite(token.symbol)}
-                    className={`h-7 w-7 rounded-lg flex items-center justify-center transition-all ${
-                      isFavorited
-                        ? 'text-foreground/70 bg-foreground/10'
-                        : 'text-muted-foreground/30 hover:text-foreground/70 hover:bg-foreground/10'
-                    }`}
-                    title={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
-                  >
-                    <Star className={`h-3.5 w-3.5 ${isFavorited ? 'fill-current' : ''}`} />
-                  </button>
+                  <Favourite on={isFavorited} onChange={() => toggleFavorite(token.symbol)} label={`Favourite ${token.symbol}`} />
 
                   {/* Pin */}
+                  <Tip content={isPinned ? 'Unpin from dashboard' : canPin ? 'Pin to dashboard' : `Max ${MAX_PINS} pins reached`} side="left">
                   <button
                     onClick={() => canPin && togglePin(token.symbol)}
                     className={`h-7 w-7 rounded-lg flex items-center justify-center transition-all ${
@@ -353,16 +347,11 @@ export function AllTokens({
                         ? 'text-muted-foreground/30 hover:text-primary hover:bg-primary/10'
                         : 'text-muted-foreground/15 cursor-not-allowed'
                     }`}
-                    title={
-                      isPinned
-                        ? 'Unpin from dashboard'
-                        : canPin
-                        ? 'Pin to dashboard'
-                        : `Max ${MAX_PINS} pins reached`
-                    }
+                    aria-label={isPinned ? 'Unpin from dashboard' : canPin ? 'Pin to dashboard' : `Max ${MAX_PINS} pins reached`}
                   >
                     <Pin className={`h-3.5 w-3.5 ${isPinned ? 'fill-current' : ''}`} />
                   </button>
+                  </Tip>
                 </div>
               </div>
             )

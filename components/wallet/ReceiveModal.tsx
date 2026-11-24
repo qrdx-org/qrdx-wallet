@@ -3,6 +3,9 @@
 import { useState } from 'react'
 import { ArrowLeft, Copy, Check, Share2, Info } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
+import PixelSwap from '@/components/PixelSwap'
+import { Segment } from '@/components/motion/Segment'
+import { Select } from '@/components/motion/Select'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -52,6 +55,9 @@ export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: Re
         )
       : null
   const shared = requestLink ?? address
+  // The last request stays on the code's far side, so clearing the amount dissolves it away.
+  const [lastRequest, setLastRequest] = useState<string | null>(null)
+  if (requestLink && requestLink !== lastRequest) setLastRequest(requestLink)
   const noun = family === 'bitcoin' ? 'Bitcoin' : family === 'solana' ? 'Solana' : qrdx && kind === 'pq' ? 'quantum-safe' : activeChain.name
 
   const handleCopy = () => {
@@ -93,24 +99,16 @@ export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: Re
 
       <div className="px-4 py-3 space-y-4">
         {qrdx && (
-          <div className="flex gap-1 p-1 bg-accent/30 rounded-xl" role="tablist">
-            {(
-              [
-                ['pq', 'Quantum-safe', '0xPQ…'],
-                ['eth', 'Classic', '0x…'],
-              ] as const
-            ).map(([k, label, hint]) => (
-              <button
-                key={k}
-                role="tab"
-                aria-selected={kind === k}
-                onClick={() => setKind(k)}
-                className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${kind === k ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                {label} <span className="font-mono text-[10px] font-normal text-muted-foreground">{hint}</span>
-              </button>
-            ))}
-          </div>
+          <Segment<'pq' | 'eth'>
+            label="Address"
+            size="md"
+            value={kind}
+            onChange={setKind}
+            options={[
+              { value: 'pq', label: <>Quantum-safe <span className="font-mono text-[10px] font-normal opacity-60">0xPQ…</span></> },
+              { value: 'eth', label: <>Classic <span className="font-mono text-[10px] font-normal opacity-60">0x…</span></> },
+            ]}
+          />
         )}
 
         {!address ? (
@@ -143,7 +141,21 @@ export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: Re
                   </p>
                 )}
                 <div className="relative p-3 bg-white rounded-2xl shadow-lg">
-                  <QRCodeSVG value={shared!} size={requestLink ? 200 : 180} level="M" bgColor="#ffffff" fgColor="#000000" />
+                  {/* The address's code dissolves, square by square, into the request's (and back). */}
+                  <PixelSwap
+                    trigger="none"
+                    active={!!requestLink}
+                    intro={false}
+                    pattern="random"
+                    pixelSize={16}
+                    duration={520}
+                    pixelDuration={260}
+                    randomness={0.35}
+                    aspectRatio="1 / 1"
+                    style={{ width: 200 }}
+                    firstContent={<QRCodeSVG value={address!} size={200} level="M" bgColor="#ffffff" fgColor="#000000" />}
+                    secondContent={<QRCodeSVG value={lastRequest ?? address!} size={200} level="M" bgColor="#ffffff" fgColor="#000000" />}
+                  />
                   {/* The code is always black on white, so its badge is too. */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="rounded-full bg-white p-1 text-black shadow-md">
@@ -199,19 +211,14 @@ export function ReceiveModal({ ethAddress, pqAddress, accountName, onClose }: Re
                       aria-label="Amount to request"
                       className="h-11 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-base tabular-nums outline-none focus:border-foreground/40"
                     />
-                    <select
+                    <Select
+                      label="In"
+                      align="right"
                       value={reqToken}
-                      onChange={(e) => setReqToken(e.target.value)}
-                      aria-label="In"
-                      className="h-11 rounded-xl border border-border bg-background px-2 text-sm"
-                    >
-                      {assets.length === 0 && <option value="">{activeChain.nativeCurrency.symbol}</option>}
-                      {assets.map((b) => (
-                        <option key={b.address || 'native'} value={b.address}>
-                          {b.symbol}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setReqToken}
+                      options={assets.length === 0 ? [{ value: '', label: activeChain.nativeCurrency.symbol }] : assets.map((b) => ({ value: b.address, label: b.symbol }))}
+                      className="w-28 shrink-0"
+                    />
                   </div>
                   <input
                     value={reqNote}

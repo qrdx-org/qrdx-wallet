@@ -1,7 +1,8 @@
 'use client'
 
-import { BubblePanel, useBubble } from '@/components/gfx/Bubble'
-import { SoapBubbleToggle } from '@/components/soap-bubble'
+import { BubblePanel } from '@/components/gfx/Bubble'
+import { Segment } from '@/components/motion/Segment'
+import { Switch } from '@/components/motion/Switch'
 import { useState, type ReactNode } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { ErrorBanner, PasswordField, PrimaryButton, Sheet } from '../flow/FlowKit'
@@ -101,6 +102,7 @@ export function Row({
   )
 }
 
+/** An on/off setting: components/motion/Switch.tsx (a SquishSwitch, or a soap bubble). */
 export function Toggle({
   checked,
   onChange,
@@ -112,53 +114,23 @@ export function Toggle({
   label: string
   disabled?: boolean
 }) {
-  const bubble = useBubble()
-  if (bubble.on)
-    return <SoapBubbleToggle checked={checked} onCheckedChange={onChange} aria-label={label} disabled={disabled} scale={0.75} />
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={`relative h-6 w-11 rounded-full transition-colors disabled:opacity-50 ${checked ? 'bg-primary' : 'bg-muted'}`}
-    >
-      <span
-        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${checked ? 'left-[22px]' : 'left-0.5'}`}
-      />
-    </button>
-  )
+  return <Switch checked={checked} onChange={onChange} label={label} disabled={disabled} />
 }
 
+/** One of a few options: components/motion/Segment.tsx (a RubberSegment). */
 export function Segmented<T extends string>({
   value,
   options,
   onChange,
+  label = 'Options',
 }: {
   value: T
   options: { value: T; label: string }[]
   onChange: (v: T) => void
+  /** What is being chosen, for screen readers. */
+  label?: string
 }) {
-  return (
-    <div className="flex gap-1.5">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          onClick={() => onChange(o.value)}
-          className={`flex-1 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
-            value === o.value
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-accent/30 text-muted-foreground hover:bg-accent/50'
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  )
+  return <Segment value={value} options={options} onChange={onChange} label={label} />
 }
 
 /** Re-authenticate before a sensitive action. `onSubmit` throws to show an error. */

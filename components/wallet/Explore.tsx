@@ -1,6 +1,7 @@
 'use client'
 
 import { Loading } from '@/components/motion/Loading'
+import { Segment } from '@/components/motion/Segment'
 import { useEffect, useState } from 'react'
 import { ExternalLink, Flame, Rocket, TrendingDown, TrendingUp } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -9,7 +10,6 @@ import { COINGECKO_API } from '@/src/core/prices'
 import { formatFiat } from '@/src/core/fiat'
 import { tradeApiBase, tradeGet, tradeSiteUrl } from '@/src/core/trade/api'
 import type { ApiAsset, IndexPrice } from '@/src/core/trade/types'
-import { cn } from '@/lib/utils'
 import { TokenBadge } from './trade/kit'
 import { useTokenList, type Token } from './TokenList'
 
@@ -190,13 +190,18 @@ export function Explore({ onOpenToken }: { onOpenToken: (token: Token) => void }
           <h3 className="flex items-center gap-1.5 text-xs font-semibold">
             <Flame className="h-3.5 w-3.5" /> {qrdx ? 'Markets' : 'Most traded'}
           </h3>
-          <div className="flex gap-0.5 rounded-lg bg-accent/40 p-0.5" role="tablist" aria-label="Sort markets">
-            {(['volume', 'gainers', 'losers'] as const).map((s) => (
-              <button key={s} type="button" role="tab" aria-selected={sort === s} onClick={() => setSort(s)} className={cn('rounded-md px-2 py-0.5 text-[10px] font-medium capitalize', sort === s ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
-                {s}
-              </button>
-            ))}
-          </div>
+          <Segment
+            label="Sort markets"
+            size="sm"
+            fill={false}
+            value={sort}
+            onChange={setSort}
+            options={[
+              { value: 'volume', label: 'Volume' },
+              { value: 'gainers', label: 'Gainers' },
+              { value: 'losers', label: 'Losers' },
+            ]}
+          />
         </div>
         {sorted.length === 0 ? (
           <p className="px-1 py-6 text-center text-xs text-muted-foreground">No markets yet.</p>

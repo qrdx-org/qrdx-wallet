@@ -1,6 +1,7 @@
 'use client'
 
 import { CtaButton } from '@/components/motion/CtaButton'
+import { TxStatus } from '@/components/motion/TxStatus'
 import { useState } from 'react'
 import { Check, Copy, ExternalLink, FastForward, Repeat, UserPlus, XCircle } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -11,7 +12,6 @@ import { shortenAddress, addressesEqual } from '@/src/core/address'
 import { sameAccount } from '@/src/core/account-id'
 import { weiToEth } from '@/src/core/ethereum'
 import { formatFiat } from '@/src/core/fiat'
-import { cn } from '@/lib/utils'
 import { usePrimaryName } from './useQnsName'
 import { Sheet } from './flow/FlowKit'
 import { ConfirmSheet } from './flow/ConfirmSheet'
@@ -126,9 +126,7 @@ export function TransactionDetail({ tx, onClose, onSendAgain }: { tx: Transactio
 
       <div className="divide-y divide-border/60 rounded-xl border border-border/70 text-xs">
         <Row k="Status">
-          <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-semibold', tx.status === 'confirmed' ? 'bg-foreground text-background' : 'border border-border')}>
-            {tx.status === 'confirmed' ? 'Confirmed' : tx.status === 'failed' ? 'Failed' : 'Pending'}
-          </span>
+          <TxStatus status={tx.status} size={14} label={tx.status === 'confirmed' ? 'Confirmed' : tx.status === 'failed' ? 'Failed' : 'Pending'} className="font-semibold" />
         </Row>
         <Row k="From" sub={nameOf(tx.from) || fromName ? shortenAddress(tx.from, 6) : undefined}>
           {nameOf(tx.from) ?? fromName ?? shortenAddress(tx.from, 6)}

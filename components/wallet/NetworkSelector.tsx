@@ -1,6 +1,7 @@
 'use client'
 
 import { Spinner } from '@/components/motion/Loading'
+import { Switch } from '@/components/motion/Switch'
 import { BubbleButton } from '@/components/gfx/Bubble'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -174,19 +175,12 @@ export function NetworkSelector() {
               than only in Settings — developers switching to a local node
               should not have to hunt for it. */}
           <div className="border-t border-border/50 mt-1 pt-1">
-            <label className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-accent/40 cursor-pointer">
+            <div className="flex items-center justify-between px-2 py-1.5 rounded-lg">
               <span className="text-[11px] text-muted-foreground">
                 Show test networks
               </span>
-              <input
-                type="checkbox"
-                checked={showTestnets}
-                onChange={e => {
-                  void updateSettings({ showTestnets: e.target.checked })
-                }}
-                className="h-3.5 w-3.5 accent-primary"
-              />
-            </label>
+              <Switch label="Show test networks" checked={showTestnets} onChange={(v) => void updateSettings({ showTestnets: v })} />
+            </div>
           </div>
         </div>
       )}

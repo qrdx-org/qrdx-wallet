@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { UndoButton } from '@/components/motion/UndoButton'
 import { ArrowLeft, Eye, Trash2 } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { fetchPortfolio, portfolioChains, type Asset, type Portfolio } from '@/src/core/portfolio'
@@ -86,9 +87,7 @@ export function WatchPage({ onBack }: { onBack: () => void }) {
                   </div>
                 </div>
               </button>
-              <button type="button" onClick={() => removeWatched(w.address)} aria-label={`Stop watching ${w.label}`} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent/50 hover:text-foreground">
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              <UndoButton label="Stop" what={`watching ${w.label}`} icon={<Trash2 className="h-3.5 w-3.5" />} onRemove={() => removeWatched(w.address)} />
             </div>
           ))}
         </Section>

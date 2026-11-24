@@ -15,6 +15,7 @@
 import { BubblePanel } from '@/components/gfx/Bubble'
 import { useMemo, useState, type ReactNode } from 'react'
 import { ScreenStack } from '@/components/motion/ScreenStack'
+import { Segment } from '@/components/motion/Segment'
 import { Welcome } from './Welcome'
 import {
   ArrowRight,
@@ -245,22 +246,22 @@ export function Onboarding({ onDone, onCommit }: { onDone: () => void; onCommit?
           </Notice>
           <PhraseGrid words={words} revealed={revealed} onReveal={() => setRevealed(true)} />
           <div className="flex items-center justify-between">
-            <div className="inline-flex rounded-lg border border-border p-0.5 text-xs">
-              {([12, 24] as const).map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => {
-                    setWordCount(n)
-                    setMnemonic(wallet.generateMnemonic(n))
-                    setRevealed(false)
-                  }}
-                  className={`px-2.5 py-1 rounded-md ${wordCount === n ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
-                >
-                  {n} words
-                </button>
-              ))}
-            </div>
+            <Segment<'12' | '24'>
+              label="Phrase length"
+              size="sm"
+              fill={false}
+              value={wordCount === 24 ? '24' : '12'}
+              onChange={(v) => {
+                const n = v === '24' ? 24 : 12
+                setWordCount(n)
+                setMnemonic(wallet.generateMnemonic(n))
+                setRevealed(false)
+              }}
+              options={[
+                { value: '12', label: '12 words' },
+                { value: '24', label: '24 words' },
+              ]}
+            />
             {revealed && <CopyButton text={mnemonic} secret />}
           </div>
         </div>

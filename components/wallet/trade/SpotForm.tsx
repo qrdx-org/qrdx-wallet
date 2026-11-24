@@ -1,5 +1,6 @@
 'use client'
 
+import { Segment } from '@/components/motion/Segment'
 import { useEffect, useMemo, useState } from 'react'
 import { spendable } from '@/src/core/fee-reserve'
 import { S, dec, div, isAmount, lessSlippage, mul, round, str } from '@/src/core/trade/decimal'
@@ -151,22 +152,18 @@ export function SpotForm({
 
   return (
     <div className="space-y-2.5">
-      <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-0.5">
-        {(['buy', 'sell'] as const).map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setSide(s)}
-            className={cn(
-              'rounded-md py-1.5 text-[12px] font-semibold transition-colors',
-              side === s ? (s === 'buy' ? 'bg-bid text-white' : 'bg-ask text-white') : 'text-muted-foreground'
-            )}
-          >
-            {s === 'buy' ? 'Buy' : 'Sell'}
-          </button>
-        ))}
-      </div>
+      <Segment<Side>
+        label="Side"
+        value={side}
+        onChange={setSide}
+        accent={side === 'buy' ? 'hsl(var(--bid))' : 'hsl(var(--ask))'}
+        options={[
+          { value: 'buy', label: 'Buy' },
+          { value: 'sell', label: 'Sell' },
+        ]}
+      />
       <Pills
+        label="Order type"
         options={[
           { id: 'limit', label: 'Limit' },
           { id: 'market', label: 'Market' },

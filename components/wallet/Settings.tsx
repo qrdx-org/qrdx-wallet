@@ -12,8 +12,6 @@ import {
   Monitor,
   Info,
   ExternalLink,
-  ToggleLeft,
-  ToggleRight,
   Link,
   Unplug,
   Blocks,
@@ -22,7 +20,6 @@ import {
   X,
   BookUser,
   UserPlus,
-  Star,
   Users,
   AtSign,
   UserCog,
@@ -45,6 +42,9 @@ import { getChain, isQrdxChain } from '@/src/core/chains'
 import { isQnsName, resolveQnsName } from '@/src/core/qns'
 import { AccountsPage } from './settings/AccountsPage'
 import { Toggle } from './settings/shared'
+import { Favourite } from '@/components/motion/Favourite'
+import { Select } from '@/components/motion/Select'
+import { UndoButton } from '@/components/motion/UndoButton'
 import { AboutLogo } from './AboutLogo'
 import { SecurityPage } from './settings/SecurityPage'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -203,12 +203,9 @@ function SettingsScreen({
     disconnectSite,
     disconnectAllSites,
   } = useWallet()
-  // Removing and disconnecting ask first.
+  // One site, one contact: removed with a moment to undo (components/motion/UndoButton.tsx).
+  // Every site at once asks first, and is confirmed by holding.
   const { dialog: confirmDialog, confirm } = useConfirm()
-  const askDisconnect = async (origin: string) => {
-    if (await confirm({ title: 'Disconnect site', message: <>Disconnect <strong className="text-foreground">{origin}</strong>? It loses access to your accounts and has to ask again.</>, confirmLabel: 'Disconnect', danger: true }))
-      void disconnectSite(origin)
-  }
   const askDisconnectAll = async () => {
     if (await confirm({ title: 'Disconnect all sites', message: `Every connected site (${connectedSites.length}) loses access to your accounts and has to ask again.`, confirmLabel: 'Disconnect all', danger: true }))
       void disconnectAllSites()
@@ -335,26 +332,14 @@ function SettingsScreen({
     checked: boolean
     onChange: (v: boolean) => void
   }) => (
-    <div className="flex items-center justify-between p-3 rounded-xl">
+    <div className="flex items-center justify-between gap-3 p-3 rounded-xl">
       <div>
         <div className="text-sm font-medium">{label}</div>
         {description && (
           <div className="text-[11px] text-muted-foreground">{description}</div>
         )}
       </div>
-      <button
-        onClick={() => onChange(!checked)}
-        className={`relative w-10 h-5.5 rounded-full transition-colors ${
-          checked ? 'bg-primary' : 'bg-muted'
-        }`}
-        style={{ width: 40, height: 22 }}
-      >
-        <div
-          className={`absolute top-0.5 h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform ${
-            checked ? 'translate-x-[20px]' : 'translate-x-0.5'
-          }`}
-        />
-      </button>
+      <Toggle label={label} checked={checked} onChange={onChange} />
     </div>
   )
 
@@ -806,14 +791,7 @@ function SettingsScreen({
                             Connected {new Date(site.connectedAt).toLocaleDateString()}
                           </div>
                         </div>
-                        <button
-                          onClick={() => { void askDisconnect(site.origin) }}
-                          aria-label={`Disconnect ${site.origin}`}
-                          className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-all shrink-0"
-                          title="Disconnect"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
+                        <UndoButton label="Disconnect" what={site.origin} icon={<Unplug className="h-3.5 w-3.5" />} onRemove={() => void disconnectSite(site.origin)} />
                       </div>
                     )
                   })}
@@ -900,16 +878,7 @@ function SettingsScreen({
                           {api.namespace}
                         </div>
                       </div>
-                      <button
-                        onClick={() => toggleApi(api.id)}
-                        className="shrink-0"
-                      >
-                        {api.enabled ? (
-                          <ToggleRight className="h-6 w-6 text-primary" />
-                        ) : (
-                          <ToggleLeft className="h-6 w-6 text-muted-foreground" />
-                        )}
-                      </button>
+                      <Toggle label={api.name} checked={api.enabled} onChange={() => toggleApi(api.id)} />
                     </div>
                   ))}
               </CardContent>
@@ -942,16 +911,7 @@ function SettingsScreen({
                           {api.namespace}
                         </div>
                       </div>
-                      <button
-                        onClick={() => toggleApi(api.id)}
-                        className="shrink-0"
-                      >
-                        {api.enabled ? (
-                          <ToggleRight className="h-6 w-6 text-primary" />
-                        ) : (
-                          <ToggleLeft className="h-6 w-6 text-muted-foreground" />
-                        )}
-                      </button>
+                      <Toggle label={api.name} checked={api.enabled} onChange={() => toggleApi(api.id)} />
                     </div>
                   ))}
               </CardContent>
@@ -984,12 +944,6 @@ function SettingsScreen({
     // storage rather than diverging into local component state.
     const toggleFavorite = (id: string) => {
       void toggleContactFavorite(id)
-    }
-
-    const deleteContact = async (id: string) => {
-      const c = addressBook.find((x) => x.id === id)
-      if (!(await confirm({ title: 'Remove contact', message: <>Remove <strong className="text-foreground">{c?.name ?? 'this contact'}</strong> from your address book?</>, confirmLabel: 'Remove', danger: true }))) return
-      void removeContact(id)
     }
 
     const resetContactForm = () => {
@@ -1048,25 +1002,8 @@ function SettingsScreen({
           </div>
         </div>
         <div className="flex items-center gap-0.5 transition-all">
-          <button
-            onClick={() => toggleFavorite(contact.id)}
-            className={`h-7 w-7 rounded-lg flex items-center justify-center transition-colors ${
-              contact.isFavorite
-                ? 'text-foreground hover:bg-accent/50'
-                : 'text-muted-foreground hover:bg-accent/50'
-            }`}
-            title={contact.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-          >
-            <Star className={`h-3.5 w-3.5 ${contact.isFavorite ? 'fill-foreground' : ''}`} />
-          </button>
-          <button
-            onClick={() => void deleteContact(contact.id)}
-            aria-label={`Remove ${contact.name}`}
-            className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
-            title="Remove"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+          <Favourite on={!!contact.isFavorite} onChange={() => toggleFavorite(contact.id)} label={`Favourite ${contact.name}`} />
+          <UndoButton label="Remove" what={contact.name} icon={<X className="h-3.5 w-3.5" />} onRemove={() => void removeContact(contact.id)} />
         </div>
       </div>
     )
@@ -1183,18 +1120,13 @@ function SettingsScreen({
                   <label className="text-[10px] font-medium text-muted-foreground">
                     Network (optional)
                   </label>
-                  <select
+                  <Select
+                    label="Network"
+                    size="md"
                     value={contactChainId}
-                    onChange={(e) => setContactChainId(e.target.value)}
-                    className="w-full h-9 px-2 rounded-lg bg-accent/30 border border-border/50 text-xs outline-none focus:border-primary/50"
-                  >
-                    <option value="">Any network</option>
-                    {CHAIN_LIST.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setContactChainId}
+                    options={[{ value: '', label: 'Any network' }, ...CHAIN_LIST.map((c) => ({ value: String(c.id), label: c.name }))]}
+                  />
                 </div>
 
                 {contactError && (

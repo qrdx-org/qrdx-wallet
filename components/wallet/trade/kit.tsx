@@ -10,6 +10,7 @@ import { X } from 'lucide-react'
 import { tradeGet } from '@/src/core/trade/api'
 import type { ApiAsset } from '@/src/core/trade/types'
 import { cn } from '@/lib/utils'
+import { Segment } from '@/components/motion/Segment'
 
 // ── data ───────────────────────────────────────────────────────────────────────
 
@@ -175,32 +176,20 @@ export function Tabs<T extends string>({
   )
 }
 
+/** One of two or three (buy or sell, market or limit): components/motion/Segment.tsx, a RubberSegment. */
 export function Pills<T extends string>({
   options,
   value,
   onChange,
+  label = 'Options',
 }: {
   options: { id: T; label: React.ReactNode }[]
   value: T
   onChange: (v: T) => void
+  /** What is being chosen, for screen readers. */
+  label?: string
 }) {
-  return (
-    <div className="flex gap-1 rounded-lg bg-muted p-0.5">
-      {options.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          onClick={() => onChange(o.id)}
-          className={cn(
-            'flex-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors',
-            value === o.id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  )
+  return <Segment value={value} onChange={onChange} label={label} options={options.map((o) => ({ value: o.id, label: o.label }))} />
 }
 
 /** A bottom sheet over the screen. */

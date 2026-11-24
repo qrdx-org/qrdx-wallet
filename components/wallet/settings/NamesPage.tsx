@@ -7,6 +7,7 @@
  */
 
 import { Loading } from '@/components/motion/Loading'
+import { Check } from '@/components/motion/Check'
 import { useEffect, useState } from 'react'
 import { AtSign } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -144,7 +145,7 @@ export function NamesPage({ onBack }: { onBack: () => void }) {
           <Section title="Register a name">
             <div className="space-y-3 p-2">
               <TextField label="Name" value={label} onChange={(v) => setLabel(v.toLowerCase().replace(/[^a-z0-9.-]/g, ''))} placeholder="yourname.qrdx" maxLength={64} />
-              <Segmented value={years} options={YEARS.map((y) => ({ value: y.value, label: y.label }))} onChange={setYears} />
+              <Segmented label="Register for" value={years} options={YEARS.map((y) => ({ value: y.value, label: y.label }))} onChange={setYears} />
               <p className="text-[11px] text-muted-foreground">
                 {!label
                   ? '3–59 of a-z, 0-9 and "-". A year costs 0.0125 QRDX for 5 or more characters, more for shorter names.'
@@ -156,10 +157,7 @@ export function NamesPage({ onBack }: { onBack: () => void }) {
                         ? `${name} is taken (until ${fmt(check.taken.expires)}).`
                         : `${name} is free: ${check.price ?? '?'} QRDX for ${years} year${years === '1' ? '' : 's'}, paid to the treasury.`}
               </p>
-              <label className="flex items-center gap-2 text-[11px]">
-                <input type="checkbox" checked={makePrimary} onChange={(e) => setMakePrimary(e.target.checked)} />
-                Show it as this account&apos;s name
-              </label>
+              <Check checked={makePrimary} onChange={setMakePrimary} label="Show it as this account's name" />
               <PrimaryButton
                 disabled={!valid || !check || check.name !== name || !!check.taken}
                 onClick={() => {

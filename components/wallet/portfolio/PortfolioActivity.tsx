@@ -6,6 +6,7 @@
  */
 
 import { Loading } from '@/components/motion/Loading'
+import { TxStatus } from '@/components/motion/TxStatus'
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight, ExternalLink, Repeat } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -78,11 +79,12 @@ export function PortfolioActivity({ portfolio }: { portfolio: Portfolio | null }
 
   return (
     <div className="space-y-0.5">
-      {items.map((t) => {
+      {items.map((t, i) => {
         const Icon = t.type === 'send' ? ArrowUpRight : t.type === 'receive' ? ArrowDownLeft : Repeat
         return (
           <a
-            key={`${t.network.id}:${t.hash}`}
+            // One transaction can list several transfers (a token and its fee, a swap's legs).
+            key={`${t.network.id}:${t.hash}:${t.type}:${t.tokenSymbol ?? ''}:${i}`}
             href={t.explorerUrl ?? `${t.network.explorerUrl}/tx/${t.hash}`}
             target="_blank"
             rel="noreferrer"
@@ -90,7 +92,7 @@ export function PortfolioActivity({ portfolio }: { portfolio: Portfolio | null }
           >
             <span className="relative">
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-foreground/[0.07]">
-                <Icon className="h-4 w-4" />
+                {t.status === 'confirmed' ? <Icon className="h-4 w-4" /> : <TxStatus status={t.status} size={18} />}
               </span>
               <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-background p-px">
                 <NetworkLogo chain={t.network} size={15} />

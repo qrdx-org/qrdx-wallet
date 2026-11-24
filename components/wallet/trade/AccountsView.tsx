@@ -8,6 +8,7 @@
  */
 
 import { CtaButton } from '@/components/motion/CtaButton'
+import { Select } from '@/components/motion/Select'
 import { useState } from 'react'
 import { Layers, Plus, Wallet } from 'lucide-react'
 import { dec, isAmount } from '@/src/core/trade/decimal'
@@ -235,6 +236,7 @@ function MoveSheet({
     <Sheet open={open} onClose={onClose} title={`Move funds · ${label}`}>
       <div className="space-y-3">
         <Pills
+          label="Direction"
           options={[
             { id: 'to_sub', label: 'To the sub-account' },
             { id: 'from_sub', label: 'Back to main' },
@@ -246,18 +248,12 @@ function MoveSheet({
           <p className="text-[11px] text-muted-foreground">{dir === 'to_sub' ? 'The main account' : 'The sub-account'} holds nothing to move.</p>
         ) : (
           <>
-            <select
+            <Select
+              label="Asset"
               value={chosen?.asset.address ?? ''}
-              onChange={(e) => setAsset(e.target.value)}
-              className="h-10 w-full rounded-xl border border-border bg-background px-3 text-base sm:text-sm"
-              aria-label="Asset"
-            >
-              {assets.map((b) => (
-                <option key={b.asset.address} value={b.asset.address!}>
-                  {b.asset.symbol} · {fmtSize(b.balance)}
-                </option>
-              ))}
-            </select>
+              onChange={setAsset}
+              options={assets.map((b) => ({ value: b.asset.address!, label: b.asset.symbol, tag: fmtSize(b.balance) }))}
+            />
             <div className="flex gap-2">
               <input
                 value={amount}

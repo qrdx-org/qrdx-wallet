@@ -1,6 +1,9 @@
 'use client'
 
 import { CtaButton } from '@/components/motion/CtaButton'
+import { Check } from '@/components/motion/Check'
+import { Chips, Segment } from '@/components/motion/Segment'
+import ElasticSlider from '@/components/ElasticSlider'
 import { useEffect, useState } from 'react'
 import { spendable } from '@/src/core/fee-reserve'
 import { dec, div, isAmount, mul, round, str } from '@/src/core/trade/decimal'
@@ -145,19 +148,18 @@ export function PerpForm({
           Collateral
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-0.5">
-        {(['buy', 'sell'] as const).map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setSide(s)}
-            className={cn('rounded-md py-1.5 text-[12px] font-semibold transition-colors', side === s ? (s === 'buy' ? 'bg-bid text-white' : 'bg-ask text-white') : 'text-muted-foreground')}
-          >
-            {s === 'buy' ? 'Long' : 'Short'}
-          </button>
-        ))}
-      </div>
+      <Segment<Side>
+        label="Side"
+        value={side}
+        onChange={setSide}
+        accent={side === 'buy' ? 'hsl(var(--bid))' : 'hsl(var(--ask))'}
+        options={[
+          { value: 'buy', label: 'Long' },
+          { value: 'sell', label: 'Short' },
+        ]}
+      />
       <Pills
+        label="Order type"
         options={[
           { id: 'limit', label: 'Limit' },
           { id: 'market', label: 'Market' },
@@ -187,10 +189,7 @@ export function PerpForm({
         </p>
       )}
       <AmountField label="Size" unit={market.base} value={size} onChange={setSize} />
-      <label className="flex items-center gap-2 text-[11px]">
-        <input type="checkbox" checked={reduceOnly} onChange={(e) => setReduceOnly(e.target.checked)} className="accent-[hsl(var(--foreground))]" />
-        Reduce only
-      </label>
+      <Check checked={reduceOnly} onChange={setReduceOnly} label="Reduce only" size={16} />
       <div className="space-y-1 rounded-lg bg-muted/40 p-2">
         <Line k="Order value" v={notional ? `${fixed(notional, 2)} ${market.quote}` : '—'} />
         <Line k="Margin" v={margin ? `${fixed(margin, 2)} ${unit}` : '—'} />
@@ -257,6 +256,7 @@ function LeverageSheet({
     <Sheet open={open} onClose={onClose} title={`${market.base}-${market.quote} leverage`}>
       <div className="space-y-3">
         <Pills
+          label="Margin mode"
           options={[
             { id: 'cross', label: 'Cross margin' },
             { id: 'isolated', label: 'Isolated' },
@@ -269,17 +269,37 @@ function LeverageSheet({
             ? 'Cross: every position shares your free collateral, so one can draw on the rest before liquidation.'
             : 'Isolated: this market risks only the margin you put in it.'}
         </p>
+        {/* An elastic slider (React Bits): pulled past either end it stretches and springs back. */}
         <div className="flex items-center gap-3">
-          <input type="range" min={1} max={max} value={ok ? n : 1} onChange={(e) => setLev(e.target.value)} className="flex-1 accent-[hsl(var(--foreground))]" aria-label="Leverage" />
+          <ElasticSlider
+            value={ok ? n : 1}
+            startingValue={1}
+            maxValue={max}
+            isStepped
+            stepSize={1}
+            onChange={(v) => setLev(String(Math.round(v)))}
+            leftIcon={<span className="num text-[10px] text-muted-foreground">1×</span>}
+            rightIcon={<span className="num text-[10px] text-muted-foreground">{max}×</span>}
+            valuePosition="none"
+            thickness={5}
+            activeThickness={10}
+            trackColor="hsl(var(--foreground) / 0.12)"
+            rangeColor="hsl(var(--foreground))"
+            iconColor="hsl(var(--muted-foreground))"
+            contentColor="hsl(var(--foreground))"
+            fillContentColor="hsl(var(--background))"
+            ariaLabel="Leverage"
+            className="min-w-0 flex-1"
+          />
           <span className="num w-14 text-right text-xl font-semibold">{lev || '—'}×</span>
         </div>
-        <div className="grid grid-cols-4 gap-1">
-          {LEVERAGE.filter((l) => Number(l) <= max).map((l) => (
-            <button key={l} type="button" onClick={() => setLev(l)} className={cn('rounded-md border py-1 text-[11px] font-medium', lev === l ? 'border-foreground bg-foreground text-background' : 'hover:bg-accent')}>
-              {l}×
-            </button>
-          ))}
-        </div>
+        <Chips
+          label="Leverage presets"
+          value={LEVERAGE.includes(lev as (typeof LEVERAGE)[number]) ? (lev as (typeof LEVERAGE)[number]) : ''}
+          onChange={setLev}
+          options={LEVERAGE.filter((l) => Number(l) <= max).map((l) => ({ value: l, label: `${l}×` }))}
+          className="w-full justify-center"
+        />
         <Line k="Initial margin" v={ok ? `${+(100 / n).toFixed(2)}% of the position` : '—'} />
         <p className="text-[10.5px] text-muted-foreground">
           On chain now: {current ? `${current.leverage}× ${current.mode}` : effective ? `not set; the node applies ${round(effective, 2)}×` : 'not set; the node default applies'}.
@@ -343,6 +363,7 @@ export function CollateralSheet({
           ))}
         </div>
         <Pills
+          label="Deposit or withdraw"
           options={[
             { id: 'deposit', label: 'Deposit' },
             { id: 'withdraw', label: 'Withdraw' },

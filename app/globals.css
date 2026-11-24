@@ -264,6 +264,78 @@ input[type="number"] {
   display: none;
 }
 
+/* React Bits controls fitted to the wallet (components/motion/*.tsx, docs/UI_COMPONENTS.md). */
+.rubber-segment.wallet-segment--fill {
+  display: grid;
+  width: 100%;
+}
+.wallet-segment--fill .rubber-segment__item {
+  min-width: 0;
+  padding: 0 6px;
+}
+.spring-check.wallet-check--bare {
+  gap: 0;
+  min-height: 0;
+}
+.wallet-check--bare .spring-check__label {
+  display: none;
+}
+.wallet-check .spring-check__word {
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.45;
+}
+.glide-select.wallet-select {
+  display: block;
+}
+.wallet-select .glide-select__trigger {
+  width: 100%;
+  justify-content: space-between;
+  padding: 0 10px 0 12px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+}
+.wallet-select .glide-select__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A long list (every network) scrolls inside its menu; a finger can still scroll it. */
+.wallet-select .glide-select__menu {
+  max-height: min(288px, 50vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid hsl(var(--border));
+}
+.wallet-select .glide-select__list {
+  touch-action: pan-y;
+}
+.wallet-ranges .rubber-segment__item {
+  min-width: 34px;
+  padding: 0 9px;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.jelly-radio.wallet-chips--xs {
+  --jr-h: 22px !important;
+  --jr-font: 10.5px !important;
+  --jr-px: 7px !important;
+}
+.fuse-button.wallet-undo {
+  --fb-h: 30px !important;
+  --fb-fs: 12px !important;
+  --fb-px: 10px !important;
+  --fb-icon: 13px !important;
+  flex-shrink: 0;
+}
+.wallet-hold.hold-button--lg {
+  height: 48px;
+  font-size: 15px;
+}
+.secret-text--break > span > span {
+  white-space: normal !important;
+}
+
 /* Rows that answer the finger: a press sinks them a little. */
 .press {
   transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease;

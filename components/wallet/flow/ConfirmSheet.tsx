@@ -1,6 +1,7 @@
 'use client'
 
 import { CtaButton } from '@/components/motion/CtaButton'
+import { HoldConfirm } from '@/components/motion/HoldConfirm'
 import { Spinner } from '@/components/motion/Loading'
 import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { AlertTriangle } from 'lucide-react'
@@ -38,7 +39,7 @@ export function ConfirmSheet({
   rows: ReviewRow[]
   warnings?: ReactNode[]
   confirmLabel?: string
-  /** A destructive action: the button says so. */
+  /** A destructive action: confirmed by holding the button (components/motion/HoldConfirm.tsx). */
   danger?: boolean
   busy?: boolean
   error?: string | null
@@ -80,15 +81,10 @@ export function ConfirmSheet({
           Cancel
         </button>
         {danger ? (
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={busy}
-            className="flex h-11 items-center justify-center gap-2 rounded-xl border border-foreground bg-background text-sm font-semibold text-foreground transition-opacity hover:bg-foreground hover:text-background disabled:opacity-60"
-          >
+          <HoldConfirm onConfirm={onConfirm} disabled={busy} size="sm" doneLabel={busy ? 'Working…' : 'Confirmed'} className="!h-11 w-full text-sm">
             {busy && <Spinner size={16} />}
-            {confirmLabel}
-          </button>
+            Hold to {confirmLabel.toLowerCase()}
+          </HoldConfirm>
         ) : (
           <CtaButton onClick={onConfirm} disabled={busy} className="h-11 text-sm" size="sm">
             {busy && <Spinner size={16} />}
@@ -136,13 +132,9 @@ export function useConfirm(): { dialog: ReactNode; confirm: (req: ConfirmRequest
           Cancel
         </button>
         {req.danger ? (
-          <button
-            type="button"
-            onClick={() => close(true)}
-            className="h-11 rounded-xl border border-foreground bg-background text-sm font-semibold text-foreground hover:bg-foreground hover:text-background"
-          >
-            {req.confirmLabel ?? 'Confirm'}
-          </button>
+          <HoldConfirm onConfirm={() => close(true)} size="sm" className="!h-11 w-full text-sm">
+            Hold to {(req.confirmLabel ?? 'confirm').toLowerCase()}
+          </HoldConfirm>
         ) : (
           <CtaButton onClick={() => close(true)} className="h-11 text-sm" size="sm">
             {req.confirmLabel ?? 'Confirm'}

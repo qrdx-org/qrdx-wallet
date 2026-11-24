@@ -10,6 +10,8 @@
  */
 
 import { useState } from 'react'
+import { Check as CheckBox } from '@/components/motion/Check'
+import { SecretText } from '@/components/motion/SecretText'
 import {
   Check,
   ChevronRight,
@@ -433,14 +435,14 @@ function DiscoverSheet({ keyringId, onClose }: { keyringId: string; onClose: () 
                   key={r.index}
                   className={`flex items-center gap-2 rounded-lg p-2 ${r.present ? 'opacity-50' : 'hover:bg-accent/30'}`}
                 >
-                  <input
-                    type="checkbox"
+                  <CheckBox
+                    aria={`Account ${r.index + 1}, ${shortenAddress(r.ethAddress, 5)}`}
                     disabled={r.present}
                     checked={r.present || picked.has(r.index)}
-                    onChange={(e) =>
+                    onChange={(on) =>
                       setPicked((s) => {
                         const n = new Set(s)
-                        if (e.target.checked) n.add(r.index)
+                        if (on) n.add(r.index)
                         else n.delete(r.index)
                         return n
                       })
@@ -570,7 +572,7 @@ function ExportKeysSheet({ account, onClose }: { account: WalletAccount; onClose
               <CopyButton text={k.value} secret />
             </div>
             <div className="font-mono text-[11px] break-all bg-muted/40 rounded-lg p-2">
-              {k.value}
+              <SecretText text={k.value} alphabet="hex" />
             </div>
             <p className="text-[10px] text-muted-foreground mt-1">{k.hint}</p>
           </div>

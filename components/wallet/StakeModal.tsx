@@ -19,6 +19,7 @@
  */
 
 import { BubblePanel } from '@/components/gfx/Bubble'
+import { Check } from '@/components/motion/Check'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, ChevronDown, Clock, Coins, Hourglass, Landmark, Server, ShieldAlert, Undo2 } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
@@ -543,10 +544,7 @@ function RunValidator({
                   </div>
                 ))}
               </div>
-              <label className="flex items-start gap-2 text-[11px] text-muted-foreground">
-                <input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} className="mt-0.5" />I will run a validator with this key and understand the stake
-                can be slashed.
-              </label>
+              <Check checked={understood} onChange={setUnderstood} label="I will run a validator with this key and understand the stake can be slashed." />
               <PrimaryButton variant="outline" loading={busy === 'deposit'} disabled={!!amountError || !understood || !!busy || !publicKey} onClick={() => onDeposit(amount)}>
                 {amountError ?? `Stake ${Number(amount).toLocaleString()} QRDX as a validator`}
               </PrimaryButton>
