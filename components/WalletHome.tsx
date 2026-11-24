@@ -9,6 +9,7 @@ import { approvalIdFromLocation } from '@/src/extension/provider/approval-protoc
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import { RemoteConnectProvider } from './wallet/connect/RemoteConnect'
 import { ScreenStack } from './motion/ScreenStack'
+import { QrdxMark } from './QrdxMark'
 
 /** QRDX Connect wraps everything, so a ?connect= link survives onboarding and unlocking. */
 export function WalletHome() {
@@ -41,10 +42,7 @@ function WalletHomeInner() {
       0,
       <div className="flex items-center justify-center w-full h-full min-h-screen">
         <div className="flex flex-col items-center gap-4 animate-fade-in">
-          <div className="relative">
-            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-primary/60 animate-pulse-ring" />
-            <div className="absolute inset-0 h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-primary/60 opacity-30 blur-lg" />
-          </div>
+          <QrdxMark className="h-10 w-10 text-foreground animate-pulse-ring" />
           <div className="text-sm font-medium text-muted-foreground">Loading QRDX Wallet...</div>
         </div>
       </div>

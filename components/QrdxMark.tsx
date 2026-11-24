@@ -19,3 +19,15 @@ export function QrdxMark({ className }: { className?: string }) {
     </svg>
   )
 }
+
+/** The mark and name, as the trade site writes its own: no tile, "Wallet" in grey. */
+export function Wordmark({ className }: { className?: string }) {
+  return (
+    <span className={cn('flex items-center gap-2', className)}>
+      <QrdxMark className="h-[22px] w-[22px] text-foreground" />
+      <span className="text-[15px] font-semibold tracking-tight">
+        QRDX<span className="ml-1 font-normal text-muted-foreground">Wallet</span>
+      </span>
+    </span>
+  )
+}

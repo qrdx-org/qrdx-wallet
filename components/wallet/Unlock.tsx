@@ -1,7 +1,9 @@
 'use client'
 
-import { QrdxMark } from '@/components/QrdxMark'
-import { useEffect, useState } from 'react'
+import { Wordmark } from '@/components/QrdxMark'
+import { DRAW, RISE } from '@/components/motion/cascade'
+import { motion, useReducedMotion } from 'framer-motion'
+import { Fragment, useEffect, useState } from 'react'
 import { Fingerprint, AlertTriangle } from 'lucide-react'
 import { useWallet } from '@/src/shared/contexts/WalletContext'
 import {
@@ -23,7 +25,14 @@ function useCountdown(until: number): number {
   return Math.max(0, Math.ceil((until - now) / 1000))
 }
 
+const HEADLINE = ['Welcome', 'back.']
+
+/**
+ * Welcome back: the same composition as the first screen (onboarding/Welcome.tsx), the name at
+ * the top clear of the orb and the way in at the bottom, where the thumb is.
+ */
 export function Unlock() {
+  const reduce = useReducedMotion()
   const { unlock, unlockWithBiometrics, biometrics, platform, backend, resetWallet } = useWallet()
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -75,70 +84,90 @@ export function Unlock() {
   const bioLabel = platform.isIOS ? 'Unlock with Face ID' : 'Unlock with biometrics'
 
   return (
-    <FlowScreen className="justify-center">
-      <div className="text-center mb-8 animate-slide-up">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary/60 mb-4 shadow-lg shadow-primary/25">
-          <QrdxMark className="h-8 w-8 text-primary-foreground" />
+    <FlowScreen>
+      <motion.div className="flex flex-1 flex-col" initial={reduce ? false : 'hidden'} animate="shown">
+        <motion.div variants={RISE} custom={0}>
+          <Wordmark />
+        </motion.div>
+
+        <div className="min-h-16 flex-1" />
+
+        <h1 className="text-[2.75rem] font-semibold leading-[0.98] tracking-[-0.045em]">
+          {/* Each word on its own line, with a real space between them for readers and search. */}
+          {HEADLINE.map((word, i) => (
+            <Fragment key={word}>
+              {i > 0 && ' '}
+              <motion.span variants={RISE} custom={1 + i} className="block">
+                {word}
+              </motion.span>
+            </Fragment>
+          ))}
+        </h1>
+        <motion.p variants={RISE} custom={3} className="mt-3 text-sm text-muted-foreground">
+          Unlock your wallet to continue.
+        </motion.p>
+
+        <div className="relative mt-7 pt-6">
+          <motion.span variants={DRAW} custom={4} className="absolute inset-x-0 top-0 h-px origin-left bg-foreground/15" />
+          <motion.div variants={RISE} custom={4} className="space-y-4">
+            {biometrics.enrolled && (
+              <>
+                <PrimaryButton onClick={bio} loading={busy}>
+                  <Fingerprint className="h-5 w-5 mr-2" /> {bioLabel}
+                </PrimaryButton>
+                <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                  <div className="h-px flex-1 bg-border" /> or use your password{' '}
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+              </>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                submit()
+              }}
+              className="space-y-3"
+            >
+              <PasswordField
+                label="Password"
+                value={password}
+                onChange={(v) => {
+                  setPassword(v)
+                  setError(null)
+                }}
+                autoFocus={!biometrics.enrolled}
+                onEnter={submit}
+              />
+              {wait > 0 ? (
+                <p className="text-xs text-amber-500" role="status">
+                  Too many attempts. Try again in {wait}s.
+                </p>
+              ) : (
+                <ErrorBanner error={error} />
+              )}
+              <PrimaryButton
+                type="submit"
+                variant={biometrics.enrolled ? 'outline' : 'primary'}
+                loading={busy && !biometrics.enrolled}
+                disabled={!password || wait > 0}
+              >
+                Unlock
+              </PrimaryButton>
+            </form>
+          </motion.div>
         </div>
-        <h1 className="text-2xl font-bold mb-1.5">Welcome back</h1>
-        <p className="text-sm text-muted-foreground">Unlock your QRDX Wallet</p>
-      </div>
 
-      <div className="space-y-4">
-        {biometrics.enrolled && (
-          <>
-            <PrimaryButton onClick={bio} loading={busy}>
-              <Fingerprint className="h-5 w-5 mr-2" /> {bioLabel}
-            </PrimaryButton>
-            <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-              <div className="h-px flex-1 bg-border" /> or use your password{' '}
-              <div className="h-px flex-1 bg-border" />
-            </div>
-          </>
-        )}
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            submit()
-          }}
-          className="space-y-3"
+        <motion.button
+          variants={RISE}
+          custom={5}
+          type="button"
+          onClick={() => setShowReset(true)}
+          className="mt-5 self-start text-xs text-muted-foreground underline decoration-foreground/20 underline-offset-4 hover:text-foreground"
         >
-          <PasswordField
-            label="Password"
-            value={password}
-            onChange={(v) => {
-              setPassword(v)
-              setError(null)
-            }}
-            autoFocus={!biometrics.enrolled}
-            onEnter={submit}
-          />
-          {wait > 0 ? (
-            <p className="text-xs text-amber-500" role="status">
-              Too many attempts. Try again in {wait}s.
-            </p>
-          ) : (
-            <ErrorBanner error={error} />
-          )}
-          <PrimaryButton
-            type="submit"
-            variant={biometrics.enrolled ? 'outline' : 'primary'}
-            loading={busy && !biometrics.enrolled}
-            disabled={!password || wait > 0}
-          >
-            Unlock
-          </PrimaryButton>
-        </form>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => setShowReset(true)}
-        className="text-xs text-muted-foreground hover:text-primary text-center mt-6"
-      >
-        Forgot password?
-      </button>
+          Forgot password?
+        </motion.button>
+      </motion.div>
 
       {showReset && (
         <Sheet

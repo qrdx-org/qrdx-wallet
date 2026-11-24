@@ -13,12 +13,12 @@ export const INK = { dark: 0.5, light: 0.42 }
 
 /**
  * The orb's centre and radius, in cells, for a canvas `w` by `h` cells. On a phone (and the
- * extension popup) it sits top right, behind the header and balance and clear of the welcome
- * screen's title; on a wide window it sits beside the wallet's column (448 CSS px, centred), a
- * little behind it.
+ * extension popup) it sits top right, behind the header and balance, clear of the wordmark and
+ * the first screens' headlines; on a wide window it sits beside the wallet's column (448 CSS px,
+ * centred), a little behind it.
  */
 export function orbFor(w: number, h: number): [number, number, number] {
-  if (w < h * 1.05) return [w * 0.84, h * 0.12, w * 0.52]
+  if (w < h * 1.05) return [w * 0.9, h * 0.1, w * 0.5]
   const half = 224 / CELL
   const r = Math.max(h * 0.2, Math.min(h * 0.36, (w / 2 - half) * 0.9))
   return [w / 2 + half + r * 0.75, h * 0.52, r]

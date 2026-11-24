@@ -1208,9 +1208,7 @@ function SettingsScreen({
         <div className="px-4 py-3 space-y-4">
           {/* Logo & version */}
           <div className="flex flex-col items-center py-4 animate-fade-in">
-            <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/25 mb-3">
-              <QrdxMark className="h-8 w-8 text-primary-foreground" />
-            </div>
+            <QrdxMark className="h-11 w-11 text-foreground mb-3" />
             <h2 className="text-lg font-bold">QRDX Wallet</h2>
             <p className="text-xs text-muted-foreground">Version 1.0.0</p>
             <p className="text-[10px] text-muted-foreground mt-1">

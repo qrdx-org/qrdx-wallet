@@ -24,6 +24,7 @@ import {
   Smartphone,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { QrdxMark } from '@/components/QrdxMark'
 import { DOWNLOADS, REPO_URL } from './downloads'
 
 type Browser = 'chromium' | 'firefox' | 'safari' | 'other'
@@ -47,11 +48,9 @@ function usePlatform(): { platform: Platform; browser: Browser; known: boolean }
 }
 
 // ── Small pieces ─────────────────────────────────────────────────────────
+/** The mark alone, in ink, as the trade site draws it: no tile. */
 function Logo({ className }: { className?: string }) {
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src="/icons/icon-192.png" alt="" aria-hidden className={cn('rounded-lg border border-border/60 dark:invert', className)} />
-  )
+  return <QrdxMark className={cn('text-foreground', className)} />
 }
 
 function Steps({ children }: { children: ReactNode[] }) {
@@ -249,7 +248,7 @@ export function LandingPage() {
       <nav className="glass sticky top-0 z-50 !border-x-0 !border-t-0">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <a href="#" className="flex items-center gap-2.5">
-            <Logo className="h-8 w-8" />
+            <Logo className="h-[22px] w-[22px]" />
             <span className="text-base font-semibold tracking-tight">QRDX Wallet</span>
           </a>
           <div className="flex items-center gap-1 sm:gap-2">
@@ -531,7 +530,7 @@ export function LandingPage() {
       <footer className="border-t border-border/60">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-center gap-2.5">
-            <Logo className="h-6 w-6 rounded-md" />
+            <Logo className="h-5 w-5" />
             <span className="text-sm font-semibold">QRDX Wallet</span>
             <span className="text-xs text-muted-foreground">· open source, ISC License</span>
           </div>
