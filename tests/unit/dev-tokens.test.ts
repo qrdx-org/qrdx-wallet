@@ -10,6 +10,10 @@ import { authorities, deployedTokenContracts, isTokenAmount, mintable, pastMintR
 import type { ExchangeToken } from '../../src/core/exchange-client'
 import { groupHoldings, portfolioChains, priceIdFor, type Holding } from '../../src/core/portfolio'
 import { knownName } from '../../src/core/recipients'
+import { plainDecimal } from '../../src/core/plain-decimal'
+import { ethToWei } from '../../src/core/ethereum'
+import { groupDigits } from '../../src/core/exchange-describe'
+import { minimumOut } from '../../src/core/exchange-client'
 
 const PQ = '0xPQ' + 'ab'.repeat(32)
 const CLASSIC = '0x' + '12'.repeat(20)
@@ -98,6 +102,20 @@ describe('dev tokens', () => {
     expect(withinCap(capped, '500.26')).toBe(false)
     expect(mintable(token({ mint_authority: PQ }))).toBeNull()
     expect(withinCap(token({ mint_authority: PQ }), '1000000000')).toBe(true)
+  })
+
+  it("reads the node's amounts in exponent form (a balance spent to zero is \"0E-18\")", () => {
+    expect(['0E-18', '0e-18', '1E+6', '1.5E-7', '-2.5E+2', '12.340E+1', '-0E-18', '1000200', ' 7.5 '].map(plainDecimal)).toEqual([
+      '0', '0', '1000000', '0.00000015', '-250', '123.4', '0', '1000200', '7.5',
+    ])
+    expect(ethToWei('0E-18', 18)).toBe(0n)
+    expect(ethToWei('1.5E-7', 18)).toBe(150_000_000_000n)
+    expect(groupDigits('1E+6')).toBe('1,000,000')
+    expect(groupDigits('0E-18')).toBe('0')
+    expect(minimumOut('1E+2', 1)).toBe('99')
+    const spent = token({ mint_authority: PQ, total_supply: '0E-18', max_supply: '1E+3' })
+    expect(mintable(spent)).toBe('1000')
+    expect(withinCap(spent, '1000')).toBe(true)
   })
 
   it('finds where the account minted a token before, most recent first, each account once', () => {

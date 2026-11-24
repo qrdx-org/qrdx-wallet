@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fee reserve**: "Max" in swap, spot, perps deposits, sub-account transfers and staking leaves the account's fee reserve (1 QRDX) behind, as the node requires of exchange operations, and the node's refusal is explained in plain words. The wallet never signs `spend_reserve` on its own.
 
 ### Fixed
+- Opening one of Your tokens crashed the app when the account's balance of it was spent to zero: the node writes that balance as "0E-18" (Python's exponent form), which the wallet's amount parsing refused. Amounts from the node are now read in exponent form everywhere they are parsed as text (`src/core/plain-decimal.ts`): balances, swap minimums, operation descriptions, portfolio history.
 - The home screen's network menu opened under the balance card (each row keeps its entrance transform, so each is its own layer).
 - Activity across every network listed a transaction with several transfers under one key, so React could drop or repeat rows.
 - Glass panels never blurred in Chrome: the CSS minifier kept only the prefixed `-webkit-backdrop-filter`.

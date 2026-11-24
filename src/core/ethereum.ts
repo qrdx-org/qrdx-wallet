@@ -26,6 +26,7 @@ import {
   getFeeModel,
 } from './chains'
 import { resolveSigningChainId } from './chain-identity'
+import { plainDecimal } from './plain-decimal'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -113,7 +114,8 @@ export function weiToEth(wei: bigint, decimals = 18): string {
 }
 
 export function ethToWei(eth: string, decimals = 18): bigint {
-  const [whole = '0', frac = ''] = eth.split('.')
+  // A node amount may be in exponent form ("0E-18").
+  const [whole = '0', frac = ''] = plainDecimal(eth).split('.')
   const fracPadded = frac.padEnd(decimals, '0').slice(0, decimals)
   return BigInt(whole) * 10n ** BigInt(decimals) + BigInt(fracPadded)
 }

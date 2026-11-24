@@ -15,6 +15,7 @@
  */
 
 import type { ExchangeOpName, JsonValue } from './exchange-tx'
+import { plainDecimal } from './plain-decimal'
 
 export interface TokenInfo {
   symbol: string
@@ -61,7 +62,7 @@ export function tokenAddressesIn(params: Record<string, JsonValue>): string[] {
 
 /** "1234567.50" → "1,234,567.5". Exact: no float conversion. */
 export function groupDigits(value: string): string {
-  const m = /^(-?)(\d+)(\.\d+)?$/.exec(value.trim())
+  const m = /^(-?)(\d+)(\.\d+)?$/.exec(plainDecimal(value))
   if (!m) return value
   // The node writes 18-place decimals ("1000.000000000000000000"); trailing zeros say nothing.
   const frac = (m[3] ?? '').replace(/\.?0+$/, '')
@@ -949,7 +950,7 @@ function fmtDuration(seconds: number): string {
 /** 1 / x to 18 places, or null for zero / unparseable input. */
 function invert(x: string): string | null {
   try {
-    const [w, f = ''] = x.split('.')
+    const [w, f = ''] = plainDecimal(x).split('.')
     const n = BigInt((w || '0') + f)
     if (n === 0n) return null
     // 1 / (n / 10^d) = 10^d / n, scaled by 10^18.
@@ -966,7 +967,7 @@ function invert(x: string): string | null {
  * past the leading zeros below 1. Half-up, trailing zeros dropped.
  */
 function trimTo(x: string, significant: number): string {
-  const [w, f = ''] = x.split('.')
+  const [w, f = ''] = plainDecimal(x).split('.')
   if (!f) return w
   const places = w !== '0' && w !== '' ? significant : f.match(/^0*/)![0].length + significant
   if (f.length <= places) return `${w}.${f}`.replace(/\.?0+$/, '')
@@ -979,7 +980,7 @@ function trimTo(x: string, significant: number): string {
 /** Exact product of two decimal strings (for "locks up to" on buy orders). */
 function multiply(a: string, b: string): string {
   const parse = (s: string) => {
-    const [w, f = ''] = s.split('.')
+    const [w, f = ''] = plainDecimal(s).split('.')
     return { n: BigInt((w || '0') + f), d: f.length }
   }
   try {

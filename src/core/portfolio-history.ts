@@ -23,6 +23,7 @@ import { tokenPriceHistory, type HistoryRange } from './trade/prices'
 import type { IndexedTx } from './activity'
 import type { Holding, Portfolio } from './portfolio'
 import type { WalletAccount } from './types'
+import { plainDecimal } from './plain-decimal'
 
 export type ValueRange = '1D' | '1W' | '1M' | '1Y'
 
@@ -68,7 +69,8 @@ function cachedEventsOn(chain: ChainConfig, account: WalletAccount, addresses: C
 const QRDX_LIMIT = 200
 
 /** Decimal string → base units, extra digits cut; null when it is not a number. */
-function units(amount: string | null | undefined, decimals: number): bigint | null {
+function units(value: string | null | undefined, decimals: number): bigint | null {
+  const amount = value ? plainDecimal(value) : value
   if (!amount || !/^\d*\.?\d*$/.test(amount) || amount === '.') return null
   const [whole, frac = ''] = amount.split('.')
   return BigInt(whole || '0') * 10n ** BigInt(decimals) + BigInt(frac.slice(0, decimals).padEnd(decimals, '0') || '0')

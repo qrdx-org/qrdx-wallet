@@ -9,6 +9,7 @@
 
 import { getEvmProvider } from './ethereum'
 import type { ChainConfig } from './chains'
+import { plainDecimal } from './plain-decimal'
 
 export const NATIVE_QRDX = 'QRDX'
 
@@ -122,7 +123,7 @@ export async function waitForExchangeReceipt(
 
 /** Lower an expected output by a slippage tolerance (percent), as an 18-dp decimal string. */
 export function minimumOut(amountOut: string, slippagePercent: number): string {
-  const [whole, frac = ''] = amountOut.split('.')
+  const [whole, frac = ''] = plainDecimal(amountOut).split('.')
   const scaled = BigInt(whole + frac.padEnd(18, '0').slice(0, 18))
   const bps = BigInt(Math.round(slippagePercent * 100))
   const min = (scaled * (10_000n - bps)) / 10_000n
